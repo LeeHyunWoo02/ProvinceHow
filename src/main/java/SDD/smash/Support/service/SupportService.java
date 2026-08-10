@@ -50,6 +50,7 @@ public class SupportService {
      * 해당 시군구의 특정 태그의 정책 개수 반환
      * 정책정보가 없는 경우 null
      */
+<<<<<<< HEAD
     public Integer getFitSupportNum(String sigunguCode, Integer supportChoice)
     {
         if(supportChoice == null || supportChoice == 0) return null;
@@ -70,6 +71,23 @@ public class SupportService {
             }
         }
         return sum;
+=======
+    public Integer getFitSupportNum(String sigunguCode, SupportTag tag)
+    {
+        if(tag == null) return null;
+
+        addressVerifyService.checkSigunguCodeOrThrow(sigunguCode);
+
+        ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+
+        String numKey = sigunguCode + ":" + tag.getValue() + ":" + "NUM";
+        Object value = ops.get(numKey);
+        if(value instanceof Number)
+        {
+            return ((Number)value).intValue();
+        }
+        return null;
+>>>>>>> origin/Backup/main
     }
 
     /**
@@ -90,15 +108,42 @@ public class SupportService {
             SupportListDTO value = ops.get(baseKey);
             if(value != null)
             {
+<<<<<<< HEAD
                 if(dto == null)
                 {
                     dto = new SupportListDTO();
                     dto.setSupportDTOList(new ArrayList<SupportDTO>());
                 }
+=======
+                if(dto == null) dto = new SupportListDTO();
+                dto.setSupportDTOList(new ArrayList<SupportDTO>());
+>>>>>>> origin/Backup/main
                 List<SupportDTO> list = value.getSupportDTOList();
                 dto.getSupportDTOList().addAll(list);
             }
         }
         return dto;
     }
+<<<<<<< HEAD
+=======
+
+//    /**
+//     * 해당 시군구의 태그에 해당하는 정책 세부 정보 리스트 반환 (사용 가능성 없어 주석처리. 추후 제거)
+//     * 데이터가 없는 경우 null (!= 0)
+//     */
+//    public SupportListDTO getFitSupportList(String sigunguCode, SupportTag tag)
+//    {
+//        addressVerifyService.checkSigunguCodeOrThrow(sigunguCode);
+//
+//        ValueOperations<String, Object> ops = redisTemplate.opsForValue();
+//
+//        String baseKey = sigunguCode + ":" + tag.getValue();
+//        Object value = ops.get(baseKey);
+//        if(value instanceof SupportListDTO)
+//        {
+//            return (SupportListDTO) value;
+//        }
+//        return null;
+//    }
+>>>>>>> origin/Backup/main
 }

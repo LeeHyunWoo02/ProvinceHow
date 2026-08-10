@@ -55,8 +55,13 @@ public class MolitAptRentAdapter {
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromHttpUrl(baseUrl)
                 .pathSegment(apiPath)
+<<<<<<< HEAD
                 .queryParam("LAWD_CD", sigunguCode)
                 .queryParam("DEAL_YMD", dealYmd)
+=======
+                .queryParam("LAWD_CD", sigunguCode)  // 시군구 코드
+                .queryParam("DEAL_YMD", dealYmd)     // YYYYMM
+>>>>>>> origin/Backup/main
                 .queryParam("pageNo", pageNo)
                 .queryParam("numOfRows", rows)
                 .queryParam("_type", "json");
@@ -79,8 +84,13 @@ public class MolitAptRentAdapter {
             JsonNode jsonNode = parseJsonWithXmlFallback(resp.getHeaders().getContentType(), body);
             return extractRecords(jsonNode);
         } catch (Exception e){
+<<<<<<< HEAD
             log.error("[API ERROR] sigungu={}, ym={}, page={}",
                     sigunguCode, yearMonth, pageNo, e);
+=======
+            log.error("[API ERROR] sigungu={}, ym={}, page={}, msg={}",
+                    sigunguCode, yearMonth, pageNo, e.getMessage(), e);
+>>>>>>> origin/Backup/main
             throw e; // rethrow → 배치 retry/fault-tolerant가 동작
         }
 
@@ -89,12 +99,22 @@ public class MolitAptRentAdapter {
     private JsonNode parseJsonWithXmlFallback(@Nullable MediaType ct, String body) {
         try {
             if ((ct != null && MediaType.APPLICATION_JSON.includes(ct)) || looksLikeJson(body)) {
+<<<<<<< HEAD
                 return objectMapper.readTree(body);
             }
             return xmlMapper.readTree(body.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             log.warn("parseJsonWithXmlFallback failed: {}", e.getMessage());
             return objectMapper.createObjectNode();
+=======
+                return objectMapper.readTree(body);  // json 파싱시도
+            }
+            // XML → JSON 트리
+            return xmlMapper.readTree(body.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.warn("parseJsonWithXmlFallback failed: {}", e.getMessage());
+            return objectMapper.createObjectNode();  // 빈 객체 반환
+>>>>>>> origin/Backup/main
         }
     }
 

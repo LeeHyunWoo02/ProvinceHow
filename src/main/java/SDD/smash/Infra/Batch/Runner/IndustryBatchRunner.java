@@ -9,15 +9,27 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+<<<<<<< HEAD
+=======
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+>>>>>>> origin/Backup/main
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
+<<<<<<< HEAD
+=======
+@ConditionalOnProperty(name = "seed.jobs.industry.enabled", havingValue = "true")
+>>>>>>> origin/Backup/main
 @Slf4j
 public class IndustryBatchRunner {
     private final JobLauncher jobLauncher;
     private final Job industryJob;
     private final BatchGuard guard;
+<<<<<<< HEAD
+=======
+    private final SeedProperties seedProperties;
+>>>>>>> origin/Backup/main
 
     private final String SEED_VERSION;
 
@@ -26,6 +38,10 @@ public class IndustryBatchRunner {
         this.jobLauncher = jobLauncher;
         this.industryJob = industryJob;
         this.guard = guard;
+<<<<<<< HEAD
+=======
+        this.seedProperties = seedProperties;
+>>>>>>> origin/Backup/main
         this.SEED_VERSION = seedProperties.getVersion();
     }
 

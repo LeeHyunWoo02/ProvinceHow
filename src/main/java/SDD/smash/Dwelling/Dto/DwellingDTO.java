@@ -2,8 +2,15 @@ package SDD.smash.Dwelling.Dto;
 
 import lombok.Builder;
 import lombok.Getter;
+<<<<<<< HEAD
 
 @Getter
+=======
+import lombok.Setter;
+
+@Getter
+@Setter
+>>>>>>> origin/Backup/main
 @Builder
 public class DwellingDTO {
 

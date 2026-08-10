@@ -1,11 +1,24 @@
 package SDD.smash.Dwelling.Batch;
 
+<<<<<<< HEAD
+=======
+import SDD.smash.Address.Entity.Sigungu;
+>>>>>>> origin/Backup/main
 import SDD.smash.Address.Repository.SigunguRepository;
 import SDD.smash.Dwelling.Adapter.MolitAptRentAdapter;
 import SDD.smash.Dwelling.Dto.DwellingDTO;
 import SDD.smash.Dwelling.Dto.DwellingUpsertDTO;
 import SDD.smash.Dwelling.Dto.RentRecord;
+<<<<<<< HEAD
 import SDD.smash.Exception.Exception.BusinessException;
+=======
+import SDD.smash.Dwelling.Entity.Dwelling;
+import SDD.smash.Dwelling.Repository.DwellingRepository;
+import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.Infra.Dto.InfraScoreDTO;
+import SDD.smash.Infra.Dto.InfraScoreUpsertDTO;
+import jakarta.persistence.EntityManagerFactory;
+>>>>>>> origin/Backup/main
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
@@ -18,6 +31,10 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
+<<<<<<< HEAD
+=======
+import org.springframework.batch.item.database.JpaItemWriter;
+>>>>>>> origin/Backup/main
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
 import org.springframework.batch.item.support.IteratorItemReader;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -45,13 +62,19 @@ public class DwellingBatch {
     private final PlatformTransactionManager platformTransactionManager;
     private final MolitAptRentAdapter adapter;
     private final SigunguRepository sigunguRepository;
+<<<<<<< HEAD
     private final DwellingCacheCleaner dwellingCacheCleaner;
+=======
+>>>>>>> origin/Backup/main
     private final @Qualifier("dataDBSource") DataSource dataDataSource;
 
     @Bean
     public Job dwellingJob(Step dwellingStep) {
         return new JobBuilder("dwellingJob", jobRepository)
+<<<<<<< HEAD
                 .listener(dwellingCacheCleaner)
+=======
+>>>>>>> origin/Backup/main
                 .start(dwellingStep)
                 .build();
     }
@@ -81,7 +104,11 @@ public class DwellingBatch {
      */
     @Bean
     @StepScope
+<<<<<<< HEAD
     public IteratorItemReader<WorkItem> dwellingReader(
+=======
+    public ItemReader<WorkItem> dwellingReader(
+>>>>>>> origin/Backup/main
             @Value("#{jobParameters['dealYmd']}") String dealYmd,
             @Value("#{jobParameters['months']}") Long months
     ) {
@@ -113,6 +140,10 @@ public class DwellingBatch {
                 if (records.isEmpty()) {
                     log.warn("No records for sigungu={}, ym={}", work.sigunguCode(), ym);
                 }
+<<<<<<< HEAD
+=======
+                log.info("sigungu = {}, ym = {}", work.sigunguCode(), ym);
+>>>>>>> origin/Backup/main
                 all.addAll(records);
             }
 
@@ -159,6 +190,11 @@ public class DwellingBatch {
         return new JdbcBatchItemWriterBuilder<DwellingUpsertDTO>()
                 .dataSource(dataDataSource)
                 .sql(upsertSql)
+<<<<<<< HEAD
+=======
+                // BeanPropertyItemSqlParameterSourceProvider 는 중첩 프로퍼티를 지원합니다.
+                // (:sigungu.sigunguCode 같이 dot path OK)
+>>>>>>> origin/Backup/main
                 .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
                 .assertUpdates(false)
                 .build();

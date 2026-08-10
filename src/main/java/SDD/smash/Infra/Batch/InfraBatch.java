@@ -105,17 +105,26 @@ public class InfraBatch {
                 .delimited()
                 .delimiter(",")
                 .quoteCharacter('\0')
+<<<<<<< HEAD
                 .names("sigungu_code", "industry_code","count","ratio","score")
+=======
+                .names("sigungu_code", "industry_code","count","ratio")
+>>>>>>> origin/Backup/main
                 .fieldSetMapper(fieldSet -> {
                     String rawSigunguCode = normalize(fieldSet.readString(0));
                     String rawIndustryCode = normalize(fieldSet.readString(1));
                     String rawInfraName = normalize(fieldSet.readString(2));
                     BigDecimal rawRatio = new BigDecimal(normalize(fieldSet.readString(3)))
                             .setScale(2, RoundingMode.HALF_UP);
+<<<<<<< HEAD
                     BigDecimal rawScore = new BigDecimal(normalize(fieldSet.readString(4)))
                             .setScale(2, RoundingMode.HALF_UP);
 
                     return new InfraDTO(rawSigunguCode, rawIndustryCode, rawInfraName,rawRatio,rawScore);
+=======
+
+                    return new InfraDTO(rawSigunguCode, rawIndustryCode, rawInfraName,rawRatio);
+>>>>>>> origin/Backup/main
                 })
                 .build();
     }
@@ -135,7 +144,10 @@ public class InfraBatch {
                     .industryCode(industryCode)
                     .count(dto.getCount())
                     .ratio(dto.getRatio())
+<<<<<<< HEAD
                     .score(dto.getScore())
+=======
+>>>>>>> origin/Backup/main
                     .build();
         };
     }
@@ -143,8 +155,13 @@ public class InfraBatch {
     @Bean
     public JdbcBatchItemWriter<InfraUpsertDTO> infraWriter() {
         String upsertSql = """
+<<<<<<< HEAD
             INSERT INTO infra (sigungu_code, industry_code, count, ratio, score)
             VALUES (:sigunguCode, :industryCode, :count, :ratio, :score)
+=======
+            INSERT INTO infra (sigungu_code, industry_code, count, ratio)
+            VALUES (:sigunguCode, :industryCode, :count, :ratio)
+>>>>>>> origin/Backup/main
             ON DUPLICATE KEY UPDATE count = VALUES(count)
             """;
 

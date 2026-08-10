@@ -16,7 +16,10 @@ public class InfraUpsertDTO {
     // 직종 개수
     private String count;
     private BigDecimal ratio;
+<<<<<<< HEAD
     private BigDecimal score;
+=======
+>>>>>>> origin/Backup/main
 
 
 }

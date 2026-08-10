@@ -13,6 +13,10 @@ import java.util.List;
 
 @Repository
 public interface SigunguRepository extends JpaRepository<Sigungu,String> {
+<<<<<<< HEAD
+=======
+    Sigungu findBySigunguCode(String sigunguCode);
+>>>>>>> origin/Backup/main
 
     @Query("SELECT new SDD.smash.Address.Dto.SigunguCodeDTO(s.sigunguCode) FROM Sigungu s")
     List<SigunguCodeDTO> findAllSigunguCodes();

@@ -23,6 +23,7 @@ public enum ErrorCode {
     MALFORMED_JSON("MALFORMED_JSON", HttpStatus.BAD_REQUEST),
 
     METHOD_NOT_ALLOWED("METHOD_NOT_ALLOWED", HttpStatus.METHOD_NOT_ALLOWED),
+<<<<<<< HEAD
     UNSUPPORTED_MEDIA_TYPE("UNSUPPORTED_MEDIA_TYPE", HttpStatus.UNSUPPORTED_MEDIA_TYPE),
     //end
 
@@ -30,6 +31,11 @@ public enum ErrorCode {
     OPENAI_SERVER_ERROR("OPENAI_SERVER_ERROR", HttpStatus.INTERNAL_SERVER_ERROR),
     OPENAI_TOKEN_EXPIRED("OPENAI_TOKEN_EXPIRED", HttpStatus.TOO_MANY_REQUESTS);
 
+=======
+    UNSUPPORTED_MEDIA_TYPE("UNSUPPORTED_MEDIA_TYPE", HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+    //end
+    ;
+>>>>>>> origin/Backup/main
 
 
     public final String code;

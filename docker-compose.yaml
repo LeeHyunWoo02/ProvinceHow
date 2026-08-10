@@ -10,13 +10,58 @@ services:
       - '8080:8080'
     env_file:
       - ./backend.env
+<<<<<<< HEAD
     depends_on:
       my-redis:
         condition: service_healthy
 
   my-redis:
     image: redis
+=======
+    volumes:
+      - ./data:/app/data:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      my-redis:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    # 한글 데이터(시도/시군구/직종명)가 있으므로 utf8mb4 고정.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+09:00
+    env_file:
+      - ./backend.env      # MYSQL_ROOT_PASSWORD / MYSQL_DATABASE / MYSQL_USER / MYSQL_PASSWORD
+    ports:
+      - '3306:3306'        # 로컬 DB 툴 접속용. 필요 없으면 지워도 된다
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      # 앱이 뜨기 전에 DB가 준비돼야 한다. Seed 배치가 기동 직후 실행되기 때문.
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  my-redis:
+    image: redis
+    ports:
+      - '6379:6379'
+>>>>>>> origin/Backup/main
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       retries: 10
+<<<<<<< HEAD
+=======
+
+volumes:
+  # 컨테이너를 지워도 데이터가 남는다.
+  # 시드를 완전히 새로 적재하려면: docker compose down -v
+  mysql-data:
+>>>>>>> origin/Backup/main

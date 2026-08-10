@@ -1,5 +1,6 @@
 package SDD.smash.Config;
 
+<<<<<<< HEAD
 import SDD.smash.Security.Filter.ApiRateLimitFilter;
 import SDD.smash.Security.Service.ApiRateLimitService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -8,18 +9,28 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
+=======
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+>>>>>>> origin/Backup/main
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
+<<<<<<< HEAD
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+=======
+>>>>>>> origin/Backup/main
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 import java.util.Arrays;
 import java.util.List;
 
+<<<<<<< HEAD
 
 @EnableWebSecurity
 @Configuration
@@ -35,6 +46,17 @@ public class SecurityConfig {
     @Value("${ratelimit.secret}")
     private String ipSecret;
 
+=======
+import static java.util.Collections.singletonList;
+
+@EnableWebSecurity
+@Configuration
+public class SecurityConfig {
+
+    @Value("${front_url}")
+    private String[] frontUrl;
+
+>>>>>>> origin/Backup/main
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
         return configuration.getAuthenticationManager();
@@ -43,6 +65,7 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
+<<<<<<< HEAD
         if(isDevProfileActive())
         {
             http
@@ -58,6 +81,21 @@ public class SecurityConfig {
                             .anyRequest().authenticated() //기본 거부 정책 적용
                     );
         }
+=======
+        http
+                .authorizeHttpRequests((auth) -> auth
+                        .requestMatchers("/api/**").permitAll()
+                        .anyRequest().authenticated() //기본 거부 정책 적용
+                );
+
+
+        /**
+         * csrf 보호 해제
+         * */
+        http
+                .csrf((csrf) -> csrf.disable());
+
+>>>>>>> origin/Backup/main
 
         /**
          * cors 관련 설정
@@ -82,6 +120,7 @@ public class SecurityConfig {
         http
                 .formLogin((formLogin) -> formLogin.disable());
 
+<<<<<<< HEAD
 
 //        http
 //                .addFilterBefore(new ApiRateLimitFilter(apiRateLimitService, env, ipSecret), UsernamePasswordAuthenticationFilter.class);
@@ -93,4 +132,8 @@ public class SecurityConfig {
         return Arrays.stream(env.getActiveProfiles())
                 .anyMatch(p -> p.equalsIgnoreCase("dev"));
     }
+=======
+        return http.build();
+    }
+>>>>>>> origin/Backup/main
 }

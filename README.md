@@ -45,7 +45,11 @@
 
 
 
+<<<<<<< HEAD
 ### 🔹 프론트엔드
+=======
+### 🔹 프런트엔드
+>>>>>>> origin/Backup/main
 - **Vite + React + TypeScript + Tailwind CSS**
 - 배포: **Vercel**
 - 기능: 사용자 입력, 지역별 데이터 시각화, 비교 UI
@@ -55,16 +59,29 @@
   - java 17, spring boot 3.5.7 사용
   - Gradle - Groovy 기반 빌드 시스템
   - jar 패키징
+<<<<<<< HEAD
 - **Docker**로 컨테이너화되어 **AWS EC2**에서 실행
+=======
+- **Docker**로 컨테이너화되어 **Oracle Cloud Infrastructure(OCI)** 컴퓨트 인스턴스에서 실행
+>>>>>>> origin/Backup/main
 - API 통합 및 데이터 가공 로직 담당
 - **Redis**를 통한 캐싱 처리
 
 ### 🔹 데이터베이스
+<<<<<<< HEAD
 - **Amazon RDS** 사용 (metadata / data 분리)
 - 공공데이터 API (고용24, 국토교통부, LOCALDATA 등)에서 실시간 정보 수집
 
 ### 🔹 인프라
 - **AWS API Gateway**를 통해 트래픽 관리
+=======
+- **MySQL 8 컨테이너** — 스키마 분리 (`smash_data` 업무 데이터 / `smash_meta` Spring Batch 메타)
+- 애플리케이션·DB·Redis를 **docker compose 한 세트**로 기동
+- 공공데이터 API (고용24, 국토교통부, LOCALDATA 등)에서 실시간 정보 수집
+
+### 🔹 인프라
+- **Oracle Cloud Infrastructure(OCI)** 컴퓨트 인스턴스에서 Docker Compose로 운영
+>>>>>>> origin/Backup/main
 - **Nginx**로 리버스 프록시 및 보안 구성
 - **GitHub Actions**를 이용한 CI/CD
 
@@ -76,8 +93,13 @@
 |------|------------|
 | Frontend | React, TypeScript, Tailwind CSS, Vite |
 | Backend | Spring Boot, Docker, Redis |
+<<<<<<< HEAD
 | Database | Amazon RDS (MySQL) |
 | Infra | AWS EC2, API Gateway, Nginx, Vercel |
+=======
+| Database | MySQL 8 (Docker 컨테이너) |
+| Infra | Oracle Cloud Infrastructure(OCI), Docker Compose, Nginx, Vercel |
+>>>>>>> origin/Backup/main
 | CI/CD | GitHub Actions |
 | Data Source | 공공데이터포털 API (고용24, 국토교통부, LOCALDATA 등) |
 
@@ -100,7 +122,11 @@
 | 역할              | 이름       | 담당                         |
 |-----------------|----------|----------------------------|
 | Design/Frontend | 임기성      | UI/UX, React 개발            |
+<<<<<<< HEAD
 | Backend/Data    | 이현우, 신진범 | Spring Boot, DB, AWS 구축 , 공공데이터 수집 및 통합 |
+=======
+| Backend/Data    | 이현우, 신진범 | Spring Boot, DB, 인프라(OCI) 구축, 공공데이터 수집 및 통합 |
+>>>>>>> origin/Backup/main
 
 ---
 
@@ -108,7 +134,10 @@
 > “지방으로 옮겨 살 수 있을까?”라는 질문에,  
 > **우리 서비스가 빠르고 명확한 답을 제공합니다.**
 
+<<<<<<< HEAD
 ---
 
 
 
+=======
+>>>>>>> origin/Backup/main
