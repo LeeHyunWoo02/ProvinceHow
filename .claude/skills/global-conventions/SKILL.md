@@ -5,7 +5,7 @@ description: smash(ProvinceHow)의 DDD 헥사고날 구조에서 통용되는 �
 
 # global-conventions (DDD)
 
-Java 17 · Spring Boot 3.5.7 · Gradle(Groovy) · Lombok · MySQL(RDS 2개) · Redis.
+Java 17 · Spring Boot 3.5.7 · Gradle(Groovy) · Lombok · MySQL(Docker 컨테이너, 스키마 2개) · Redis(Docker 컨테이너).
 아키텍처는 **DDD 헥사고날**이다 → architecture-conventions
 
 ---

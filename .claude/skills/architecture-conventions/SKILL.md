@@ -434,11 +434,12 @@ Seed 배치는 **외부 파일/API → 저장소**로 데이터를 밀어넣는 
 ## 7. 기술 인프라 (common/config)
 
 DataSource 2개 구성은 DDD 전환과 무관하게 유지된다.
+DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — 드라이버 `com.mysql.cj.jdbc.Driver`, 호스트는 compose 서비스명 `mysql`.
 
-| DataSource | 용도 | 트랜잭션 매니저 |
-|---|---|---|
-| `dataDBSource` (`@Primary` DataSource) | 업무 데이터 — 모든 JPA 엔티티 | `dataTransactionManager` |
-| `batchDataSource` (`@BatchDataSource`) | Spring Batch 메타 | `batchTransactionManager` (**`@Primary` PlatformTransactionManager**) |
+| DataSource | 스키마 | 용도 | 트랜잭션 매니저 |
+|---|---|---|---|
+| `dataDBSource` (`@Primary` DataSource) | `smash_data` | 업무 데이터 — 모든 JPA 엔티티 | `dataTransactionManager` |
+| `batchDataSource` (`@BatchDataSource`) | `smash_meta` | Spring Batch 메타 | `batchTransactionManager` (**`@Primary` PlatformTransactionManager**) |
 
 > ⚠️ `@Primary` **트랜잭션 매니저는 배치용**이다. application 계층에서 무수식 `@Transactional`을 쓰면 JPA 트랜잭션이 열리지 않는다.
 > **반드시 `@Transactional(transactionManager = "dataTransactionManager", readOnly = true)`** → persistence-conventions §6

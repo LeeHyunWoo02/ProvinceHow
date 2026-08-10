@@ -33,7 +33,6 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-xml'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.13'
-    implementation 'software.amazon.jdbc:aws-advanced-jdbc-wrapper:2.5.0'
     compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.mysql:mysql-connector-j'
 	annotationProcessor 'org.projectlombok:lombok'

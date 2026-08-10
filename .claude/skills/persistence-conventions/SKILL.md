@@ -5,8 +5,25 @@ description: smash(ProvinceHow)의 DDD 헥사고날 구조에서 영속성을 �
 
 # persistence-conventions (DDD)
 
-MySQL(Amazon RDS) 2계정 · Spring Data JPA(Hibernate) · Spring Batch.
+MySQL(**Docker 컨테이너**, 스키마 2개) · Spring Data JPA(Hibernate) · Spring Batch.
 스키마는 **`hibernate.hbm2ddl.auto=update`** 로 JPA 엔티티에서 파생된다 → **`infrastructure/persistence`의 JpaEntity가 스키마의 정본**이다.
+
+---
+
+## 0. DB 인프라 (Docker 컨테이너)
+
+DB는 **MySQL 컨테이너 1개에 스키마 2개**다. RDS가 아니다.
+
+| DataSource | 프로퍼티 | 스키마 | 용도 | 트랜잭션 매니저 |
+|---|---|---|---|---|
+| `dataDBSource` (`@Primary` DataSource) | `spring.datasource-data.*` | `smash_data` | 업무 데이터 — 모든 JPA 엔티티 | `dataTransactionManager` (`JpaTransactionManager`) |
+| `batchDataSource` (`@BatchDataSource`) | `spring.datasource-meta.*` | `smash_meta` | Spring Batch 메타 테이블 | `batchTransactionManager` (**`@Primary`**) |
+
+- 드라이버는 **`com.mysql.cj.jdbc.Driver`** (AWS JDBC Wrapper 아님). JDBC URL 호스트는 compose 서비스명 **`mysql`**.
+- 업무 테이블은 `hbm2ddl.auto=update`가 자동 생성한다.
+- `smash_meta`는 `docker/mysql/init/01-init-meta-db.sh`가 최초 1회 만들고,
+  배치 메타 테이블은 **`BATCH_SCHEMA_INIT=always`** 일 때 애플리케이션이 생성한다.
+- 개발 중 DB를 완전히 초기화하려면 `docker compose down -v`. 운영 절차는 **seed-data** 스킬 참조.
 
 ---
 
