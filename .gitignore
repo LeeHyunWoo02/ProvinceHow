@@ -1,6 +1,8 @@
 HELP.md
 data/
 /scripts
+backend.env
+!backend.env.example
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
