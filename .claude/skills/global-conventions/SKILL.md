@@ -1,0 +1,304 @@
+---
+name: global-conventions
+description: smash(ProvinceHow)의 DDD 헥사고날 구조에서 통용되는 전역 규약 — 소문자 패키지 규칙과 계층별 클래스 접미사, 유비쿼터스 언어, DomainException/ErrorCode 기반 예외 설계(HttpStatus 분리), 도메인 모델·애플리케이션 DTO·응답 DTO 3분리 원칙, 계층별 로깅 기준을 정의한다. 새 클래스 이름을 정하거나, 예외를 던지거나, ErrorCode를 추가하거나, DTO를 만들거나, 로그를 남길 때 사용한다. 계층 배치는 architecture-conventions, 유스케이스·도메인 모델 작성은 backend-conventions, JPA 매핑은 persistence-conventions, 캐시는 redis-conventions를 따른다.
+---
+
+# global-conventions (DDD)
+
+Java 17 · Spring Boot 3.5.7 · Gradle(Groovy) · Lombok · MySQL(RDS 2개) · Redis.
+아키텍처는 **DDD 헥사고날**이다 → architecture-conventions
+
+---
+
+## 1. 패키지 네이밍
+
+```
+SDD.smash.<context>.<layer>[.<sublayer>]
+```
+
+- **전부 소문자.** 기존 `SDD.smash.Dwelling.Service` → `SDD.smash.dwelling.application`
+- 컨텍스트: `common`, `address`, `job`, `dwelling`, `infra`, `support`, `recommendation`
+- 계층: `domain`(`.model` / `.service` / `.port`), `application`(`.port.in` / `.dto`), `infrastructure`(`.persistence` / `.cache` / `.external` / `.batch` / `.scheduler`), `presentation`(`.dto`)
+
+**패키지 이름이 곧 아키텍처 규칙이다.** `domain` 아래에 JPA import가 있으면 패키지를 잘못 고른 것이다.
+
+---
+
+## 2. 클래스 접미사 카탈로그
+
+| 계층 | 종류 | 접미사 | 예시 |
+|---|---|---|---|
+| `domain.model` | Aggregate Root / Entity | **없음** (도메인 용어 그대로) | `DwellingMarket`, `JobCount`, `RegionInfra`, `SupportPolicy` |
+| `domain.model` | 값 객체 | 없음 (`record`) | `SigunguCode`, `Score`, `Money`, `JobCode` |
+| `domain.model` | 도메인 enum | 없음 | `DwellingType`, `InfraImportance`, `SupportTag`, `Major` |
+| `domain.service` | 도메인 서비스 / 정책 | `...Policy` / `...Calculator` | `DwellingScorePolicy`, `JobScorePolicy` |
+| `domain.port` | out-port (저장) | `...Repository` | `DwellingMarketRepository` |
+| `domain.port` | out-port (외부 공급) | `...Provider` | `RentRecordProvider`, `SupportPolicyProvider` |
+| `domain.port` | out-port (캐시) | `...Cache` | `DwellingScoreCache` |
+| `application.port.in` | in-port (유스케이스 계약) | `...UseCase` | `DwellingQueryUseCase`, `RecommendRegionUseCase` |
+| `application` | 유스케이스 구현 (조회) | `...QueryService` | `DwellingQueryService`, `RegionDetailService` |
+| `application` | 유스케이스 구현 (변경/갱신) | `...Service` | `RefreshSupportPolicyService` |
+| `application.dto` | 유스케이스 입력 | `...Command` / `...Query` | `RecommendCommand` |
+| `application.dto` | 유스케이스 출력 | `...Info` / `...View` | `DwellingInfo`, `RegionCodeView` |
+| `infrastructure.persistence` | JPA 매핑 클래스 | `...JpaEntity` | `DwellingJpaEntity`, `SigunguJpaEntity` |
+| `infrastructure.persistence` | Spring Data 인터페이스 | `...JpaRepository` | `DwellingJpaRepository` |
+| `infrastructure.persistence` | 포트 구현 | `...RepositoryAdapter` | `DwellingRepositoryAdapter` |
+| `infrastructure.persistence` | 도메인↔JPA 변환 | `...JpaMapper` | `DwellingJpaMapper` |
+| `infrastructure.cache` | 캐시 포트 구현 | `...RedisAdapter` | `DwellingScoreRedisAdapter` |
+| `infrastructure.external` | 외부 API 포트 구현 | `...ApiAdapter` | `MolitAptRentApiAdapter`, `YouthCenterApiAdapter` |
+| `infrastructure.batch` | 배치 설정 / 실행기 | `...BatchConfig` / `...BatchRunner` | `DwellingBatchConfig`, `DwellingBatchRunner` |
+| `infrastructure.scheduler` | 스케줄러 | `...Scheduler` | `SupportPolicyRefreshScheduler` |
+| `presentation` | 컨트롤러 | `...Controller` | `RecommendController` |
+| `presentation.dto` | 요청 / 응답 | `...Request` / `...Response` | `RecommendRequest`, `RecommendResponse` |
+
+### 2.1 접미사가 알려주는 것
+
+- **`Service`는 application에만 쓴다.** 도메인 규칙 객체는 `Policy`다. 이 구분이 "지금 도메인 규칙을 쓰는지, 오케스트레이션을 쓰는지"를 이름만으로 드러낸다.
+- **`Repository`는 두 개가 있다.** `domain.port.XxxRepository`(인터페이스, 도메인 언어)와 `infrastructure.persistence.XxxJpaRepository`(Spring Data). 헷갈리면 import 경로를 본다.
+- **`Entity`라는 이름을 도메인에 쓰지 않는다.** DDD의 Entity는 개념이지 접미사가 아니다. JPA 매핑 클래스만 `JpaEntity`를 붙인다.
+- **`DTO` 접미사를 더 이상 쓰지 않는다.** 역할에 따라 `Command`/`Info`/`Request`/`Response`로 나눈다(§4).
+
+### 2.2 메서드 명명
+
+| 계층 | 규칙 | 예시 |
+|---|---|---|
+| `domain.model` | 도메인 행위를 서술. getter 나열 금지 | `scoreFor(type, budget)`, `isAffordable(budget)`, `totalCount()` |
+| `domain.port` | 저장소 언어 | `findBy(SigunguCode)`, `findAll()`, `save(...)`, `existsBy(...)` |
+| `application` | 유스케이스 이름 | `getDwellingInfo(...)`, `recommend(...)`, `refreshAll()` |
+| `infrastructure` | 기술 동작 | `toDomain(...)`, `toJpaEntity(...)`, `fetchMonth(...)` |
+
+- 검증 후 예외를 던지는 메서드는 `...OrThrow`. 다만 **대부분의 검증은 값 객체 생성자로 흡수**되므로 이런 메서드가 줄어드는 것이 정상이다.
+- 상수는 `private static final` + SCREAMING_SNAKE.
+
+### 2.3 유비쿼터스 언어
+
+코드에 쓰는 용어는 팀이 대화에서 쓰는 용어와 같아야 한다. 아래 표를 정본으로 삼는다.
+
+| 도메인 용어 | 코드 | 쓰지 않을 표현 |
+|---|---|---|
+| 시군구 코드 | `SigunguCode` | `code`, `region`, `zipCd`(외부 API 용어) |
+| 지역 추천 점수 | `Score` | `point`, `rate` |
+| 전월세 시세 | `DwellingMarket` | `Dwelling`(모호), `Rent` |
+| 지원정책 | `SupportPolicy` | `youthPolicy`, `plcy`(외부 API 용어) |
+| 일자리 수 | `JobCount` | `employment` |
+| 인프라 충실도 | `InfraImportance` | `level`, `weight` |
+
+**외부 API의 어휘(`plcyNm`, `aplyUrlAddr`, `LAWD_CD`, `zipCd`)는 `infrastructure/external` 안에서만 존재한다.** 어댑터 경계를 넘어오면 도메인 용어로 번역한다.
+
+### 2.4 API 경로
+
+- 공개 API는 전부 `/api` 하위. `SecurityConfig`가 `/api/**` permitAll, 나머지 authenticated.
+- 경로·쿼리 파라미터는 camelCase (`/jobTop`, `sigunguCode`, `midJobCode`).
+- **현재 CORS는 GET/OPTIONS만 허용**한다. 다른 메서드를 열려면 `SecurityConfig`를 함께 바꾼다.
+
+---
+
+## 3. 예외 설계
+
+### 3.1 구조
+
+```
+common/exception/
+├── ErrorCode.java                  enum — 코드 문자열만. HttpStatus 없음 ★
+├── DomainException.java            RuntimeException + ErrorCode
+└── handler/
+    ├── GlobalExceptionHandler.java @RestControllerAdvice
+    ├── ErrorCodeHttpMapper.java    ErrorCode → HttpStatus 매핑 ★
+    └── ErrorResponse.java          { code, message }
+```
+
+> ★ **As-Is와의 가장 큰 차이**: 현재 `ErrorCode`는 `HttpStatus`를 필드로 갖는다.
+> `ErrorCode`는 도메인이 던지는 개념이므로 **HTTP를 알면 안 된다.** HttpStatus 매핑은 web adapter의 관심사로 분리한다.
+
+```java
+// common/exception/ErrorCode.java — 프레임워크 의존 없음
+public enum ErrorCode {
+    // address
+    ADDRESS_CODE_NOT_FOUND,
+    // job
+    JOB_CODE_NOT_FOUND,
+    // dwelling
+    PRICE_AMOUNT_NOT_VALID,
+    NOT_FOUND_YEARMONTH,
+    // common domain
+    SCORE_OUT_OF_RANGE,
+    ;
+    public String code() { return name(); }   // 코드 문자열 == enum 이름
+}
+
+// common/exception/DomainException.java
+@Getter
+public class DomainException extends RuntimeException {
+    private final ErrorCode errorCode;
+    public DomainException(ErrorCode errorCode, String message) {
+        super(message);
+        this.errorCode = errorCode;
+    }
+}
+
+// common/exception/handler/ErrorCodeHttpMapper.java — HTTP는 여기서만
+final class ErrorCodeHttpMapper {
+    private static final Map<ErrorCode, HttpStatus> STATUS = new EnumMap<>(Map.of(
+            ErrorCode.ADDRESS_CODE_NOT_FOUND, HttpStatus.NOT_FOUND,
+            ErrorCode.JOB_CODE_NOT_FOUND,     HttpStatus.NOT_FOUND,
+            ErrorCode.NOT_FOUND_YEARMONTH,    HttpStatus.NOT_FOUND,
+            ErrorCode.PRICE_AMOUNT_NOT_VALID, HttpStatus.BAD_REQUEST,
+            ErrorCode.SCORE_OUT_OF_RANGE,     HttpStatus.BAD_REQUEST));
+
+    static HttpStatus of(ErrorCode code) {
+        return STATUS.getOrDefault(code, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+```
+
+### 3.2 규칙
+
+1. **도메인 규칙 위반은 `DomainException`.** 다른 런타임 예외를 직접 던지지 않는다.
+2. **검증은 가능한 한 값 객체 생성자에서.** 서비스마다 반복하던 코드 검증이 여기로 흡수된다.
+   ```java
+   public record SigunguCode(String value) {
+       public SigunguCode {
+           if (value == null || value.length() != 5)
+               throw new DomainException(ErrorCode.ADDRESS_CODE_NOT_FOUND, "유효하지 않은 시군구 코드");
+       }
+   }
+   ```
+   → 형식은 값 객체가, **존재 여부는 포트 조회**가 검증한다(`repository.existsBy(code)`).
+3. **어느 계층에서 던지는가**
+   - `domain` — 불변식/규칙 위반. 대부분 여기.
+   - `application` — 유스케이스 전제 위반(참조 대상 부재 등)
+   - `infrastructure` — 기술 예외를 잡아 **도메인 예외로 번역**하거나, 흡수해서 빈 결과 반환
+   - `presentation` — 던지지 않는다. 형식 검증은 Bean Validation에 맡긴다
+4. **try/catch를 컨트롤러·유스케이스에 두지 않는다.** 전역 핸들러가 처리한다.
+5. `ErrorCode` 추가 시 **도메인 주석 블록 안**에 넣고, HTTP 매핑이 필요하면 `ErrorCodeHttpMapper`에도 추가한다. 매핑을 빠뜨리면 500이 된다.
+6. **클라이언트에 내부 예외 메시지를 노출하지 않는다.** fallback은 로그만 남기고 고정 문구를 반환한다.
+
+### 3.3 응답 매핑표
+
+| 상황 | ErrorCode | HTTP |
+|---|---|---|
+| 코드 형식 오류 / 미존재 | `ADDRESS_CODE_NOT_FOUND`, `JOB_CODE_NOT_FOUND` | 404 |
+| 값 객체 불변식 위반 | `PRICE_AMOUNT_NOT_VALID`, `SCORE_OUT_OF_RANGE` | 400 |
+| `@Valid` 실패 | `VALIDATION_FAILED` | 400 |
+| 파라미터 누락/타입 불일치 | `BIND_FAILED` | 400 |
+| JSON 파싱 실패 | `MALFORMED_JSON` | 400 |
+| 지원하지 않는 메서드/타입 | `METHOD_NOT_ALLOWED` / `UNSUPPORTED_MEDIA_TYPE` | 405 / 415 |
+| 그 외 | (fallback) | 500 |
+
+- `GlobalExceptionHandler`는 `ResponseEntityExceptionHandler`를 상속하고, Spring MVC 표준 예외는 **새 핸들러를 만들지 말고 부모 메서드를 `@Override`** 한다.
+- **fallback도 `ErrorResponse`를 반환한다.** (현재 문자열만 반환하는 것은 전환 시 함께 고친다.)
+
+---
+
+## 4. DTO 3분리
+
+같은 데이터라도 계층마다 다른 타입을 쓴다. **한 클래스를 3계층이 공유하지 않는다.**
+
+| 종류 | 위치 | 목적 | Lombok |
+|---|---|---|---|
+| **도메인 모델** | `domain/model` | 비즈니스 규칙과 불변식 | `@Getter`만 (또는 `record`) |
+| **애플리케이션 DTO** | `application/dto` | 유스케이스 입출력. 도메인 타입을 담아도 됨 | `record` 우선 |
+| **표현 DTO** | `presentation/dto` | HTTP 요청/응답 계약(JSON 필드명) | `record` + Bean Validation |
+| **기술 DTO** | `infrastructure/**` | CSV 행, 외부 API 응답, Upsert 파라미터 | 필요에 따라 |
+
+```java
+// presentation/dto — HTTP 계약. 원시 타입으로 받고 Command로 변환
+public record RecommendRequest(
+        SupportTag supportTag,
+        String midJobCode,
+        @NotNull(message = "주거 유형은 필수입니다.") DwellingType dwellingType,
+        @NotNull(message = "가격은 필수입니다.")     Integer price,
+        @NotNull(message = "인프라 중요도는 필수입니다.") InfraImportance infraImportance) {
+
+    public RecommendCommand toCommand() {          // 경계에서 값 객체로 승격
+        return new RecommendCommand(supportTag,
+                midJobCode == null ? null : new JobCode(midJobCode),
+                dwellingType, Money.of(price), infraImportance);
+    }
+}
+
+// application/dto — 유스케이스 입력. 값 객체로 구성
+public record RecommendCommand(SupportTag supportTag, JobCode jobCode,
+                               DwellingType dwellingType, Money budget,
+                               InfraImportance infraImportance) {}
+
+// presentation/dto — 응답. 도메인 모델을 노출하지 않는다
+public record RecommendResponse(String sidoCode, String sidoName,
+                                String sigunguCode, String sigunguName, int score, ...) {
+    public static RecommendResponse from(RegionRecommendation r) { ... }
+}
+```
+
+### 4.1 규칙
+
+1. **원시 타입은 경계에서만.** `presentation`이 `String`/`Integer`로 받고, `toCommand()`에서 값 객체로 승격한다. 그 안쪽은 전부 값 객체다.
+2. **도메인 모델을 JSON으로 직렬화하지 않는다.** 응답은 항상 `presentation/dto`.
+3. **`record`를 기본으로 쓴다.** 가변이 꼭 필요할 때만 클래스 + `@Getter @Setter`.
+   - 예외: **Redis/Jackson 역직렬화 대상**은 기본 생성자 + setter가 필요하다. 이 타입들은 `infrastructure/cache` 안에 두고 도메인으로 새어나가지 않게 한다 → redis-conventions §3
+4. **`@Data` 금지.** 도메인 모델에는 `@EqualsAndHashCode`/`@ToString`도 붙이지 않는다(값 객체는 `record`가 처리).
+5. JSON 필드명은 camelCase. `presentation/dto`의 필드명이 곧 API 계약이므로 **변경 시 프론트와 합의**한다.
+6. **성공 응답에 공통 봉투(`ApiResponse<T>`)를 쓰지 않는다.** 컨트롤러는 `ResponseEntity<XxxResponse>`를 그대로 반환한다. 오류만 `ErrorResponse` 형식이다.
+
+---
+
+## 5. 로깅 기준
+
+### 5.1 계층별 정책
+
+| 계층 | 로깅 |
+|---|---|
+| `domain` | **금지.** 순수성 유지. 규칙 위반은 예외로 표현한다 |
+| `application` | 유스케이스 단위 결과·건수. 실패는 예외로 올린다 |
+| `infrastructure` | 기술 실패의 1차 기록(외부 API, 배치, 캐시). **여기가 로그의 주 무대** |
+| `presentation` | 전역 핸들러의 오류 기록만 |
+
+### 5.2 작성 규칙
+
+```java
+@Slf4j                    // Lombok. 수동 LoggerFactory 선언 금지
+public class MolitAptRentApiAdapter { ... }
+```
+
+| 레벨 | 언제 | 예시 |
+|---|---|---|
+| `error` | 작업이 실패로 끝남. 예외 객체를 마지막 인자로 | `log.error("[MOLIT] fetch 실패 sigungu={}, ym={}", code, ym, e)` |
+| `warn` | 진행은 하지만 데이터가 누락/비정상 | `log.warn("인프라 데이터 없음 sigungu={}", code)` |
+| `info` | 배치·스케줄러의 시작/완료/건수 | `log.info("[SupportRefresh] 완료 count={}, elapsed={}ms", n, ms)` |
+| `debug` | 상세 추적 | 루프 내부 진행 상황 |
+
+1. **문자열 연결(`+`) 금지, `{}` 플레이스홀더 사용.**
+2. 스케줄러/배치 로그에는 `[식별자]` 접두어 + 처리 건수/소요시간.
+3. **비밀값 금지** — serviceKey, apiKey, DB 접속정보. 외부 API URL 전체를 로그로 찍지 않는다(쿼리스트링에 키가 들어 있다).
+4. `System.out.println` / `printStackTrace()` 금지.
+5. 루프 안 `info`는 건수가 크면 `debug`로 낮춘다.
+
+---
+
+## 6. 공통 유틸
+
+`common/util`은 **도메인 지식이 없는 기술 유틸**만 담는다. 계산 규칙이 도메인 지식이면 `domain/service`의 Policy로 옮긴다.
+
+| 클래스 | 성격 | 위치 |
+|---|---|---|
+| `BatchTextUtil` (`normalize`, `isBlank`, `digitsOnly`, `addLeadingZero`) | 외부 데이터 정제 = 기술 | `common/util` (또는 `infrastructure/batch`) |
+| `MapperUtil` (`text`, `num` on `JsonNode`) | JSON 파싱 = 기술 | `common/util` |
+| `CalculateUtil` (`mean`, `median`) | **도메인 계산** | `dwelling/domain/service` 로 이동 검토 |
+| `BatchGuard` | Spring Batch 의존 | `common/batch` |
+
+- 유틸은 `public static` 메서드만 갖는 무상태 클래스(Spring 빈 아님).
+- **domain 패키지에서 `common/util`을 import하지 않는다.** 도메인이 필요로 하는 계산은 도메인 안에 둔다.
+
+---
+
+## 7. 체크리스트
+
+- [ ] 패키지가 소문자 `SDD.smash.<context>.<layer>`인가
+- [ ] 클래스 접미사가 §2 카탈로그와 일치하는가 (`Service`는 application에만, 도메인 규칙은 `Policy`)
+- [ ] 외부 API 어휘(`plcyNm`, `LAWD_CD`)가 어댑터 밖으로 새지 않았는가
+- [ ] 예외가 `DomainException` + `ErrorCode`인가, `ErrorCode`에 `HttpStatus`가 없는가
+- [ ] 새 `ErrorCode`를 `ErrorCodeHttpMapper`에도 추가했는가
+- [ ] 형식 검증이 값 객체 생성자에 있는가 (서비스에 흩어져 있지 않은가)
+- [ ] DTO가 계층별로 분리됐는가 (도메인 모델을 JSON으로 노출하지 않았는가)
+- [ ] 원시 타입이 presentation 경계 안쪽으로 넘어가지 않았는가
+- [ ] `domain`에 로그가 없는가, 나머지는 `@Slf4j` + `{}` + 비밀값 미노출인가
+- [ ] `./gradlew test` 통과
