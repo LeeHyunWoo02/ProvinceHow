@@ -2,7 +2,9 @@ HELP.md
 data/
 /scripts
 backend.env
+backend.prod.env
 !backend.env.example
+!backend.prod.env.example
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
