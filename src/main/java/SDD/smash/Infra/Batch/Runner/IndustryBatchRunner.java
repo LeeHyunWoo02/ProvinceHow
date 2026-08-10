@@ -9,10 +9,12 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 @Component
+@ConditionalOnProperty(name = "seed.jobs.industry.enabled", havingValue = "true")
 @Slf4j
 public class IndustryBatchRunner {
     private final JobLauncher jobLauncher;

@@ -67,7 +67,7 @@ public class SidoBatch {
         return new FlatFileItemReaderBuilder<SidoDTO>()
                 .name("sidoCsvReader")
                 .resource(new FileSystemResource(filePath))
-                .encoding("MS949")
+                .encoding("UTF-8")
                 .linesToSkip(1)
                 .strict(true)
                 .delimited()

@@ -85,7 +85,7 @@ public class SigunguBatch {
         return new FlatFileItemReaderBuilder<SigunguDTO>()
                 .name("sigunguCsvReader")
                 .resource(new FileSystemResource(filePath))
-                .encoding("MS949")
+                .encoding("UTF-8")
                 .linesToSkip(1)
                 .strict(true)
                 .delimited()

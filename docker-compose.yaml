@@ -10,6 +10,8 @@ services:
       - '8080:8080'
     env_file:
       - ./backend.env
+    volumes:
+      - ./data:/app/data:ro
     depends_on:
       my-redis:
         condition: service_healthy

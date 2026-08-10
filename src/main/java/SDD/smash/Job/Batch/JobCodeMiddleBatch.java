@@ -24,6 +24,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -90,17 +91,12 @@ public class JobCodeMiddleBatch {
                 .linesToSkip(1)
                 .skippedLinesCallback(line -> log.info("Skip header : {}", line))
                 .strict(true)
-                .delimited()
-                    .delimiter(",")
-                    .quoteCharacter('\0')
-                    .includedFields(0,1,2)
-                    .strict(false)
-                    .names("jobCode", "name","upstream_code")
-                .fieldSetMapper(fieldSet -> {
+                .lineMapper((line, lineNumber) -> {
+                    String[] values = line.split(",", -1);
                     JobCodeMiddleDTO dto = new JobCodeMiddleDTO();
-                    dto.setCode(fieldSet.readString(0).trim());
-                    dto.setName(fieldSet.readString(1).trim());
-                    dto.setUpstream(fieldSet.readString(2).trim());
+                    dto.setCode(values[0].trim());
+                    dto.setName(String.join(",", Arrays.copyOfRange(values, 1, values.length - 1)).trim());
+                    dto.setUpstream(values[values.length - 1].trim());
 
                     return dto;
                 })
