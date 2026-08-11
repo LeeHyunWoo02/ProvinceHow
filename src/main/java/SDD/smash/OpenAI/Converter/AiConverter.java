@@ -1,14 +1,18 @@
 package SDD.smash.OpenAI.Converter;
 
-import SDD.smash.Apis.Dto.*;
 import SDD.smash.OpenAI.Dto.AiRecommendDTO;
+import SDD.smash.recommendation.application.dto.RegionDetailInfo;
+import SDD.smash.recommendation.application.dto.RegionRecommendation;
+import SDD.smash.recommendation.presentation.dto.AiPickEntry;
+import SDD.smash.recommendation.presentation.dto.DetailResponse;
+import SDD.smash.recommendation.presentation.dto.RecommendAggregateResponse;
 import org.springframework.lang.Nullable;
 
 import java.util.List;
 
 public class AiConverter {
-    public static DetailResponseDTO toResponseDTO(DetailDTO dto, @Nullable String summarizeContent){
-        return DetailResponseDTO.builder()
+    public static DetailResponse toResponseDTO(RegionDetailInfo dto, @Nullable String summarizeContent){
+        return DetailResponse.builder()
                 .sidoCode(dto.getSidoCode())
                 .sidoName(dto.getSidoName())
                 .sigunguCode(dto.getSigunguCode())
@@ -25,10 +29,10 @@ public class AiConverter {
                 .build();
     }
 
-    public static RecommendAggregateResponse toResponseList(List<RecommendDTO> recommendDTOList,
+    public static RecommendAggregateResponse toResponseList(List<RegionRecommendation> recommendDTOList,
                                                             @Nullable AiRecommendDTO aiRecommendDTO){
-        List<RecommendDTO> items = recommendDTOList.stream()
-                .map(dto -> RecommendDTO.builder()
+        List<RegionRecommendation> items = recommendDTOList.stream()
+                .map(dto -> RegionRecommendation.builder()
                         .sidoCode(dto.getSidoCode())
                         .sidoName(dto.getSidoName())
                         .sigunguCode(dto.getSigunguCode())

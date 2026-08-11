@@ -1,6 +1,6 @@
 package SDD.smash.legacy.job.Repository;
 
-import SDD.smash.Apis.Dto.CodeDTO;
+import SDD.smash.legacy.address.Dto.CodeDTO;
 import SDD.smash.legacy.job.Entity.JobCodeMiddle;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,7 +13,7 @@ public interface JobCodeMiddleRepository extends JpaRepository<JobCodeMiddle, St
     boolean existsByCode(String code);
 
     @Query("""
-    SELECT new SDD.smash.Apis.Dto.CodeDTO(
+    SELECT new SDD.smash.legacy.address.Dto.CodeDTO(
     jm.code,
     jm.name
     )

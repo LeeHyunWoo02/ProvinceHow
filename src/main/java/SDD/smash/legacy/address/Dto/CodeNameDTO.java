@@ -1,4 +1,4 @@
-package SDD.smash.Apis.Dto;
+package SDD.smash.legacy.address.Dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

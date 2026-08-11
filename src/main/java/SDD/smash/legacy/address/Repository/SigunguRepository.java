@@ -2,8 +2,8 @@ package SDD.smash.legacy.address.Repository;
 
 import SDD.smash.legacy.address.Dto.SigunguCodeDTO;
 import SDD.smash.legacy.address.Entity.Sigungu;
-import SDD.smash.Apis.Dto.CodeDTO;
-import SDD.smash.Apis.Dto.CodeNameDTO;
+import SDD.smash.legacy.address.Dto.CodeDTO;
+import SDD.smash.legacy.address.Dto.CodeNameDTO;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -21,7 +21,7 @@ public interface SigunguRepository extends JpaRepository<Sigungu,String> {
 
 
     @Query("""
-    SELECT new SDD.smash.Apis.Dto.CodeNameDTO(
+    SELECT new SDD.smash.legacy.address.Dto.CodeNameDTO(
     sgg.sido.sidoCode,
     sgg.sido.name,
     sgg.sigunguCode,
@@ -33,7 +33,7 @@ public interface SigunguRepository extends JpaRepository<Sigungu,String> {
 
     @Query("""
 
-            SELECT new SDD.smash.Apis.Dto.CodeDTO(
+            SELECT new SDD.smash.legacy.address.Dto.CodeDTO(
             s.sigunguCode,
             s.name
             )
@@ -46,7 +46,7 @@ public interface SigunguRepository extends JpaRepository<Sigungu,String> {
 
     @Query("""
 
-            SELECT new SDD.smash.Apis.Dto.CodeNameDTO(
+            SELECT new SDD.smash.legacy.address.Dto.CodeNameDTO(
             sgg.sido.sidoCode,
             sgg.sido.name,
             sgg.sigunguCode,

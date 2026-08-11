@@ -1,7 +1,7 @@
 package SDD.smash.OpenAI.Service;
 
-import SDD.smash.Apis.Dto.DetailDTO;
-import SDD.smash.Apis.Dto.DetailResponseDTO;
+import SDD.smash.recommendation.application.dto.RegionDetailInfo;
+import SDD.smash.recommendation.presentation.dto.DetailResponse;
 import SDD.smash.common.exception.DomainException;
 import SDD.smash.OpenAI.Client.OpenAiClient;
 import SDD.smash.OpenAI.Converter.AiConverter;
@@ -31,7 +31,7 @@ public class DetailAiSummaryService {
         this.TEMPERATURE = temperature;
     }
 
-    public DetailResponseDTO summarize(DetailDTO dto){
+    public DetailResponse summarize(RegionDetailInfo dto){
         try{
             String json = objectMapper.writeValueAsString(dto);
             Tool extractedTool = extractedTool();

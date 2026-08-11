@@ -1,7 +1,7 @@
 package SDD.smash.OpenAI.Service;
 
-import SDD.smash.Apis.Dto.RecommendAggregateResponse;
-import SDD.smash.Apis.Dto.RecommendDTO;
+import SDD.smash.recommendation.application.dto.RegionRecommendation;
+import SDD.smash.recommendation.presentation.dto.RecommendAggregateResponse;
 import SDD.smash.common.exception.DomainException;
 import SDD.smash.OpenAI.Client.OpenAiClient;
 import SDD.smash.OpenAI.Converter.AiConverter;
@@ -38,7 +38,7 @@ public class AiRecommendService {
 
     }
 
-    public RecommendAggregateResponse summarize(List<RecommendDTO> recommendList){
+    public RecommendAggregateResponse summarize(List<RegionRecommendation> recommendList){
         try{
             String json = objectMapper.writeValueAsString(recommendList);
 

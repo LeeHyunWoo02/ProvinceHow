@@ -1,7 +1,7 @@
 package SDD.smash;
 
 import SDD.smash.dwelling.infrastructure.batch.DwellingBatchRunner;
-import SDD.smash.legacy.support.scheduler.YouthSupportScheduler;
+import SDD.smash.support.infrastructure.scheduler.SupportPolicyRefreshScheduler;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -41,9 +41,10 @@ public abstract class IntegrationTestSupport {
 
     /**
      * @Scheduled(initialDelay = 0) 이라 컨텍스트가 뜨자마자 청년정책 API 를 전 시군구에 대해 호출한다.
+     * recommendation 단계에서 옛 {@code YouthSupportScheduler} 를 대체했다.
      */
     @MockitoBean
-    private YouthSupportScheduler youthSupportScheduler;
+    private SupportPolicyRefreshScheduler supportPolicyRefreshScheduler;
 
     @DynamicPropertySource
     static void datasourceProperties(DynamicPropertyRegistry registry) {

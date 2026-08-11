@@ -1,7 +1,7 @@
 package SDD.smash.legacy.address.Repository;
 
 import SDD.smash.legacy.address.Entity.Sido;
-import SDD.smash.Apis.Dto.CodeDTO;
+import SDD.smash.legacy.address.Dto.CodeDTO;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -12,7 +12,7 @@ import java.util.List;
 public interface SidoRepository extends JpaRepository<Sido,String> {
 
     @Query("""
-    SELECT new SDD.smash.Apis.Dto.CodeDTO(
+    SELECT new SDD.smash.legacy.address.Dto.CodeDTO(
     s.sidoCode,
     s.name
     )

@@ -16,11 +16,9 @@ import org.springframework.stereotype.Service;
  * 갱신 로직을 옮긴 것이다 — 전 시군구 × 전 태그를 순회해 외부 API 를 호출하고,
  * 끝나면 파생 점수 캐시를 무효화한다(redis-conventions §6.1).
  *
- * <p><b>지금은 아무도 이 유스케이스를 트리거하지 않는다.</b> 옛 {@code YouthSupportScheduler}
- * 가 여전히 3일 주기로 실제 외부 API 를 호출해 옛 네임스페이스({@code sigunguCode:tag})를
- * 갱신하므로, 이 유스케이스를 지금 스케줄에 올리면 외부 API 호출이 두 배로 나간다.
- * `recommendation` 단계에서 옛 스케줄러를 걷어낼 때 {@code support/infrastructure/scheduler}
- * 의 트리거를 활성화한다.
+ * <p>{@code recommendation} 단계에서 {@code support/infrastructure/scheduler/SupportPolicyRefreshScheduler}
+ * 가 3일 주기로 이 유스케이스를 트리거하도록 활성화됐고, 같은 커밋에서 옛
+ * {@code YouthSupportScheduler} 를 삭제했다.
  */
 @Service
 @RequiredArgsConstructor
