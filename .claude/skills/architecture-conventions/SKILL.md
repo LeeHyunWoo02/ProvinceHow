@@ -403,9 +403,12 @@ Seed 배치는 **외부 파일/API → 저장소**로 데이터를 밀어넣는 
   | 5 | Population | address | Sigungu |
   | 6 | Industry | infra | — |
   | 7 | Infra | infra | Sigungu, Industry |
-  | 8 | InfraScore | infra | Sigungu |
-  | 9 | JobCount | job | Sigungu, JobCodeMiddle |
-  | 10 | Dwelling | dwelling | Sigungu + 외부 API |
+  | 8 | JobCount | job | Sigungu, JobCodeMiddle |
+  | 9 | Dwelling | dwelling | Sigungu + 외부 API |
+
+  > 위 값은 2026-08-11 실제 코드에서 실측한 것이다. 이전 표에는 머지 충돌 정리 때 삭제된
+  > `InfraScore` 배치가 8번으로 남아 있어 `JobCount`·`Dwelling`이 한 칸씩 밀려 적혀 있었다.
+  > 코드를 표에 맞추지 말고 표를 코드에 맞춘다 — `@Order` 변경은 실행 순서 변경이다.
 
 - 재실행 방지는 `BatchGuard.alreadyDone(jobName, seedVersion)` 유지. 위치는 `common/batch` 또는 각 컨텍스트 infrastructure.
 - **대량 적재 배치는 Aggregate를 거치지 않아도 된다.** `JdbcBatchItemWriter` + Upsert SQL로 직접 쓰는 현재 방식을 유지한다. 도메인 불변식은 Processor에서 값 객체 생성으로 검증한다.

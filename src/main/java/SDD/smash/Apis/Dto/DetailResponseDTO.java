@@ -3,7 +3,7 @@ package SDD.smash.Apis.Dto;
 import SDD.smash.legacy.dwelling.Dto.DwellingInfoDTO;
 import SDD.smash.Infra.Dto.InfraDetails;
 import SDD.smash.Infra.Dto.InfraMajor;
-import SDD.smash.Job.Dto.JobInfoDTO;
+import SDD.smash.legacy.job.Dto.JobInfoDTO;
 import SDD.smash.Support.dto.SupportListDTO;
 import lombok.Builder;
 import lombok.Getter;
