@@ -3,6 +3,7 @@ package SDD.smash.address.infrastructure.persistence;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -16,9 +17,23 @@ import lombok.NoArgsConstructor;
  * <p>As-Is 의 {@code @ManyToOne Sido} 객체 참조를 {@code sido_code} 값 컬럼으로 바꿨다.
  * <b>컬럼명과 타입(varchar(2))이 As-Is 조인 컬럼과 같아 스키마 변경이 없다.</b>
  * DB 에 이미 걸려 있는 물리 FK 제약은 그대로 남는다. 제거는 전환 완료 후 별도 DDL 로 한다.
+ *
+ * <p><b>{@code idx_sigungu_sido} 를 명시하는 이유</b> — persistence-conventions §2.5.
+ * FK 객체 참조를 없애면 Hibernate 가 조인 컬럼 인덱스를 자동 생성하지 않는다.
+ * {@code sido_code} 는 {@code findAllBySidoCode} 의 필터이자
+ * {@code findAllRegionCodes} / {@code findRegionCode} 의 {@code JOIN ... ON} 조건이라
+ * 인덱스가 없으면 풀스캔이 된다.
+ * 기존 DB 에는 옛 FK 가 남긴 해시 이름 인덱스가 같은 컬럼에 이미 있으므로,
+ * 중복 생성을 막으려면 {@code docker/mysql/ddl/2026-08-11-rename-fk-index.sql} 로
+ * 그 인덱스를 이 이름으로 바꿔줘야 한다.
  */
 @Entity
-@Table(name = "sigungu")
+@Table(
+        name = "sigungu",
+        indexes = {
+                @Index(name = "idx_sigungu_sido", columnList = "sido_code")
+        }
+)
 @Getter
 @Builder
 @NoArgsConstructor(access = AccessLevel.PROTECTED)

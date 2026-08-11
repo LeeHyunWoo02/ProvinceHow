@@ -1,7 +1,8 @@
 package SDD.smash.recommendation.infrastructure.external;
 
+import SDD.smash.recommendation.application.dto.RegionPick;
 import SDD.smash.recommendation.application.dto.RegionRecommendation;
-import SDD.smash.recommendation.presentation.dto.RecommendAggregateResponse;
+import SDD.smash.recommendation.application.port.out.RegionPickProvider;
 import SDD.smash.common.exception.DomainException;
 import SDD.smash.recommendation.infrastructure.external.dto.AiRecommendDTO;
 import SDD.smash.recommendation.infrastructure.external.dto.OpenAiMessage;
@@ -11,22 +12,42 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 import static SDD.smash.common.util.MapperUtil.extractJson;
 
-@Service
+/**
+ * {@link RegionPickProvider} 의 OpenAI 구현. As-Is {@code OpenAI.Service.AiRecommendService} 다.
+ *
+ * <p><b>바뀐 것은 반환 타입뿐이다.</b> 예전에는 이 클래스가
+ * {@code presentation/dto/RecommendAggregateResponse} 를 직접 조립해
+ * <b>infrastructure → presentation</b> 역방향 의존을 만들었다. 이제 AI 결과
+ * ({@code List<RegionPick>})만 돌려주고, 응답 조립은 {@code presentation/AiConverter} 가 한다.
+ * 프롬프트 문자열·모델 파라미터·{@code extractJson} 사용은 그대로다.
+ *
+ * <p><b>폴백 3경로 — As-Is 그대로 유지한다.</b> 어느 경우든 예외를 밖으로 내보내지 않고
+ * 빈 목록을 반환해, 추천 결과는 정상 응답되고 {@code aiPick} 만 빈 배열이 되게 한다.
+ * <ol>
+ *   <li>{@code extractJson} 이 null (응답에서 JSON 을 못 찾음)</li>
+ *   <li>{@code JsonProcessingException} (직렬화/역직렬화 실패)</li>
+ *   <li>{@code DomainException} (OpenAI 호출 실패 — {@code OpenAiClient} 가 던진다)</li>
+ * </ol>
+ *
+ * <p>빈 이름을 {@code aiRecommendService} 로 고정한다 — 클래스명만 컨벤션에 맞게 바꾸고
+ * 스프링 빈 식별자는 As-Is 와 동일하게 남긴다.
+ */
+@Component("aiRecommendService")
 @Slf4j
-public class AiRecommendService {
+public class OpenAiRegionPickApiAdapter implements RegionPickProvider {
     private final OpenAiClient openAiClient;
     private final ObjectMapper objectMapper;
     private final String MODEL;
     private final Double TEMPERATURE;
 
 
-    public AiRecommendService(OpenAiClient openAiClient, ObjectMapper objectMapper,
+    public OpenAiRegionPickApiAdapter(OpenAiClient openAiClient, ObjectMapper objectMapper,
                               @Value("${openai.model}") String model,
                               @Value("${openai.temperature}") Double temperature) {
         this.openAiClient = openAiClient;
@@ -36,7 +57,8 @@ public class AiRecommendService {
 
     }
 
-    public RecommendAggregateResponse summarize(List<RegionRecommendation> recommendList){
+    @Override
+    public List<RegionPick> pick(List<RegionRecommendation> recommendList){
         try{
             String json = objectMapper.writeValueAsString(recommendList);
 
@@ -88,16 +110,31 @@ public class AiRecommendService {
             String raw = response.getChoices().get(0).getMessage().getContent();
             String jsonOnly = extractJson(raw);
             if(jsonOnly == null){
-                return AiConverter.toResponseList(recommendList,null);
+                return List.of();                       // 폴백 ① — As-Is 의 toResponseList(list, null) 과 같은 결과
             }
             AiRecommendDTO aiDto = objectMapper.readValue(jsonOnly, AiRecommendDTO.class);
-            return AiConverter.toResponseList(recommendList, aiDto);
+            return toPicks(aiDto);
         } catch (JsonProcessingException e) {
-            return AiConverter.toResponseList(recommendList,null);
+            return List.of();                           // 폴백 ②
         } catch (DomainException e){
             log.warn("OpenAI API 호출 실패");
-            return AiConverter.toResponseList(recommendList, null);
+            return List.of();                           // 폴백 ③
         }
+    }
+
+    /**
+     * 외부 LLM 응답 스키마를 application DTO 로 번역한다.
+     * As-Is {@code AiConverter.toResponseList} 안에 있던
+     * {@code aiRecommendDTO == null || getRecommendations() == null → List.of()} 판정을
+     * 그대로 옮겨온 것이다.
+     */
+    private List<RegionPick> toPicks(AiRecommendDTO aiRecommendDTO) {
+        if (aiRecommendDTO == null || aiRecommendDTO.getRecommendations() == null) {
+            return List.of();
+        }
+        return aiRecommendDTO.getRecommendations().stream()
+                .map(p -> new RegionPick(p.getSigunguCode(), p.getReason()))
+                .toList();
     }
 
 }

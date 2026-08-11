@@ -1,26 +1,45 @@
 package SDD.smash.recommendation.infrastructure.external;
 
 import SDD.smash.recommendation.application.dto.RegionDetailInfo;
-import SDD.smash.recommendation.presentation.dto.DetailResponse;
+import SDD.smash.recommendation.application.port.out.RegionSummaryProvider;
 import SDD.smash.common.exception.DomainException;
 import SDD.smash.recommendation.infrastructure.external.dto.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 
-@Service
+/**
+ * {@link RegionSummaryProvider} 의 OpenAI 구현.
+ * As-Is {@code OpenAI.Service.DetailAiSummaryService} 다.
+ *
+ * <p><b>바뀐 것은 반환 타입뿐이다.</b> 예전에는 {@code presentation/dto/DetailResponse} 를
+ * 직접 조립해 <b>infrastructure → presentation</b> 역방향 의존을 만들었다.
+ * 이제 요약문만 돌려주고 응답 조립은 {@code presentation/AiConverter} 가 한다.
+ * 프롬프트 문자열·web_search_preview 도구 설정·마크다운 정리 정규식은 그대로다.
+ *
+ * <p><b>폴백 2경로 — As-Is 그대로 유지한다.</b> {@code null} 을 반환해
+ * 상세 응답은 정상적으로 내려가고 {@code aiSummary} 만 비게 한다.
+ * <ol>
+ *   <li>{@code JsonProcessingException}</li>
+ *   <li>{@code DomainException} (OpenAI 호출 실패)</li>
+ * </ol>
+ * (추천 쪽과 달리 {@code extractJson} 을 쓰지 않으므로 세 번째 경로가 없다 — As-Is 와 동일.)
+ *
+ * <p>빈 이름을 {@code detailAiSummaryService} 로 고정한다.
+ */
+@Component("detailAiSummaryService")
 @Slf4j
-public class DetailAiSummaryService {
+public class OpenAiRegionSummaryApiAdapter implements RegionSummaryProvider {
     private final OpenAiClient openAiClient;
     private final ObjectMapper objectMapper;
     private final String MODEL;
     private final Double TEMPERATURE;
 
-    public DetailAiSummaryService(OpenAiClient openAiClient, ObjectMapper objectMapper,
+    public OpenAiRegionSummaryApiAdapter(OpenAiClient openAiClient, ObjectMapper objectMapper,
                                   @Value("${openai.model}") String model,
                                   @Value("${openai.temperature}") Double temperature) {
         this.openAiClient = openAiClient;
@@ -29,7 +48,8 @@ public class DetailAiSummaryService {
         this.TEMPERATURE = temperature;
     }
 
-    public DetailResponse summarize(RegionDetailInfo dto){
+    @Override
+    public String summarize(RegionDetailInfo dto){
         try{
             String json = objectMapper.writeValueAsString(dto);
             Tool extractedTool = extractedTool();
@@ -77,12 +97,12 @@ public class DetailAiSummaryService {
                     .replaceAll("[ \t]+\\r?\\n", "\n") // 줄 끝 공백 제거
                     .trim();
 
-            return AiConverter.toResponseDTO(dto, aiSummaryContent);
+            return aiSummaryContent;
         } catch (JsonProcessingException e) {
-            return AiConverter.toResponseDTO(dto,null);
+            return null;                    // 폴백 ① — As-Is 의 toResponseDTO(dto, null) 과 같은 결과
         } catch (DomainException e){
             log.warn("OpenAI API 호출 실패");
-            return AiConverter.toResponseDTO(dto,null);
+            return null;                    // 폴백 ②
         }
     }
 

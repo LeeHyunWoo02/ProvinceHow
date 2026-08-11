@@ -3,11 +3,11 @@ package SDD.smash.recommendation.presentation;
 import SDD.smash.common.domain.model.Money;
 import SDD.smash.dwelling.domain.model.DwellingType;
 import SDD.smash.job.domain.model.JobCode;
-import SDD.smash.recommendation.infrastructure.external.AiConverter;
-import SDD.smash.recommendation.infrastructure.external.AiRecommendService;
 import SDD.smash.recommendation.application.dto.RecommendCommand;
+import SDD.smash.recommendation.application.dto.RegionPick;
 import SDD.smash.recommendation.application.dto.RegionRecommendation;
 import SDD.smash.recommendation.application.port.in.RecommendRegionUseCase;
+import SDD.smash.recommendation.application.port.out.RegionPickProvider;
 import SDD.smash.recommendation.presentation.dto.RecommendAggregateResponse;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -28,6 +28,12 @@ import java.util.List;
  * 경로·파라미터명·검증 애노테이션을 그대로 유지한다. {@code dwellingType} 요청 파라미터는
  * 이제 {@code dwelling.domain.model.DwellingType}(새 enum)으로 바인딩된다 — 상수 이름
  * (MONTHLY/JEONSE)이 같아 쿼리스트링 값은 바뀌지 않는다.
+ *
+ * <p>주입 대상은 <b>application 계층의 포트 2개</b>다 — 조회 in-port 와 AI out-port.
+ * 이전에는 {@code infrastructure/external} 의 구현 클래스를 직접 주입해
+ * <b>presentation → infrastructure</b> 역방향 의존이 있었다.
+ * AI 요약은 응답을 꾸미는 표현 계층의 선택 기능({@code aiUse})이므로
+ * 유스케이스 안으로 넣지 않고 여기서 포트를 호출한다.
  */
 @Validated
 @RestController
@@ -37,7 +43,7 @@ import java.util.List;
 public class RecommendController {
 
     private final RecommendRegionUseCase recommendRegionUseCase;
-    private final AiRecommendService aiRecommendService;
+    private final RegionPickProvider regionPickProvider;
 
     @GetMapping("/recommend")
     public ResponseEntity<RecommendAggregateResponse> recommend(
@@ -60,12 +66,11 @@ public class RecommendController {
 
         List<RegionRecommendation> list = recommendRegionUseCase.recommend(command);
 
-        RecommendAggregateResponse response;
-        if (aiUse) {
-            response = aiRecommendService.summarize(list);
-            return ResponseEntity.ok(response);
-        }
-        response = AiConverter.toResponseList(list, null);
+        // aiUse=false 면 AI 를 호출하지 않는다(As-Is 분기 유지).
+        // AI 호출이 실패하면 포트가 빈 목록을 돌려주므로 aiPick 만 빈 배열이 된다.
+        List<RegionPick> picks = aiUse ? regionPickProvider.pick(list) : null;
+
+        RecommendAggregateResponse response = AiConverter.toResponseList(list, picks);
         return ResponseEntity.ok(response);
     }
 }
