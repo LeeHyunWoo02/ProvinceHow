@@ -1,11 +1,11 @@
 package SDD.smash.Apis.Service;
 
-import SDD.smash.Address.Repository.SigunguRepository;
-import SDD.smash.Address.Service.AddressVerifyService;
-import SDD.smash.Address.Service.PopulationService;
+import SDD.smash.legacy.address.Repository.SigunguRepository;
+import SDD.smash.legacy.address.Service.AddressVerifyService;
+import SDD.smash.legacy.address.Service.PopulationService;
 import SDD.smash.Apis.Dto.CodeNameDTO;
 import SDD.smash.Apis.Dto.DetailDTO;
-import SDD.smash.Dwelling.Service.DwellingService;
+import SDD.smash.legacy.dwelling.Service.DwellingService;
 import SDD.smash.common.exception.ErrorCode;
 import SDD.smash.common.exception.DomainException;
 import SDD.smash.Infra.Service.InfraService;

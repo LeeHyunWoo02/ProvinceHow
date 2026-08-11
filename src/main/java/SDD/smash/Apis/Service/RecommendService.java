@@ -1,12 +1,12 @@
 package SDD.smash.Apis.Service;
 
-import SDD.smash.Address.Repository.SigunguRepository;
+import SDD.smash.legacy.address.Repository.SigunguRepository;
 import SDD.smash.Apis.Dto.CodeNameDTO;
 import SDD.smash.Apis.Dto.RecommendDTO;
 import SDD.smash.Apis.Dto.ScoreDTO;
-import SDD.smash.Dwelling.Entity.DwellingType;
-import SDD.smash.Dwelling.Service.DwellingScoreSerivce;
-import SDD.smash.Dwelling.Service.DwellingService;
+import SDD.smash.legacy.dwelling.Entity.DwellingType;
+import SDD.smash.legacy.dwelling.Service.DwellingScoreSerivce;
+import SDD.smash.legacy.dwelling.Service.DwellingService;
 import SDD.smash.Infra.Service.InfraScoreService;
 import SDD.smash.Infra.Service.InfraService;
 import SDD.smash.Job.Service.JobScoreService;

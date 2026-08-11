@@ -1,6 +1,6 @@
 package SDD.smash.Job.Service;
 
-import SDD.smash.Address.Service.AddressVerifyService;
+import SDD.smash.legacy.address.Service.AddressVerifyService;
 import SDD.smash.common.exception.ErrorCode;
 import SDD.smash.common.exception.DomainException;
 import SDD.smash.Job.Dto.JobInfoDTO;

@@ -1,7 +1,7 @@
 package SDD.smash.Support.scheduler;
 
-import SDD.smash.Address.Dto.SigunguCodeDTO;
-import SDD.smash.Address.Repository.SigunguRepository;
+import SDD.smash.legacy.address.Dto.SigunguCodeDTO;
+import SDD.smash.legacy.address.Repository.SigunguRepository;
 import SDD.smash.Support.domain.SupportTag;
 import SDD.smash.Support.dto.SupportListDTO;
 import SDD.smash.Support.service.YouthCenterClient;

@@ -30,7 +30,7 @@ import static SDD.smash.Util.BatchTextUtil.addLeadingZero;
 import static SDD.smash.Util.BatchTextUtil.normalize;
 
 /**
- * 시군구 시드 배치. As-Is {@code SDD.smash.Address.Batch.SigunguBatch} 를 옮긴 것이다.
+ * 시군구 시드 배치. As-Is {@code SigunguBatch} 를 옮긴 것이다.
  *
  * <p>As-Is 는 {@code Map<String, Sido>} 로 시도 엔티티를 캐싱해 {@code @ManyToOne} 에 물렸다.
  * FK 객체 참조를 없앴으므로 <b>코드 집합</b>만 캐싱해 존재 여부를 판정한다.

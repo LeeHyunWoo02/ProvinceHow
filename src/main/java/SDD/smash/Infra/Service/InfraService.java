@@ -1,6 +1,6 @@
 package SDD.smash.Infra.Service;
 
-import SDD.smash.Address.Service.AddressVerifyService;
+import SDD.smash.legacy.address.Service.AddressVerifyService;
 import SDD.smash.Infra.Dto.InfraDetails;
 import SDD.smash.Infra.Dto.InfraMajor;
 import SDD.smash.Infra.Entity.Major;

@@ -3,7 +3,7 @@ package SDD.smash.Apis.Controller;
 import SDD.smash.Apis.Dto.RecommendAggregateResponse;
 import SDD.smash.Apis.Dto.RecommendDTO;
 import SDD.smash.Apis.Service.RecommendService;
-import SDD.smash.Dwelling.Entity.DwellingType;
+import SDD.smash.legacy.dwelling.Entity.DwellingType;
 import SDD.smash.OpenAI.Converter.AiConverter;
 import SDD.smash.OpenAI.Service.AiRecommendService;
 import jakarta.validation.constraints.Max;

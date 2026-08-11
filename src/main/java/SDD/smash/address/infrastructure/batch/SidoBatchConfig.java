@@ -22,7 +22,7 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /**
- * 시도 시드 배치. As-Is {@code SDD.smash.Address.Batch.SidoBatch} 를 옮긴 것이다.
+ * 시도 시드 배치. As-Is {@code SidoBatch} 를 옮긴 것이다.
  *
  * <p>Job 이름("SidoJob")과 빈 이름은 바꾸지 않는다.
  * {@code BatchGuard} 가 Job 이름으로 재실행 여부를 판단하고 Runner 가 {@code @Qualifier} 로 찾는다.

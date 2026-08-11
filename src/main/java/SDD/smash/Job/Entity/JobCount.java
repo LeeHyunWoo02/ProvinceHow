@@ -1,6 +1,6 @@
 package SDD.smash.Job.Entity;
 
-import SDD.smash.Address.Entity.Sigungu;
+import SDD.smash.legacy.address.Entity.Sigungu;
 import jakarta.persistence.*;
 import lombok.Getter;
 

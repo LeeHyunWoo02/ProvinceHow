@@ -1,6 +1,6 @@
 package SDD.smash.Apis.Dto;
 
-import SDD.smash.Dwelling.Dto.DwellingInfoDTO;
+import SDD.smash.legacy.dwelling.Dto.DwellingInfoDTO;
 import SDD.smash.Infra.Dto.InfraDetails;
 import SDD.smash.Infra.Dto.InfraMajor;
 import SDD.smash.Job.Dto.JobInfoDTO;

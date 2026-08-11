@@ -1,6 +1,6 @@
 package SDD.smash.Infra.Entity;
 
-import SDD.smash.Address.Entity.Sigungu;
+import SDD.smash.legacy.address.Entity.Sigungu;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;

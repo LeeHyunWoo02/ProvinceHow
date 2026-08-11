@@ -1,8 +1,8 @@
 package SDD.smash.Job.Batch;
 
 
-import SDD.smash.Address.Entity.Sigungu;
-import SDD.smash.Address.Repository.SigunguRepository;
+import SDD.smash.legacy.address.Entity.Sigungu;
+import SDD.smash.legacy.address.Repository.SigunguRepository;
 import SDD.smash.Job.Dto.JobCountCsvDTO;
 import SDD.smash.Job.Dto.JobCountUpsertDTO;
 import SDD.smash.Job.Entity.JobCodeMiddle;

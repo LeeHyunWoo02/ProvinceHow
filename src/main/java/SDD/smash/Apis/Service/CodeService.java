@@ -1,7 +1,7 @@
 package SDD.smash.Apis.Service;
 
-import SDD.smash.Address.Repository.SidoRepository;
-import SDD.smash.Address.Repository.SigunguRepository;
+import SDD.smash.legacy.address.Repository.SidoRepository;
+import SDD.smash.legacy.address.Repository.SigunguRepository;
 import SDD.smash.Apis.Dto.CodeDTO;
 import SDD.smash.common.exception.ErrorCode;
 import SDD.smash.common.exception.DomainException;

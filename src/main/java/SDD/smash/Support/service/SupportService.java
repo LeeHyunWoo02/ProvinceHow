@@ -1,6 +1,6 @@
 package SDD.smash.Support.service;
 
-import SDD.smash.Address.Service.AddressVerifyService;
+import SDD.smash.legacy.address.Service.AddressVerifyService;
 import SDD.smash.Support.domain.SupportTag;
 import SDD.smash.Support.dto.SupportDTO;
 import SDD.smash.Support.dto.SupportListDTO;

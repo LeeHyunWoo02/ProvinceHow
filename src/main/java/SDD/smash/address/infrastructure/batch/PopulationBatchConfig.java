@@ -34,7 +34,7 @@ import static SDD.smash.Util.BatchTextUtil.isBlank;
 import static SDD.smash.Util.BatchTextUtil.normalize;
 
 /**
- * 인구 시드 배치. As-Is {@code SDD.smash.Address.Batch.PopulationBatch} 를 옮긴 것이다.
+ * 인구 시드 배치. As-Is {@code PopulationBatch} 를 옮긴 것이다.
  *
  * <p>Upsert SQL 문자열과 네임드 파라미터는 한 글자도 바꾸지 않았다.
  * 테이블명 {@code Population} 도 As-Is 그대로다.

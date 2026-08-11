@@ -1,8 +1,8 @@
 package SDD.smash.Infra.Batch;
 
 
-import SDD.smash.Address.Entity.Sigungu;
-import SDD.smash.Address.Repository.SigunguRepository;
+import SDD.smash.legacy.address.Entity.Sigungu;
+import SDD.smash.legacy.address.Repository.SigunguRepository;
 import SDD.smash.Infra.Dto.InfraDTO;
 import SDD.smash.Infra.Dto.InfraUpsertDTO;
 import SDD.smash.Infra.Entity.Industry;
