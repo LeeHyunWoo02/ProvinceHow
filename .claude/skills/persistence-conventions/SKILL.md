@@ -155,6 +155,19 @@ private Major major;
 - **FK 객체 참조를 제거하면 Hibernate가 인덱스를 자동 생성하지 않는다.** 조인·필터에 쓰는 코드 컬럼에는 `@Index`를 **명시적으로 추가**해야 한다. 이 점을 놓치면 전환 후 조회 성능이 떨어진다.
 - Upsert 대상 테이블에는 유니크 제약이 **반드시** 있어야 한다(§5).
 
+> ⚠️ **`@Index`를 추가하기 전에 이미 커버되는지 먼저 확인한다.** 중복 인덱스는 쓰기 비용만 늘린다.
+> - `@Column(unique = true)` → 그 컬럼에 유니크 인덱스가 이미 생긴다 (`population`/`dwelling`의 `sigungu_code`)
+> - 복합 유니크의 **선두 컬럼**은 leftmost prefix로 커버된다 (`JobCount`의 `sigungu_code`).
+>   **두 번째 이후 컬럼은 커버되지 않으므로** 단독 조회가 있으면 `@Index`가 필요하다
+>   (`JobCount.job_code_middle_code` — `WHERE job_code_middle_code = ?` 단독 필터가 있다)
+>
+> ⚠️ **기존 DB에 `@Index`를 새로 선언할 때의 함정.** 옛 FK가 남긴 인덱스는 Hibernate 해시 이름
+> (`FK6q4k2r...`)이라 이름이 달라, `hbm2ddl.auto=update`가 **같은 컬럼에 인덱스를 하나 더 만든다.**
+> 해결은 옛 인덱스를 선언한 이름으로 **`RENAME INDEX`** 하는 것이다
+> (`docker/mysql/ddl/2026-08-11-rename-fk-index.sql`).
+> `DROP INDEX`는 FK가 살아있는 동안 **errno 1553으로 거부**되지만 `RENAME INDEX`는 FK가 있어도
+> 성공하고 FK가 개명된 인덱스를 계속 쓴다(MySQL 8.0 실측). 그래서 rename이 순서 의존성도 없다.
+
 ---
 
 ## 3. Mapper — 도메인 ↔ JPA

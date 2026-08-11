@@ -1,6 +1,6 @@
 ---
 name: seed-data
-description: smash(ProvinceHow) 서비스 기동 전 DB에 사전 적재해야 하는 시드 CSV(data/)를 준비·검증·재적재하는 워크플로우. Spring Batch Seed Job 9개의 파일 스펙(경로 환경변수, 인코딩, 컬럼), @Order 기반 FK 선후관계, BatchGuard/SEED_VERSION 재실행 제어, scripts/verify-seed.sh 리포트 해석과 실패 유형별 대응을 다룬다. 시드 CSV를 추가·교체하거나, 앱 기동 전 데이터를 점검하거나, 배치가 실패·skip 됐을 때 원인을 찾거나, 새 Seed 배치를 추가할 때 사용한다. 배치 코드 자체의 작성 규칙은 persistence-conventions, 배치의 계층 배치는 architecture-conventions를 따른다.
+description: smash(ProvinceHow) 서비스 기동 전 DB에 사전 적재해야 하는 시드 CSV(data/)를 준비·검증·재적재하는 워크플로우. Spring Batch Seed Job 8개의 파일 스펙(경로 환경변수, 인코딩, 컬럼), @Order 기반 FK 선후관계, BatchGuard/SEED_VERSION 재실행 제어, scripts/verify-seed.sh 리포트 해석과 실패 유형별 대응을 다룬다. 시드 CSV를 추가·교체하거나, 앱 기동 전 데이터를 점검하거나, 배치가 실패·skip 됐을 때 원인을 찾거나, 새 Seed 배치를 추가할 때 사용한다. 배치 코드 자체의 작성 규칙은 persistence-conventions, 배치의 계층 배치는 architecture-conventions를 따른다.
 ---
 
 # seed-data
@@ -51,7 +51,7 @@ MySQL 컨테이너 **1개에 스키마 2개**를 둔다.
 | 배치 | seed.jobs 키 | 현재 |
 |---|---|---|
 | Sido / Sigungu / JobCodeTop / JobCodeMiddle | `sido` `sigungu` `job-code-top` `job-code-middle` | `true` |
-| Population / Industry / Infra / InfraScore / JobCount | `population` `industry` `infra` `infra-score` `job-count` | `false` |
+| Population / Industry / Infra / JobCount | `population` `industry` `infra` `job-count` | `false` |
 
 파일을 준비했다면 **프로퍼티를 `true`로 바꿔야** 실제로 적재된다. 파일만 넣고 플래그를 안 켜는 실수가 잦다.
 
@@ -67,16 +67,19 @@ MySQL 컨테이너 **1개에 스키마 2개**를 둔다.
 | 4 | `jobCodeMiddleJob` | `jobCodeMiddle.filePath` | `JOBCODEMIDDLE_FILEPATH` | `level_middle.csv` | MS949 | `code,name,upstream_code` |
 | 5 | `populationJob` | `population.filePath` | `POPULATION_FILEPATH` | `population.csv` | MS949 | `sigungu_code,population` |
 | 6 | `industryJob` | `industry.filePath` | `INDUSTRY_FILEPATH` | `industry.csv` | UTF-8 | `code,name,major` |
-| 7 | `infraJob` | `infra.filePath` | `INFRA_FILEPATH` | `infra.csv` | MS949 | `sigungu_code,industry_code,count,ratio` |
-| 8 | `infraScoreJob` | `infraScore.filePath` | `INFRASCORE_FILEPATH` | `infra_score.csv` | MS949 | `sigungu_code,score` |
-| 9 | `jobCountJob` | `jobCount.filePath` | `JOBCOUNT_FILEPATH` | `job_count.csv` | MS949 | `sigungu_code,job_code,count` |
+| 7 | `infraJob` | `infra.filePath` | `INFRA_FILEPATH` | `infra.csv` | MS949 | `sigungu_code,industry_code,count,ratio,score` |
+| 8 | `jobCountJob` | `jobCount.filePath` | `JOBCOUNT_FILEPATH` | `job_count.csv` | MS949 | `sigungu_code,job_code,count` |
+
+Seed Job 은 8개다. `infraScoreJob` 은 인프라 점수를 `infraChoice` 비트마스크 방식으로 바꾸면서
+배치·엔티티·DTO 와 함께 삭제됐다. `infraScore.filePath` / `INFRASCORE_FILEPATH` 도 더는 읽지 않는다.
+
+`@Order(9)` 는 `DwellingBatchRunner` 가 쓴다. CSV 가 아니라 국토부 API 를 호출하는 배치라 이 표에는 없다.
 
 ### 1.1 FK 선후관계 (`@Order`가 이 순서를 보장한다)
 
 ```
 sido ──▶ sigungu ──┬──▶ population
                    ├──▶ infra ◀── industry
-                   ├──▶ infra_score
                    └──▶ job_count ◀── level_middle ◀── level_top
 ```
 
@@ -272,30 +275,33 @@ docker compose up --build
 
 ---
 
-## 6. 현재 상태 (2026-08-10 기준)
+## 6. 현재 상태 (2026-08-11 기준)
 
-`bash scripts/verify-seed.sh` → **PASS 19 / WARN 5 / FAIL 0 (exit 0)**
-활성 배치 4개는 기동 가능하고, 나머지 5개는 `seed.jobs.*.enabled=false`로 꺼져 있어 기동을 막지 않는다.
+활성 배치 4개는 기동 가능하고, 나머지 4개는 `seed.jobs.*.enabled=false`로 꺼져 있어 기동을 막지 않는다.
 
 | 배치 | 상태 |
 |---|---|
 | Sido / Sigungu / JobCodeTop / JobCodeMiddle | ✅ 활성. 스펙 일치, FK 전부 매칭 |
-| Population / InfraScore / JobCount | ⏸ 비활성 — **소스 CSV 없음** |
+| Population / JobCount | ⏸ 비활성 — **소스 CSV 없음** |
 | Industry | ⏸ 비활성 — 소스 CSV 없음. `infra`의 FK 대상이라 **먼저 준비해야 한다** |
-| Infra | ⏸ 비활성 — 파일은 있으나 **컬럼 3개**(`sigungu_code,opnSvcId,num`), 배치는 **4개**(`sigungu_code,industry_code,count,ratio`) 요구 |
+| Infra | ⏸ 비활성 — 파일은 있으나 **컬럼 3개**(`sigungu_code,opnSvcId,num`), 배치는 **5개**(`sigungu_code,industry_code,count,ratio,score`) 요구 |
+
+`infra` 테이블이 비면 `RegionMajorScoreRepository` 조회 결과가 없어 **지역추천의 인프라 점수가 항상 0**이 된다.
+기동은 되지만 추천 결과가 인프라를 반영하지 못한다.
 
 **남은 작업 순서** (의존성 때문에 이 순서를 지킨다)
 
-1. **`industry.csv`** 준비 — `infra.csv`의 `industry_code` FK 대상. 헤더 `code,name,major`, **UTF-8**, `major`는 `HEALTH|FOOD|CULTURE|LIFE` 중 하나
-2. **`infra.csv` 정합** — `ratio` 컬럼을 추가하고 `opnSvcId`→`industry_code`, `num`→`count`로 헤더 정정
-   - 파일을 바꿀 수 없다면 `InfraBatch`의 `names(...)`/`fieldSetMapper`를 3컬럼으로 수정. 단 `Infra.ratio`가 `nullable = false`라 엔티티도 함께 조정해야 한다
-3. **`population.csv`, `infra_score.csv`, `job_count.csv`** 준비
+1. **`industry.csv`** 준비 — `infra.csv`의 `industry_code` FK 대상. 헤더 `code,name,major`, **UTF-8**, `major`는 `HEALTH|FOOD|CULTURE|LIFE` 중 하나.
+   `IndustryJpaEntity.code` 가 `length = 10` 이므로 **코드는 10자 이하**여야 한다(현재 `opnSvcId` 값 `11_44_01_P` 가 정확히 10자).
+   `major` 값이 이 4개 중 하나가 아니면 `Major.valueOf` 가 예외를 던져 **배치가 실패**한다(조용한 skip 이 아니다).
+2. **`infra.csv` 정합** — 헤더를 `sigungu_code,industry_code,count,ratio,score` 로 맞춘다.
+   `opnSvcId`→`industry_code`, `num`→`count` 로 이름을 바꾸고 `ratio`, `score` 두 컬럼을 채운다.
+   - `ratio`/`score` 는 `new BigDecimal(...)` 로 파싱하므로 **빈 값이면 `NumberFormatException` 으로 배치가 실패**한다. 반드시 숫자를 넣는다.
+   - `InfraJpaEntity.score` 는 `precision = 6, scale = 2` 라 **최대 9999.99**, `ratio` 는 `precision = 18, scale = 2` 다.
+   - **BOM 을 제거**하고 MS949 로 저장한다. 현재 파일에는 UTF-8 BOM(`EF BB BF`)이 있는데, 리더가 `quoteCharacter('\0')` 로 읽기 때문에 첫 컬럼 값 앞에 깨진 문자가 붙어 `sigungu_code` 매칭이 전부 실패한다(→ 전 행 조용히 skip).
+3. **`population.csv`, `job_count.csv`** 준비
 4. 준비된 배치의 **`seed.jobs.<키>.enabled=true`** 로 전환 (dev/prod 프로퍼티 양쪽)
 5. `bash scripts/verify-seed.sh` 가 exit 0 인지 확인 후 기동
-
-> `InfraBatch.fieldSetMapper`의 지역변수명이 `rawInfraName`인데 실제로는 `count` 위치(`readString(2)`)를 읽는다. 2번 항목을 손볼 때 함께 정리한다.
-
-> `InfraBatch.fieldSetMapper`의 지역변수명이 `rawInfraName`인데 실제로는 `count` 위치(`readString(2)`)를 읽는다. 3번 항목을 손볼 때 함께 정리한다.
 
 ---
 

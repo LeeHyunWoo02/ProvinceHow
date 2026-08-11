@@ -32,7 +32,8 @@ Business 계층 없음).
 
 | 역할 | 파일 | 권한 |
 | --- | --- | --- |
-| backend-developer | `.claude/agents/backend-developer.md` | 할당된 범위의 유일한 작성자 |
+| backend-developer | `.claude/agents/backend-developer.md` | 할당된 범위의 유일한 작성자. 새 기능을 목표 DDD 구조로 바로 구현한다 |
+| ddd-refactorer | `.claude/agents/ddd-refactorer.md` | 기존 레이어드 코드를 DDD 헥사고날 구조로 이관하는 유일한 작성자. 구조만 옮기고 동작은 바꾸지 않는다 |
 
 
 ## 일반 규칙

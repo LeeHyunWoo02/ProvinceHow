@@ -94,6 +94,7 @@ SDD/smash/
 │   │
 │   ├── application/           유스케이스. domain만 의존
 │   │   ├── port/in/           in-port 인터페이스 — 다른 컨텍스트에 공개할 때만
+│   │   ├── port/out/          out-port 인터페이스 — ★ 예외적으로만 (아래 규칙 참조)
 │   │   ├── <Xxx>QueryService  유스케이스 구현 (@Service, @Transactional)
 │   │   └── dto/               유스케이스 입출력 DTO
 │   │
@@ -116,6 +117,28 @@ SDD/smash/
 - `presentation`은 컨트롤러가 있는 컨텍스트에만 둔다. 현재 실질적으로 `recommendation`뿐이다.
 - `common/config`의 Spring 설정 클래스들은 컨텍스트에 속하지 않는 **애플리케이션 부트스트랩**이다.
 
+### 3.1 out-port는 기본이 `domain/port`다 — `application/port/out`은 예외
+
+**기본 규칙**: out-port는 `domain/port`에 둔다(§4.2). 도메인이 필요로 하는 것을 도메인 언어로
+선언하고 `infrastructure`가 구현한다. 저장소·캐시·외부 공급 포트는 전부 여기다.
+
+**예외**: 포트 시그니처가 **`application/dto`를 입력으로 요구**하면 `application/port/out`에 둔다.
+`domain/port`에 두면 `domain → application` **역방향 의존**이 생겨 §4 표를 더 크게 위반하기 때문이다.
+
+이 예외는 아래 두 조건을 **모두** 만족할 때만 인정한다.
+1. 포트의 입출력이 도메인 개념이 아니다 — 도메인 규칙이 관여하지 않는 부가 기능이다
+2. 그 입력을 도메인 타입으로 새로 만드는 것이 **존재하지 않는 도메인 개념의 발명**이 된다
+
+| 현재 적용 사례 | 위치 | 근거 |
+|---|---|---|
+| `RegionPickProvider`<br>`RegionSummaryProvider` | `recommendation/application/port/out/` | 입력이 `RegionRecommendation`/`RegionDetailInfo`(여러 컨텍스트 조합 결과 = application DTO). AI 요약·추천은 도메인 규칙이 아니라 응답을 꾸미는 부가 기능이고, `recommendation`은 Aggregate가 없는 조합 전용 컨텍스트다(§2 표) |
+
+- **이 예외를 늘리기 전에 먼저 "도메인 개념이 정말 없는가"를 따진다.** 도메인 규칙이 있다면
+  값 객체·Aggregate를 만들고 포트를 `domain/port`로 되돌리는 것이 맞다.
+- `application/port/out`의 포트는 **`presentation`이 직접 호출해도 된다.** 표현 계층의 선택적
+  부가 기능(예: `aiUse=true`일 때만 AI 호출)을 유스케이스 계약에 억지로 밀어넣지 않기 위한 것이다.
+  의존 방향은 `presentation → application`이므로 §4 표를 지킨다.
+
 ---
 
 ## 4. 계층별 규칙과 의존 방향
@@ -126,8 +149,12 @@ SDD/smash/
 | `domain/service` | 같은 컨텍스트 domain, `common.domain.model` | 위와 동일 + port 구현체 | 없음 |
 | `domain/port` | 같은 컨텍스트 domain 모델 | 기술 타입(`Page`, `Optional`은 허용) | 없음 |
 | `application` | 자기 domain 전체, **다른 컨텍스트의 `application/port/in`** | 다른 컨텍스트의 domain/infrastructure, `HttpServletRequest`, `RedisTemplate`, JPA 타입 | `@Service`, `@Transactional`만 |
-| `infrastructure` | 자기 domain(port 구현), 자기 application | 다른 컨텍스트의 infrastructure, presentation | 전부 허용 |
-| `presentation` | 자기/타 컨텍스트의 `application` | domain 모델 직접 노출, infrastructure, Repository | Spring Web |
+| `infrastructure` | 자기 domain(port 구현), 자기 application(`port/out` 구현 포함) | 다른 컨텍스트의 infrastructure, **presentation** | 전부 허용 |
+| `presentation` | 자기/타 컨텍스트의 `application` (`port/in` · `port/out` 둘 다) | domain 모델 직접 노출, infrastructure, Repository | Spring Web |
+
+> ⚠️ **`infrastructure → presentation` 금지가 실수하기 쉬운 지점이다.**
+> 외부 API 어댑터가 응답 DTO(`presentation/dto`)를 직접 조립하면 이 방향이 생긴다.
+> 어댑터는 **외부 호출 결과 자체**를 돌려주고, 응답 조립은 `presentation`이 한다.
 
 ### 4.1 domain — 무엇을 담는가
 
@@ -335,7 +362,10 @@ public record Score(int value) {
 | `JobCode` | `job` | `String topCode` / `midJobCode` |
 | `IndustryCode`, `Major` | `infra` | `String code`, `Major` enum |
 | `SupportTag` | `support` | 기존 `SupportTag` (유지) |
-| `DwellingType`, `InfraImportance` | 각 컨텍스트 domain/model | 기존 enum (이동) |
+| `DwellingType` | `dwelling/domain/model` | 기존 enum (이동) |
+
+> `InfraImportance`는 머지 충돌 정리(2026-08-11)로 `infraChoice` 비트마스크(`Major`, 위 행) 방식에
+> 통합되며 삭제됐다. 코드에 없는 개념이니 되살리지 않는다.
 
 ### 5.4 도메인 서비스 / 정책 (Policy)
 
@@ -403,9 +433,12 @@ Seed 배치는 **외부 파일/API → 저장소**로 데이터를 밀어넣는 
   | 5 | Population | address | Sigungu |
   | 6 | Industry | infra | — |
   | 7 | Infra | infra | Sigungu, Industry |
-  | 8 | InfraScore | infra | Sigungu |
-  | 9 | JobCount | job | Sigungu, JobCodeMiddle |
-  | 10 | Dwelling | dwelling | Sigungu + 외부 API |
+  | 8 | JobCount | job | Sigungu, JobCodeMiddle |
+  | 9 | Dwelling | dwelling | Sigungu + 외부 API |
+
+  > 위 값은 2026-08-11 실제 코드에서 실측한 것이다. 이전 표에는 머지 충돌 정리 때 삭제된
+  > `InfraScore` 배치가 8번으로 남아 있어 `JobCount`·`Dwelling`이 한 칸씩 밀려 적혀 있었다.
+  > 코드를 표에 맞추지 말고 표를 코드에 맞춘다 — `@Order` 변경은 실행 순서 변경이다.
 
 - 재실행 방지는 `BatchGuard.alreadyDone(jobName, seedVersion)` 유지. 위치는 `common/batch` 또는 각 컨텍스트 infrastructure.
 - **대량 적재 배치는 Aggregate를 거치지 않아도 된다.** `JdbcBatchItemWriter` + Upsert SQL로 직접 쓰는 현재 방식을 유지한다. 도메인 불변식은 Processor에서 값 객체 생성으로 검증한다.

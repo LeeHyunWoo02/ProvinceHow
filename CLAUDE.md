@@ -33,7 +33,8 @@ areas, also read `architecture-conventions`. This project follows Domain-Driven 
 
 | Role | File | Authority |
 | --- | --- | --- |
-| backend-developer | `.claude/agents/backend-developer.md` | Sole writer for its assigned scope |
+| backend-developer | `.claude/agents/backend-developer.md` | Sole writer for its assigned scope. Implements new features directly in the target DDD structure |
+| ddd-refactorer | `.claude/agents/ddd-refactorer.md` | Sole writer for migrating existing layered code to the DDD hexagonal structure. Moves structure only, never changes behavior |
 
 ## General Rules
 

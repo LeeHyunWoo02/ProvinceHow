@@ -36,6 +36,7 @@ SDD.smash.<context>.<layer>[.<sublayer>]
 | `domain.port` | out-port (외부 공급) | `...Provider` | `RentRecordProvider`, `SupportPolicyProvider` |
 | `domain.port` | out-port (캐시) | `...Cache` | `DwellingScoreCache` |
 | `application.port.in` | in-port (유스케이스 계약) | `...UseCase` | `DwellingQueryUseCase`, `RecommendRegionUseCase` |
+| `application.port.out` | out-port — **예외적으로만** (architecture-conventions §3.1) | `...Provider` / `...Cache` | `RegionPickProvider`, `RegionSummaryProvider` |
 | `application` | 유스케이스 구현 (조회) | `...QueryService` | `DwellingQueryService`, `RegionDetailService` |
 | `application` | 유스케이스 구현 (변경/갱신) | `...Service` | `RefreshSupportPolicyService` |
 | `application.dto` | 유스케이스 입력 | `...Command` / `...Query` | `RecommendCommand` |
@@ -55,6 +56,7 @@ SDD.smash.<context>.<layer>[.<sublayer>]
 
 - **`Service`는 application에만 쓴다.** 도메인 규칙 객체는 `Policy`다. 이 구분이 "지금 도메인 규칙을 쓰는지, 오케스트레이션을 쓰는지"를 이름만으로 드러낸다.
 - **`Repository`는 두 개가 있다.** `domain.port.XxxRepository`(인터페이스, 도메인 언어)와 `infrastructure.persistence.XxxJpaRepository`(Spring Data). 헷갈리면 import 경로를 본다.
+- **out-port는 기본이 `domain.port`다.** `application.port.out`은 포트 시그니처가 `application/dto`를 요구할 때만 쓰는 예외다 → architecture-conventions §3.1
 - **`Entity`라는 이름을 도메인에 쓰지 않는다.** DDD의 Entity는 개념이지 접미사가 아니다. JPA 매핑 클래스만 `JpaEntity`를 붙인다.
 - **`DTO` 접미사를 더 이상 쓰지 않는다.** 역할에 따라 `Command`/`Info`/`Request`/`Response`로 나눈다(§4).
 

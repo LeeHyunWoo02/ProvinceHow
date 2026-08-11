@@ -1,0 +1,30 @@
+package SDD.smash.dwelling.infrastructure.external;
+
+import SDD.smash.dwelling.domain.model.RentRecord;
+import com.fasterxml.jackson.databind.JsonNode;
+
+import static SDD.smash.common.util.BatchTextUtil.nullZero;
+import static SDD.smash.common.util.MapperUtil.num;
+import static SDD.smash.common.util.MapperUtil.text;
+
+/**
+ * 국토부 응답 JSON → 도메인 {@code RentRecord} 변환.
+ * As-Is {@code RentRecordConverter} 를 옮긴 것이다.
+ *
+ * <p>외부 API 어휘({@code aptNm}, {@code 보증금액}, {@code 월세금액})는 여기까지만 존재한다.
+ * 값이 없으면 0 으로 채우는 것도 As-Is 그대로다 — 월세 0 이 곧 "전세"라는 판정 기준이 된다.
+ */
+final class RentRecordJsonMapper {
+
+    private RentRecordJsonMapper() {
+    }
+
+    static RentRecord toRecord(JsonNode node) {
+        String aptNm = text(node, "aptNm", "아파트");
+        String jibun = text(node, "jibun", "지번");
+        Integer deposit = num(node, "deposit", "보증금액");
+        Integer monthly = num(node, "monthlyRent", "월세금액");
+
+        return new RentRecord(aptNm, jibun, nullZero(deposit), nullZero(monthly));
+    }
+}
