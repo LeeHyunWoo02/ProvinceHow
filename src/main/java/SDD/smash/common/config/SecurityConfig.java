@@ -1,7 +1,7 @@
 package SDD.smash.common.config;
 
-import SDD.smash.Security.Filter.ApiRateLimitFilter;
-import SDD.smash.Security.Service.ApiRateLimitService;
+import SDD.smash.common.security.ApiRateLimitFilter;
+import SDD.smash.common.security.ApiRateLimitService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;

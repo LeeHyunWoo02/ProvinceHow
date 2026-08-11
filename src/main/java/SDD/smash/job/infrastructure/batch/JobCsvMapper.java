@@ -5,9 +5,9 @@ import SDD.smash.job.infrastructure.batch.dto.JobCodeTopCsvRow;
 import SDD.smash.job.infrastructure.persistence.JobCodeMiddleJpaEntity;
 import SDD.smash.job.infrastructure.persistence.JobCodeTopJpaEntity;
 
-import static SDD.smash.Util.BatchTextUtil.addLeadingZero;
-import static SDD.smash.Util.BatchTextUtil.addLeadingZeroThird;
-import static SDD.smash.Util.BatchTextUtil.normalize;
+import static SDD.smash.common.util.BatchTextUtil.addLeadingZero;
+import static SDD.smash.common.util.BatchTextUtil.addLeadingZeroThird;
+import static SDD.smash.common.util.BatchTextUtil.normalize;
 
 /**
  * CSV 행 → JPA 엔티티 변환. As-Is {@code JobConverter} 를 옮긴 것이다.

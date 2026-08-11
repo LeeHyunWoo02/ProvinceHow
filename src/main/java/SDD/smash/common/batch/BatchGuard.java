@@ -1,4 +1,4 @@
-package SDD.smash.Util;
+package SDD.smash.common.batch;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.BatchStatus;

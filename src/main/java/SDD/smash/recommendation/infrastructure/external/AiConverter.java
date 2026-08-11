@@ -1,6 +1,6 @@
-package SDD.smash.OpenAI.Converter;
+package SDD.smash.recommendation.infrastructure.external;
 
-import SDD.smash.OpenAI.Dto.AiRecommendDTO;
+import SDD.smash.recommendation.infrastructure.external.dto.AiRecommendDTO;
 import SDD.smash.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.recommendation.application.dto.RegionRecommendation;
 import SDD.smash.recommendation.presentation.dto.AiPickEntry;

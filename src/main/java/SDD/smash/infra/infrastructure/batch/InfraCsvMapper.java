@@ -4,7 +4,7 @@ import SDD.smash.infra.domain.model.Major;
 import SDD.smash.infra.infrastructure.batch.dto.IndustryCsvRow;
 import SDD.smash.infra.infrastructure.persistence.IndustryJpaEntity;
 
-import static SDD.smash.Util.BatchTextUtil.normalize;
+import static SDD.smash.common.util.BatchTextUtil.normalize;
 
 /**
  * 업종 CSV 행 → JPA 엔티티 변환. As-Is {@code InfraConverter} 를 옮긴 것이다.

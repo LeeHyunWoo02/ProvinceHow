@@ -29,9 +29,9 @@ import javax.sql.DataSource;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static SDD.smash.Util.BatchTextUtil.digitsOnly;
-import static SDD.smash.Util.BatchTextUtil.isBlank;
-import static SDD.smash.Util.BatchTextUtil.normalize;
+import static SDD.smash.common.util.BatchTextUtil.digitsOnly;
+import static SDD.smash.common.util.BatchTextUtil.isBlank;
+import static SDD.smash.common.util.BatchTextUtil.normalize;
 
 /**
  * 인구 시드 배치. As-Is {@code PopulationBatch} 를 옮긴 것이다.

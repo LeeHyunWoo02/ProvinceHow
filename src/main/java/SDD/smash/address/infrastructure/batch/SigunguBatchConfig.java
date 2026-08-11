@@ -26,8 +26,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import java.util.HashSet;
 import java.util.Set;
 
-import static SDD.smash.Util.BatchTextUtil.addLeadingZero;
-import static SDD.smash.Util.BatchTextUtil.normalize;
+import static SDD.smash.common.util.BatchTextUtil.addLeadingZero;
+import static SDD.smash.common.util.BatchTextUtil.normalize;
 
 /**
  * 시군구 시드 배치. As-Is {@code SigunguBatch} 를 옮긴 것이다.

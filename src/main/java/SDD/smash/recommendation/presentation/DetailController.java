@@ -2,8 +2,8 @@ package SDD.smash.recommendation.presentation;
 
 import SDD.smash.common.domain.model.SigunguCode;
 import SDD.smash.job.domain.model.JobCode;
-import SDD.smash.OpenAI.Converter.AiConverter;
-import SDD.smash.OpenAI.Service.DetailAiSummaryService;
+import SDD.smash.recommendation.infrastructure.external.AiConverter;
+import SDD.smash.recommendation.infrastructure.external.DetailAiSummaryService;
 import SDD.smash.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.recommendation.application.port.in.RegionDetailUseCase;
 import SDD.smash.recommendation.presentation.dto.DetailResponse;

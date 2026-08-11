@@ -26,8 +26,8 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-import static SDD.smash.Util.BatchTextUtil.addLeadingZero;
-import static SDD.smash.Util.BatchTextUtil.normalize;
+import static SDD.smash.common.util.BatchTextUtil.addLeadingZero;
+import static SDD.smash.common.util.BatchTextUtil.normalize;
 
 /**
  * 직종 중분류 시드 배치. As-Is {@code JobCodeMiddleBatch} 를 옮긴 것이다.

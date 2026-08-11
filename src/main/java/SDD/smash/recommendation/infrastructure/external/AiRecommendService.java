@@ -1,14 +1,12 @@
-package SDD.smash.OpenAI.Service;
+package SDD.smash.recommendation.infrastructure.external;
 
 import SDD.smash.recommendation.application.dto.RegionRecommendation;
 import SDD.smash.recommendation.presentation.dto.RecommendAggregateResponse;
 import SDD.smash.common.exception.DomainException;
-import SDD.smash.OpenAI.Client.OpenAiClient;
-import SDD.smash.OpenAI.Converter.AiConverter;
-import SDD.smash.OpenAI.Dto.AiRecommendDTO;
-import SDD.smash.OpenAI.Dto.OpenAiMessage;
-import SDD.smash.OpenAI.Dto.OpenAiRequest;
-import SDD.smash.OpenAI.Dto.OpenAiResponse;
+import SDD.smash.recommendation.infrastructure.external.dto.AiRecommendDTO;
+import SDD.smash.recommendation.infrastructure.external.dto.OpenAiMessage;
+import SDD.smash.recommendation.infrastructure.external.dto.OpenAiRequest;
+import SDD.smash.recommendation.infrastructure.external.dto.OpenAiResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +15,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 
-import static SDD.smash.Util.MapperUtil.extractJson;
+import static SDD.smash.common.util.MapperUtil.extractJson;
 
 @Service
 @Slf4j

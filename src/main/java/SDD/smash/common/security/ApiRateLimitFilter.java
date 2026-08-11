@@ -1,6 +1,5 @@
-package SDD.smash.Security.Filter;
+package SDD.smash.common.security;
 
-import SDD.smash.Security.Service.ApiRateLimitService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;

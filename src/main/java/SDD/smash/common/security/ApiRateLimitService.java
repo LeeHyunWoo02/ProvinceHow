@@ -1,4 +1,4 @@
-package SDD.smash.Security.Service;
+package SDD.smash.common.security;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;

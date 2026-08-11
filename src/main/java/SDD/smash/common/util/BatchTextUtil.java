@@ -1,4 +1,4 @@
-package SDD.smash.Util;
+package SDD.smash.common.util;
 
 
 public class BatchTextUtil {

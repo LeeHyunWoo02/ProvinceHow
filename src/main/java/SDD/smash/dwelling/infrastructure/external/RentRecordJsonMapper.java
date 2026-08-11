@@ -3,9 +3,9 @@ package SDD.smash.dwelling.infrastructure.external;
 import SDD.smash.dwelling.domain.model.RentRecord;
 import com.fasterxml.jackson.databind.JsonNode;
 
-import static SDD.smash.Util.BatchTextUtil.nullZero;
-import static SDD.smash.Util.MapperUtil.num;
-import static SDD.smash.Util.MapperUtil.text;
+import static SDD.smash.common.util.BatchTextUtil.nullZero;
+import static SDD.smash.common.util.MapperUtil.num;
+import static SDD.smash.common.util.MapperUtil.text;
 
 /**
  * 국토부 응답 JSON → 도메인 {@code RentRecord} 변환.

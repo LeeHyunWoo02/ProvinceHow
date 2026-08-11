@@ -5,7 +5,7 @@ import SDD.smash.address.infrastructure.batch.dto.SigunguCsvRow;
 import SDD.smash.address.infrastructure.persistence.SidoJpaEntity;
 import SDD.smash.address.infrastructure.persistence.SigunguJpaEntity;
 
-import static SDD.smash.Util.BatchTextUtil.normalize;
+import static SDD.smash.common.util.BatchTextUtil.normalize;
 
 /**
  * CSV 행 → JPA 엔티티 변환. As-Is {@code AddressConverter} 를 옮긴 것이다.

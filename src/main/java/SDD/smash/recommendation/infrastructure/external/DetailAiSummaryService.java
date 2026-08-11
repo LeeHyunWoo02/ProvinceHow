@@ -1,11 +1,9 @@
-package SDD.smash.OpenAI.Service;
+package SDD.smash.recommendation.infrastructure.external;
 
 import SDD.smash.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.recommendation.presentation.dto.DetailResponse;
 import SDD.smash.common.exception.DomainException;
-import SDD.smash.OpenAI.Client.OpenAiClient;
-import SDD.smash.OpenAI.Converter.AiConverter;
-import SDD.smash.OpenAI.Dto.*;
+import SDD.smash.recommendation.infrastructure.external.dto.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
