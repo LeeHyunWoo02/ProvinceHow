@@ -7,7 +7,7 @@ import SDD.smash.common.exception.ErrorCode;
 import SDD.smash.common.exception.DomainException;
 import SDD.smash.legacy.job.Repository.JobCodeMiddleRepository;
 import SDD.smash.legacy.job.Repository.JobCodeTopRepository;
-import SDD.smash.Support.domain.SupportTag;
+import SDD.smash.legacy.support.domain.SupportTag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

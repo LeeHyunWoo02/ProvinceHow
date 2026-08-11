@@ -1,4 +1,4 @@
-package SDD.smash.Support.domain;
+package SDD.smash.legacy.support.domain;
 
 import SDD.smash.legacy.infra.Entity.Major;
 

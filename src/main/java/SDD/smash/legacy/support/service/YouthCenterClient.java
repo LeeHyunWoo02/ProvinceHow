@@ -1,10 +1,10 @@
-package SDD.smash.Support.service;
+package SDD.smash.legacy.support.service;
 
 import SDD.smash.common.config.YouthCenterProperties;
-import SDD.smash.Support.domain.SupportTag;
-import SDD.smash.Support.dto.SupportDTO;
-import SDD.smash.Support.dto.SupportListDTO;
-import SDD.smash.Support.dto.YouthCenterResponse;
+import SDD.smash.legacy.support.domain.SupportTag;
+import SDD.smash.legacy.support.dto.SupportDTO;
+import SDD.smash.legacy.support.dto.SupportListDTO;
+import SDD.smash.legacy.support.dto.YouthCenterResponse;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

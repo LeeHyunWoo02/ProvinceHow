@@ -1,10 +1,10 @@
-package SDD.smash.Support.scheduler;
+package SDD.smash.legacy.support.scheduler;
 
 import SDD.smash.legacy.address.Dto.SigunguCodeDTO;
 import SDD.smash.legacy.address.Repository.SigunguRepository;
-import SDD.smash.Support.domain.SupportTag;
-import SDD.smash.Support.dto.SupportListDTO;
-import SDD.smash.Support.service.YouthCenterClient;
+import SDD.smash.legacy.support.domain.SupportTag;
+import SDD.smash.legacy.support.dto.SupportListDTO;
+import SDD.smash.legacy.support.service.YouthCenterClient;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

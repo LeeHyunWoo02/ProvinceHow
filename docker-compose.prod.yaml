@@ -27,7 +27,7 @@ services:
     ports:
       - '8080:8080'
     env_file:
-      - ./backend.prod.env
+      - ./backend.env
     volumes:
       - ./data:/app/data:ro
     depends_on:
@@ -44,7 +44,7 @@ services:
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+09:00
     env_file:
-      - ./backend.prod.env
+      - ./backend.env
     # ports 를 열지 않는다. 외부에서 DB에 직접 붙지 못하게 한다.
     volumes:
       - mysql-data:/var/lib/mysql

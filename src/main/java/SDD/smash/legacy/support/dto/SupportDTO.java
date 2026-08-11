@@ -1,16 +1,16 @@
-package SDD.smash.Support.dto;
+package SDD.smash.legacy.support.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.util.List;
-
+@NoArgsConstructor
 @Getter
 @Setter
-@NoArgsConstructor
 @AllArgsConstructor
-public class SupportListDTO {
-    List<SupportDTO> supportDTOList;
+public class SupportDTO {
+    String plcyNm;
+    String aplyUrlAddr;
+    String plcyKywdNm;
 }

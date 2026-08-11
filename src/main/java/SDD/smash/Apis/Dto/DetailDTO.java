@@ -4,7 +4,7 @@ import SDD.smash.legacy.dwelling.Dto.DwellingInfoDTO;
 import SDD.smash.legacy.infra.Dto.InfraDetails;
 import SDD.smash.legacy.infra.Dto.InfraMajor;
 import SDD.smash.legacy.job.Dto.JobInfoDTO;
-import SDD.smash.Support.dto.SupportListDTO;
+import SDD.smash.legacy.support.dto.SupportListDTO;
 import lombok.Builder;
 import lombok.Getter;
 

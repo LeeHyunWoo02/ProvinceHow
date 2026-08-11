@@ -11,7 +11,7 @@ import SDD.smash.common.exception.DomainException;
 import SDD.smash.legacy.infra.Service.InfraService;
 import SDD.smash.legacy.job.Repository.JobCodeMiddleRepository;
 import SDD.smash.legacy.job.Service.JobService;
-import SDD.smash.Support.service.SupportService;
+import SDD.smash.legacy.support.service.SupportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;

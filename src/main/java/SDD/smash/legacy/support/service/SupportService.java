@@ -1,9 +1,9 @@
-package SDD.smash.Support.service;
+package SDD.smash.legacy.support.service;
 
 import SDD.smash.legacy.address.Service.AddressVerifyService;
-import SDD.smash.Support.domain.SupportTag;
-import SDD.smash.Support.dto.SupportDTO;
-import SDD.smash.Support.dto.SupportListDTO;
+import SDD.smash.legacy.support.domain.SupportTag;
+import SDD.smash.legacy.support.dto.SupportDTO;
+import SDD.smash.legacy.support.dto.SupportListDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;

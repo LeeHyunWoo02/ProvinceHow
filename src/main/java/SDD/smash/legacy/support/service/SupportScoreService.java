@@ -1,8 +1,8 @@
-package SDD.smash.Support.service;
+package SDD.smash.legacy.support.service;
 
 import SDD.smash.legacy.address.Dto.SigunguCodeDTO;
 import SDD.smash.legacy.address.Repository.SigunguRepository;
-import SDD.smash.Support.domain.SupportTag;
+import SDD.smash.legacy.support.domain.SupportTag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -11,8 +11,15 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.*;
 
+/**
+ * 전환 중 임시 공존용 빈 이름 지정.
+ * 새 {@code SDD.smash.support.application.SupportScoreService} 와 기본 빈 이름
+ * ('supportScoreService')이 겹쳐 컨텍스트가 뜨지 않으므로 옛 쪽에 한정 이름을 준다.
+ * 주입은 전부 타입 기준(생성자 주입)이라 이름 변경이 동작에 영향을 주지 않는다.
+ * 이 클래스가 사라지는 recommendation 이관 단계에서 함께 제거된다.
+ */
 @RequiredArgsConstructor
-@Service
+@Service("legacySupportScoreService")
 public class SupportScoreService {
 
     private static final String REDIS_KEY_PREFIX = "support:score:";
