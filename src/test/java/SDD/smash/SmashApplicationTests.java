@@ -1,10 +1,8 @@
 package SDD.smash;
 
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest
-class SmashApplicationTests {
+class SmashApplicationTests extends IntegrationTestSupport {
 
 	@Test
 	void contextLoads() {

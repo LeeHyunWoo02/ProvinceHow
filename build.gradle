@@ -41,9 +41,17 @@ dependencies {
 	testImplementation 'io.projectreactor:reactor-test'
 	testImplementation 'org.springframework.batch:spring-batch-test'
 	testImplementation 'org.springframework.security:spring-security-test'
+	// 버전을 지정하지 않는다. Spring Boot 3.5.7 이 Testcontainers 1.21.3 을 관리한다.
+	testImplementation 'org.testcontainers:mysql'
+	testImplementation 'org.testcontainers:junit-jupiter'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
 tasks.named('test') {
 	useJUnitPlatform()
+
+	// Testcontainers 1.21.3 이 쓰는 docker-java 는 Docker API 1.32 로 붙는데,
+	// Docker Engine 29 는 최소 1.40 을 요구해 /info 가 400 을 돌려준다.
+	// docker-java 는 이 값을 'api.version' 시스템 프로퍼티(또는 API_VERSION 환경변수)에서 읽는다.
+	systemProperty 'api.version', (System.getenv('API_VERSION') ?: '1.40')
 }
