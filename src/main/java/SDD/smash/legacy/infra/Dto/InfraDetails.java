@@ -1,6 +1,6 @@
-package SDD.smash.Infra.Dto;
+package SDD.smash.legacy.infra.Dto;
 
-import SDD.smash.Infra.Entity.Major;
+import SDD.smash.legacy.infra.Entity.Major;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

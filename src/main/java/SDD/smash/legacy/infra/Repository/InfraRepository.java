@@ -1,10 +1,10 @@
-package SDD.smash.Infra.Repository;
+package SDD.smash.legacy.infra.Repository;
 
-import SDD.smash.Infra.Dto.InfraDetails;
-import SDD.smash.Infra.Dto.InfraMajor;
-import SDD.smash.Infra.Dto.SigunguMajorAvgDTO;
-import SDD.smash.Infra.Entity.Infra;
-import SDD.smash.Infra.Entity.Major;
+import SDD.smash.legacy.infra.Dto.InfraDetails;
+import SDD.smash.legacy.infra.Dto.InfraMajor;
+import SDD.smash.legacy.infra.Dto.SigunguMajorAvgDTO;
+import SDD.smash.legacy.infra.Entity.Infra;
+import SDD.smash.legacy.infra.Entity.Major;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,7 +19,7 @@ import java.util.List;
 public interface InfraRepository extends JpaRepository<Infra,Long> {
 
     @Query("""
-    SELECT new SDD.smash.Infra.Dto.InfraMajor(
+    SELECT new SDD.smash.legacy.infra.Dto.InfraMajor(
         ind.major,
         SUM(i.count),
         AVG(i.score)
@@ -34,7 +34,7 @@ public interface InfraRepository extends JpaRepository<Infra,Long> {
                                        @Param("major") Major major);
 
     @Query("""
-    SELECT new SDD.smash.Infra.Dto.InfraDetails(
+    SELECT new SDD.smash.legacy.infra.Dto.InfraDetails(
         ind.major,
         ind.name,
         i.count,
@@ -48,7 +48,7 @@ public interface InfraRepository extends JpaRepository<Infra,Long> {
 
     @Query("""
 
-            SELECT new SDD.smash.Infra.Dto.SigunguMajorAvgDTO(
+            SELECT new SDD.smash.legacy.infra.Dto.SigunguMajorAvgDTO(
             i.sigungu.sigunguCode,
             i.industry.major,
             AVG(i.score)

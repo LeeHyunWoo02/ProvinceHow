@@ -1,4 +1,4 @@
-package SDD.smash.Infra.Entity;
+package SDD.smash.legacy.infra.Entity;
 
 import java.util.EnumSet;
 

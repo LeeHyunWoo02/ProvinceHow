@@ -18,6 +18,10 @@ public enum ErrorCode {
     JOB_CODE_NOT_FOUND,
     //end
 
+    // infra
+    INDUSTRY_CODE_NOT_FOUND,
+    //end
+
     // dwelling
     PRICE_AMOUNT_NOT_VALID,
     NOT_FOUND_YEARMONTH,

@@ -8,7 +8,7 @@ import SDD.smash.Apis.Dto.DetailDTO;
 import SDD.smash.legacy.dwelling.Service.DwellingService;
 import SDD.smash.common.exception.ErrorCode;
 import SDD.smash.common.exception.DomainException;
-import SDD.smash.Infra.Service.InfraService;
+import SDD.smash.legacy.infra.Service.InfraService;
 import SDD.smash.legacy.job.Repository.JobCodeMiddleRepository;
 import SDD.smash.legacy.job.Service.JobService;
 import SDD.smash.Support.service.SupportService;

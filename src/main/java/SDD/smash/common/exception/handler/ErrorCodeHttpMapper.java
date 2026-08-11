@@ -18,6 +18,7 @@ final class ErrorCodeHttpMapper {
     static {
         STATUS.put(ErrorCode.ADDRESS_CODE_NOT_FOUND, HttpStatus.NOT_FOUND);
         STATUS.put(ErrorCode.JOB_CODE_NOT_FOUND, HttpStatus.NOT_FOUND);
+        STATUS.put(ErrorCode.INDUSTRY_CODE_NOT_FOUND, HttpStatus.NOT_FOUND);
         STATUS.put(ErrorCode.NOT_FOUND_YEARMONTH, HttpStatus.NOT_FOUND);
 
         STATUS.put(ErrorCode.PRICE_AMOUNT_NOT_VALID, HttpStatus.BAD_REQUEST);

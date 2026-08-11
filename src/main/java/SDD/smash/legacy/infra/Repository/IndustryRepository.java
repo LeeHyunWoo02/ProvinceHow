@@ -1,6 +1,6 @@
-package SDD.smash.Infra.Repository;
+package SDD.smash.legacy.infra.Repository;
 
-import SDD.smash.Infra.Entity.Industry;
+import SDD.smash.legacy.infra.Entity.Industry;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

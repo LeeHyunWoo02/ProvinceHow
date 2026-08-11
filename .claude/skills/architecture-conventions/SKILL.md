@@ -335,7 +335,10 @@ public record Score(int value) {
 | `JobCode` | `job` | `String topCode` / `midJobCode` |
 | `IndustryCode`, `Major` | `infra` | `String code`, `Major` enum |
 | `SupportTag` | `support` | 기존 `SupportTag` (유지) |
-| `DwellingType`, `InfraImportance` | 각 컨텍스트 domain/model | 기존 enum (이동) |
+| `DwellingType` | `dwelling/domain/model` | 기존 enum (이동) |
+
+> `InfraImportance`는 머지 충돌 정리(2026-08-11)로 `infraChoice` 비트마스크(`Major`, 위 행) 방식에
+> 통합되며 삭제됐다. 코드에 없는 개념이니 되살리지 않는다.
 
 ### 5.4 도메인 서비스 / 정책 (Policy)
 

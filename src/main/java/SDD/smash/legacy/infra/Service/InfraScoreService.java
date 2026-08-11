@@ -1,7 +1,7 @@
-package SDD.smash.Infra.Service;
+package SDD.smash.legacy.infra.Service;
 
-import SDD.smash.Infra.Entity.Major;
-import SDD.smash.Infra.Repository.InfraRepository;
+import SDD.smash.legacy.infra.Entity.Major;
+import SDD.smash.legacy.infra.Repository.InfraRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -12,7 +12,14 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-@Service
+/**
+ * 전환 중 임시 공존용 빈 이름 지정.
+ * 새 {@code SDD.smash.infra.application.InfraScoreService} 와 기본 빈 이름('infraScoreService')이
+ * 겹쳐 컨텍스트가 뜨지 않으므로 옛 쪽에 한정 이름을 준다.
+ * 주입은 전부 타입 기준(생성자 주입)이라 이름 변경이 동작에 영향을 주지 않는다.
+ * 이 클래스가 사라지는 recommendation 이관 단계에서 함께 제거된다.
+ */
+@Service("legacyInfraScoreService")
 @RequiredArgsConstructor
 public class InfraScoreService {
     private static final String REDIS_KEY_PREFIX = "infra:score:";

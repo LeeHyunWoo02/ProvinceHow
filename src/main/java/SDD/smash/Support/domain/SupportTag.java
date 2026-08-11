@@ -1,6 +1,6 @@
 package SDD.smash.Support.domain;
 
-import SDD.smash.Infra.Entity.Major;
+import SDD.smash.legacy.infra.Entity.Major;
 
 import java.util.EnumSet;
 

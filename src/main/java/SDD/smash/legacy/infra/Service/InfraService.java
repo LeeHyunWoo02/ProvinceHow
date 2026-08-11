@@ -1,10 +1,10 @@
-package SDD.smash.Infra.Service;
+package SDD.smash.legacy.infra.Service;
 
 import SDD.smash.legacy.address.Service.AddressVerifyService;
-import SDD.smash.Infra.Dto.InfraDetails;
-import SDD.smash.Infra.Dto.InfraMajor;
-import SDD.smash.Infra.Entity.Major;
-import SDD.smash.Infra.Repository.InfraRepository;
+import SDD.smash.legacy.infra.Dto.InfraDetails;
+import SDD.smash.legacy.infra.Dto.InfraMajor;
+import SDD.smash.legacy.infra.Entity.Major;
+import SDD.smash.legacy.infra.Repository.InfraRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
