@@ -1,9 +1,8 @@
-package SDD.smash.Infra.Batch;
+package SDD.smash.infra.infrastructure.batch;
 
-import SDD.smash.Infra.Converter.InfraConverter;
-import SDD.smash.Infra.Dto.IndustryDTO;
-import SDD.smash.Infra.Entity.Industry;
-import SDD.smash.Infra.Repository.IndustryRepository;
+import SDD.smash.infra.infrastructure.batch.dto.IndustryCsvRow;
+import SDD.smash.infra.infrastructure.persistence.IndustryJpaEntity;
+import SDD.smash.infra.infrastructure.persistence.IndustryJpaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -22,20 +21,24 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
-
+/**
+ * 업종 마스터 시드 배치. As-Is {@code IndustryBatch} 를 옮긴 것이다.
+ *
+ * <p>Job 이름("industryJob")과 빈 이름, chunk 크기, CSV 인코딩(<b>UTF-8</b>)을 그대로 유지한다.
+ */
 @Configuration
 @RequiredArgsConstructor
-public class IndustryBatch {
+public class IndustryBatchConfig {
+
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
-    private final IndustryRepository industryRepository;
-
+    private final IndustryJpaRepository industryJpaRepository;
 
     @Value("${industry.filePath}")
     private String filePath;
 
     @Bean
-    public Job industryJob(){
+    public Job industryJob() {
         return new JobBuilder("industryJob", jobRepository)
                 .start(industryStep())
                 .build();
@@ -45,7 +48,7 @@ public class IndustryBatch {
     public Step industryStep() {
 
         return new StepBuilder("industryStep", jobRepository)
-                .<IndustryDTO, Industry> chunk(20, platformTransactionManager)
+                .<IndustryCsvRow, IndustryJpaEntity> chunk(20, platformTransactionManager)
                 .reader(industryCsvReader())
                 .processor(industryCsvProcessor())
                 .writer(industryWriter())
@@ -54,9 +57,9 @@ public class IndustryBatch {
 
     @Bean
     @StepScope
-    public FlatFileItemReader<IndustryDTO> industryCsvReader() {
+    public FlatFileItemReader<IndustryCsvRow> industryCsvReader() {
 
-        return new FlatFileItemReaderBuilder<IndustryDTO>()
+        return new FlatFileItemReaderBuilder<IndustryCsvRow>()
                 .name("industryCsvReader")
                 .resource(new FileSystemResource(filePath))
                 .encoding("UTF-8")
@@ -66,28 +69,24 @@ public class IndustryBatch {
                 .delimiter(",")
                 .quoteCharacter('\0')
                 .names("code", "name", "major")
-                .fieldSetMapper(fieldSet -> {
-                    IndustryDTO dto = new IndustryDTO();
-                    dto.setCode(fieldSet.readString(0).trim());
-                    dto.setName(fieldSet.readString(1).trim());
-                    dto.setMajor(fieldSet.readString(2).trim());
-                    return dto;
-                })
+                .fieldSetMapper(fieldSet -> new IndustryCsvRow(
+                        fieldSet.readString(0).trim(),
+                        fieldSet.readString(1).trim(),
+                        fieldSet.readString(2).trim()))
                 .build();
     }
 
     @Bean
-    public ItemProcessor<IndustryDTO, Industry> industryCsvProcessor(){
-        return InfraConverter::industryToEntity;
+    public ItemProcessor<IndustryCsvRow, IndustryJpaEntity> industryCsvProcessor() {
+        return InfraCsvMapper::toIndustryJpaEntity;
     }
 
     @Bean
-    public RepositoryItemWriter<Industry> industryWriter() {
+    public RepositoryItemWriter<IndustryJpaEntity> industryWriter() {
 
-        return new RepositoryItemWriterBuilder<Industry>()
-                .repository(industryRepository)
+        return new RepositoryItemWriterBuilder<IndustryJpaEntity>()
+                .repository(industryJpaRepository)
                 .methodName("save")
                 .build();
     }
-
 }
