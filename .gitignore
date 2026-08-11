@@ -1,13 +1,10 @@
 HELP.md
-<<<<<<< HEAD
-=======
 data/
 /scripts
 backend.env
 backend.prod.env
 !backend.env.example
 !backend.prod.env.example
->>>>>>> origin/Backup/main
 .gradle
 build/
 !gradle/wrapper/gradle-wrapper.jar
@@ -25,12 +22,8 @@ build/
 bin/
 !**/src/main/**/bin/
 !**/src/test/**/bin/
-<<<<<<< HEAD
-backend.env
-=======
 env.properties
 
->>>>>>> origin/Backup/main
 ### IntelliJ IDEA ###
 .idea
 *.iws
