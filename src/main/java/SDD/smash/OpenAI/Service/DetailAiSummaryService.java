@@ -2,7 +2,7 @@ package SDD.smash.OpenAI.Service;
 
 import SDD.smash.Apis.Dto.DetailDTO;
 import SDD.smash.Apis.Dto.DetailResponseDTO;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.DomainException;
 import SDD.smash.OpenAI.Client.OpenAiClient;
 import SDD.smash.OpenAI.Converter.AiConverter;
 import SDD.smash.OpenAI.Dto.*;
@@ -82,7 +82,7 @@ public class DetailAiSummaryService {
             return AiConverter.toResponseDTO(dto, aiSummaryContent);
         } catch (JsonProcessingException e) {
             return AiConverter.toResponseDTO(dto,null);
-        } catch (BusinessException e){
+        } catch (DomainException e){
             log.warn("OpenAI API 호출 실패");
             return AiConverter.toResponseDTO(dto,null);
         }

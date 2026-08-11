@@ -1,7 +1,7 @@
 package SDD.smash.Job.Service;
 
-import SDD.smash.Exception.Code.ErrorCode;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.ErrorCode;
+import SDD.smash.common.exception.DomainException;
 import SDD.smash.Job.Dto.JobCountDTO;
 import SDD.smash.Job.Repository.JobCodeMiddleRepository;
 import SDD.smash.Job.Repository.JobCountRepository;
@@ -39,7 +39,7 @@ public class JobScoreService {
         //jobcode 존재 확인
         if(jobCodeMiddleCode != null && !jobCodeMiddleRepository.existsByCode(jobCodeMiddleCode))
         {
-            throw new BusinessException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종 코드입니다.");
+            throw new DomainException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종 코드입니다.");
         }
 
         String jobCodeKey = (jobCodeMiddleCode != null) ? jobCodeMiddleCode : "default";

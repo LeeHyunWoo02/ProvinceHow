@@ -3,8 +3,8 @@ package SDD.smash.Apis.Service;
 import SDD.smash.Address.Repository.SidoRepository;
 import SDD.smash.Address.Repository.SigunguRepository;
 import SDD.smash.Apis.Dto.CodeDTO;
-import SDD.smash.Exception.Code.ErrorCode;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.ErrorCode;
+import SDD.smash.common.exception.DomainException;
 import SDD.smash.Job.Repository.JobCodeMiddleRepository;
 import SDD.smash.Job.Repository.JobCodeTopRepository;
 import SDD.smash.Support.domain.SupportTag;
@@ -36,7 +36,7 @@ public class CodeService {
     {
         //topCode 검증
         if(topCode==null || !jobCodeTopRepository.existsByCode(topCode))
-            throw new BusinessException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종코드");
+            throw new DomainException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종코드");
 
         return jobCodeMiddleRepository.getCodeDTOListByTopCode(topCode);
 
@@ -53,7 +53,7 @@ public class CodeService {
     public List<CodeDTO> getAllSigungusBySido(String sidoCode)
     {
         if(sidoCode == null || !sidoRepository.existsBySidoCode(sidoCode))
-            throw new BusinessException(ErrorCode.ADDRESS_CODE_NOT_FOUND, "유효하지 않은 지역코드");
+            throw new DomainException(ErrorCode.ADDRESS_CODE_NOT_FOUND, "유효하지 않은 지역코드");
 
         return sigunguRepository.getCodeDTOListBySidoCode(sidoCode);
     }

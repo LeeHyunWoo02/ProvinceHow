@@ -1,6 +1,6 @@
 package SDD.smash.Support.service;
 
-import SDD.smash.Config.YouthCenterProperties;
+import SDD.smash.common.config.YouthCenterProperties;
 import SDD.smash.Support.domain.SupportTag;
 import SDD.smash.Support.dto.SupportDTO;
 import SDD.smash.Support.dto.SupportListDTO;

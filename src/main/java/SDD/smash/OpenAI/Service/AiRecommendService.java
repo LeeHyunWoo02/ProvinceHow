@@ -2,7 +2,7 @@ package SDD.smash.OpenAI.Service;
 
 import SDD.smash.Apis.Dto.RecommendAggregateResponse;
 import SDD.smash.Apis.Dto.RecommendDTO;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.DomainException;
 import SDD.smash.OpenAI.Client.OpenAiClient;
 import SDD.smash.OpenAI.Converter.AiConverter;
 import SDD.smash.OpenAI.Dto.AiRecommendDTO;
@@ -96,7 +96,7 @@ public class AiRecommendService {
             return AiConverter.toResponseList(recommendList, aiDto);
         } catch (JsonProcessingException e) {
             return AiConverter.toResponseList(recommendList,null);
-        } catch (BusinessException e){
+        } catch (DomainException e){
             log.warn("OpenAI API 호출 실패");
             return AiConverter.toResponseList(recommendList, null);
         }

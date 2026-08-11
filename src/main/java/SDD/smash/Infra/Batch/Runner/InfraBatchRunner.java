@@ -1,6 +1,6 @@
 package SDD.smash.Infra.Batch.Runner;
 
-import SDD.smash.Config.SeedProperties;
+import SDD.smash.common.config.SeedProperties;
 import SDD.smash.Util.BatchGuard;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;

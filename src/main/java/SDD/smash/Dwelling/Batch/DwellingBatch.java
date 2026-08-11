@@ -5,7 +5,7 @@ import SDD.smash.Dwelling.Adapter.MolitAptRentAdapter;
 import SDD.smash.Dwelling.Dto.DwellingDTO;
 import SDD.smash.Dwelling.Dto.DwellingUpsertDTO;
 import SDD.smash.Dwelling.Dto.RentRecord;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.DomainException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
@@ -34,7 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static SDD.smash.Dwelling.Converter.DwellingConverter.toDTO;
-import static SDD.smash.Exception.Code.ErrorCode.NOT_FOUND_YEARMONTH;
+import static SDD.smash.common.exception.ErrorCode.NOT_FOUND_YEARMONTH;
 
 @Configuration
 @Slf4j
@@ -86,7 +86,7 @@ public class DwellingBatch {
             @Value("#{jobParameters['months']}") Long months
     ) {
         if (dealYmd == null || months == null) {
-            throw new BusinessException(NOT_FOUND_YEARMONTH,"dealYmd or months is null");
+            throw new DomainException(NOT_FOUND_YEARMONTH,"dealYmd or months is null");
         }
         YearMonth to = YearMonth.parse(dealYmd, DateTimeFormatter.ofPattern("yyyyMM"));
         YearMonth from = to.minusMonths(months - 1);

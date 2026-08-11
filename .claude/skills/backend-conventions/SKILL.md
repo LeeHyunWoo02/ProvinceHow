@@ -310,21 +310,21 @@ class DwellingScorePolicyTest {
 
     @Test
     @DisplayName("월세 중앙값이 예산과 같으면 100점")
-    void 월세_중앙값이_예산과_같으면_만점() {
+    void scoresFullWhenMonthlyMedianEqualsBudget() {
         Score score = policy.score(DwellingType.MONTHLY, Money.of(60), Money.of(60));
         assertThat(score).isEqualTo(Score.of(100));
     }
 
     @Test
     @DisplayName("10만원 차이마다 10점 감점되고 0점 미만으로 내려가지 않는다")
-    void 월세_차이만큼_감점되고_0점에서_멈춘다() {
+    void deductsPerStepAndStopsAtZero() {
         assertThat(policy.score(DwellingType.MONTHLY, Money.of(80), Money.of(60))).isEqualTo(Score.of(80));
         assertThat(policy.score(DwellingType.MONTHLY, Money.of(500), Money.of(20))).isEqualTo(Score.ZERO);
     }
 
     @Test
     @DisplayName("실거래가 없으면 0점")
-    void 시세가_없으면_0점() {
+    void scoresZeroWhenNoMarketData() {
         assertThat(policy.score(DwellingType.MONTHLY, null, Money.of(60))).isEqualTo(Score.ZERO);
     }
 }
@@ -349,7 +349,7 @@ class DwellingScoreServiceTest {
 
     @Test
     @DisplayName("캐시가 있으면 저장소를 조회하지 않는다")
-    void 캐시히트시_저장소_미조회() {
+    void returnsCachedScoresWithoutQueryingRepository() {
         given(dwellingScoreCache.find(any()))
                 .willReturn(Optional.of(Map.of(new SigunguCode("11110"), Score.of(100))));
 
@@ -361,7 +361,7 @@ class DwellingScoreServiceTest {
 
     @Test
     @DisplayName("캐시 미스면 조회 후 계산 결과를 캐시에 저장한다")
-    void 캐시미스시_계산후_저장() {
+    void storesComputedScoresOnCacheMiss() {
         given(dwellingScoreCache.find(any())).willReturn(Optional.empty());
         given(dwellingMarketRepository.findAll()).willReturn(List.of(market("11110", 60)));
 
@@ -399,7 +399,7 @@ src/test/java/SDD/smash/<context>/<layer>/<대상>Test.java
     src/test/java/SDD/smash/dwelling/application/DwellingScoreServiceTest.java
 ```
 
-- 클래스 `<대상>Test`, 메서드는 한국어 스네이크(`캐시히트시_저장소_미조회`) + `@DisplayName`으로 문장 설명.
+- 클래스 `<대상>Test`, **메서드명은 영어 camelCase**(`returnsCachedScoresWithoutQueryingRepository`) + `@DisplayName`으로 한국어 문장 설명.
 - given/when/then 주석으로 구간을 나눈다.
 
 ---

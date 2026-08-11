@@ -1,7 +1,7 @@
 package SDD.smash.OpenAI.Client;
 
 
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.DomainException;
 import SDD.smash.OpenAI.Dto.OpenAiRequest;
 import SDD.smash.OpenAI.Dto.OpenAiResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -17,7 +17,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 
-import static SDD.smash.Exception.Code.ErrorCode.OPENAI_TOKEN_EXPIRED;
+import static SDD.smash.common.exception.ErrorCode.OPENAI_TOKEN_EXPIRED;
 
 @Component
 @Slf4j
@@ -46,7 +46,7 @@ public class OpenAiClient {
         ResponseEntity<OpenAiResponse> res = restTemplate.postForEntity(
                 APIURL, entity, OpenAiResponse.class);
         if (!res.getStatusCode().is2xxSuccessful() || res.getBody() == null) {
-            throw new BusinessException(OPENAI_TOKEN_EXPIRED, "토큰이 만료되었습니다.");
+            throw new DomainException(OPENAI_TOKEN_EXPIRED, "토큰이 만료되었습니다.");
         }
         return res.getBody();
     }

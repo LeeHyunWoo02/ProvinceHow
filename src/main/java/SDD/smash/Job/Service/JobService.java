@@ -1,8 +1,8 @@
 package SDD.smash.Job.Service;
 
 import SDD.smash.Address.Service.AddressVerifyService;
-import SDD.smash.Exception.Code.ErrorCode;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.ErrorCode;
+import SDD.smash.common.exception.DomainException;
 import SDD.smash.Job.Dto.JobInfoDTO;
 import SDD.smash.Job.Repository.JobCodeMiddleRepository;
 import SDD.smash.Job.Repository.JobCountRepository;
@@ -54,7 +54,7 @@ public class JobService {
         //jobcode 존재 확인
         if(jobMidCode != null && !jobCodeMiddleRepository.existsByCode(jobMidCode))
         {
-            throw new BusinessException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종 코드입니다.");
+            throw new DomainException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종 코드입니다.");
         }
 
         JobInfoDTO jobInfo = jobCountRepository.findJobInfoByCode(sigunguCode, jobMidCode);

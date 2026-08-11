@@ -4,8 +4,8 @@ import SDD.smash.Dwelling.Dto.DwellingJeonseDTO;
 import SDD.smash.Dwelling.Dto.DwellingMonthDTO;
 import SDD.smash.Dwelling.Entity.DwellingType;
 import SDD.smash.Dwelling.Repository.DwellingRepository;
-import SDD.smash.Exception.Code.ErrorCode;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.ErrorCode;
+import SDD.smash.common.exception.DomainException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -88,7 +88,7 @@ public class DwellingScoreSerivce {
     private Integer validPrice(DwellingType type, Integer price)
     {
         if (price == null) {
-            throw new BusinessException(ErrorCode.PRICE_AMOUNT_NOT_VALID, "가격이 입력되지 않았습니다.");
+            throw new DomainException(ErrorCode.PRICE_AMOUNT_NOT_VALID, "가격이 입력되지 않았습니다.");
         }
         if(type == DwellingType.MONTHLY)
         {

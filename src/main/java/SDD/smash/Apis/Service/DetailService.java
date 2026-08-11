@@ -6,8 +6,8 @@ import SDD.smash.Address.Service.PopulationService;
 import SDD.smash.Apis.Dto.CodeNameDTO;
 import SDD.smash.Apis.Dto.DetailDTO;
 import SDD.smash.Dwelling.Service.DwellingService;
-import SDD.smash.Exception.Code.ErrorCode;
-import SDD.smash.Exception.Exception.BusinessException;
+import SDD.smash.common.exception.ErrorCode;
+import SDD.smash.common.exception.DomainException;
 import SDD.smash.Infra.Service.InfraService;
 import SDD.smash.Job.Repository.JobCodeMiddleRepository;
 import SDD.smash.Job.Service.JobService;
@@ -38,7 +38,7 @@ public class DetailService {
 
         //midJobCode 검증
         if (midJobCode != null && !jobCodeMiddleRepository.existsByCode(midJobCode))
-            throw new BusinessException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종코드");
+            throw new DomainException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종코드");
 
         CodeNameDTO codeName = sigunguRepository.findCodeNameBySigunguCode(sigunguCode);
 
