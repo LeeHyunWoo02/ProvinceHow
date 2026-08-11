@@ -38,12 +38,8 @@ public class SigunguBatch {
     private final SidoRepository sidoRepository;
     private final SigunguRepository sigunguRepository;
 
-<<<<<<< HEAD
     public SigunguBatch(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager,
                         SidoRepository sidoRepository, SigunguRepository sigunguRepository) {
-=======
-    public SigunguBatch(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager, SidoRepository sidoRepository, SigunguRepository sigunguRepository) {
->>>>>>> origin/Backup/main
         this.jobRepository = jobRepository;
         this.platformTransactionManager = platformTransactionManager;
         this.sidoRepository = sidoRepository;
@@ -90,11 +86,7 @@ public class SigunguBatch {
         return new FlatFileItemReaderBuilder<SigunguDTO>()
                 .name("sigunguCsvReader")
                 .resource(new FileSystemResource(filePath))
-<<<<<<< HEAD
-                .encoding("MS949")
-=======
                 .encoding("UTF-8")
->>>>>>> origin/Backup/main
                 .linesToSkip(1)
                 .strict(true)
                 .delimited()

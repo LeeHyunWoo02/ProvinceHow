@@ -49,11 +49,8 @@ public class Infra {
     @Column(name = "ratio", precision = 18, scale = 2, nullable = false)
     @NotNull
     private BigDecimal ratio;
-<<<<<<< HEAD
 
     @Column(name = "score", precision = 6, scale = 2, nullable = false)
     @NotNull
     private BigDecimal score;
-=======
->>>>>>> origin/Backup/main
 }

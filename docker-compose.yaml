@@ -10,14 +10,6 @@ services:
       - '8080:8080'
     env_file:
       - ./backend.env
-<<<<<<< HEAD
-    depends_on:
-      my-redis:
-        condition: service_healthy
-
-  my-redis:
-    image: redis
-=======
     volumes:
       - ./data:/app/data:ro
     depends_on:
@@ -52,16 +44,11 @@ services:
     image: redis
     ports:
       - '6379:6379'
->>>>>>> origin/Backup/main
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 5s
       retries: 10
-<<<<<<< HEAD
-=======
-
 volumes:
   # 컨테이너를 지워도 데이터가 남는다.
   # 시드를 완전히 새로 적재하려면: docker compose down -v
   mysql-data:
->>>>>>> origin/Backup/main

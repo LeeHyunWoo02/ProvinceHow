@@ -2,18 +2,11 @@ package SDD.smash.Apis.Dto;
 
 import SDD.smash.Dwelling.Dto.DwellingInfoDTO;
 import SDD.smash.Infra.Dto.InfraDetails;
-<<<<<<< HEAD
 import SDD.smash.Infra.Dto.InfraMajor;
-=======
->>>>>>> origin/Backup/main
 import SDD.smash.Job.Dto.JobInfoDTO;
 import SDD.smash.Support.dto.SupportListDTO;
 import lombok.Builder;
 import lombok.Getter;
-<<<<<<< HEAD
-=======
-import lombok.Setter;
->>>>>>> origin/Backup/main
 
 import java.util.List;
 
@@ -27,11 +20,8 @@ public class DetailDTO {
     private String sigunguCode;
     private String sigunguName;
 
-<<<<<<< HEAD
     private Integer population;
 
-=======
->>>>>>> origin/Backup/main
     // 일자리
     private JobInfoDTO totalJobInfo;
     private JobInfoDTO fitJobInfo;
@@ -47,10 +37,7 @@ public class DetailDTO {
     //인프라
     private List<InfraDetails> infraDetails;
 
-<<<<<<< HEAD
     //주 인프라 점수
     private List<InfraMajor> infraMajors;
 
-=======
->>>>>>> origin/Backup/main
 }

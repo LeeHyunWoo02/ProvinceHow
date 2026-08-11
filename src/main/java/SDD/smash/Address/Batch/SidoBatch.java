@@ -22,11 +22,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
-<<<<<<< HEAD
-=======
-import static SDD.smash.Util.BatchTextUtil.addLeadingZero;
-import static SDD.smash.Util.BatchTextUtil.normalize;
->>>>>>> origin/Backup/main
 
 
 @Configuration
@@ -70,11 +65,7 @@ public class SidoBatch {
         return new FlatFileItemReaderBuilder<SidoDTO>()
                 .name("sidoCsvReader")
                 .resource(new FileSystemResource(filePath))
-<<<<<<< HEAD
-                .encoding("MS949")
-=======
                 .encoding("UTF-8")
->>>>>>> origin/Backup/main
                 .linesToSkip(1)
                 .strict(true)
                 .delimited()

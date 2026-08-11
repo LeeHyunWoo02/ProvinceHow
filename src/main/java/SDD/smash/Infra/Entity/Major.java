@@ -1,6 +1,5 @@
 package SDD.smash.Infra.Entity;
 
-<<<<<<< HEAD
 import java.util.EnumSet;
 
 public enum Major {
@@ -30,11 +29,4 @@ public enum Major {
         }
         return set;
     }
-=======
-public enum Major {
-    HEALTH,
-    FOOD,
-    CULTURE,
-    LIFE
->>>>>>> origin/Backup/main
 }

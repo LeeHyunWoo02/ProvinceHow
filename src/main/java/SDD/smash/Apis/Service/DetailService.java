@@ -2,10 +2,7 @@ package SDD.smash.Apis.Service;
 
 import SDD.smash.Address.Repository.SigunguRepository;
 import SDD.smash.Address.Service.AddressVerifyService;
-<<<<<<< HEAD
 import SDD.smash.Address.Service.PopulationService;
-=======
->>>>>>> origin/Backup/main
 import SDD.smash.Apis.Dto.CodeNameDTO;
 import SDD.smash.Apis.Dto.DetailDTO;
 import SDD.smash.Dwelling.Service.DwellingService;
@@ -27,10 +24,7 @@ public class DetailService {
     private final DwellingService dwellingService;
     private final SupportService supportService;
     private final InfraService infraService;
-<<<<<<< HEAD
     private final PopulationService populationService;
-=======
->>>>>>> origin/Backup/main
 
     private final AddressVerifyService addressVerifyService;
     private final SigunguRepository sigunguRepository;
@@ -54,11 +48,8 @@ public class DetailService {
                 .sigunguCode(codeName.getSigunguCode())
                 .sigunguName(codeName.getSigunguName())
 
-<<<<<<< HEAD
                 .population(populationService.getPopulationBySigunguCode(sigunguCode))
 
-=======
->>>>>>> origin/Backup/main
                 .totalJobInfo(jobService.getJobInfoBySigungu(sigunguCode))
                 .fitJobInfo(jobService.getJobInfoBySigunguAndJobCode(sigunguCode, midJobCode))
 
@@ -68,10 +59,7 @@ public class DetailService {
                 .dwellingInfo(dwellingService.getDwellingInfo(sigunguCode))
 
                 .infraDetails(infraService.getInfraDetails(sigunguCode))
-<<<<<<< HEAD
                 .infraMajors(infraService.getMajorInfraNumAndScore(sigunguCode))
-=======
->>>>>>> origin/Backup/main
                 .build();
     }
 }

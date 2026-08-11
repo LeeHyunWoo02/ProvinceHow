@@ -2,10 +2,6 @@ package SDD.smash.Dwelling.Dto;
 
 import lombok.Builder;
 import lombok.Getter;
-<<<<<<< HEAD
-=======
-import lombok.Setter;
->>>>>>> origin/Backup/main
 
 @Getter
 @Builder

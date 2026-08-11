@@ -29,7 +29,6 @@ public class MapperUtil {
         return null;
     }
 
-<<<<<<< HEAD
     public static String extractJson(String raw) {
         int s = raw.indexOf('{');
         int e = raw.lastIndexOf('}');
@@ -38,6 +37,4 @@ public class MapperUtil {
         }
         return raw.substring(s, e + 1).trim();
     }
-=======
->>>>>>> origin/Backup/main
 }

@@ -31,15 +31,10 @@ public class YouthSupportScheduler {
     /**
      * 이후 3일 간격으로 반복 수행
      * initialDelay=0으로 컨텍스트 시작 직후 실행 => 개발시에는 불필요한 트래픽을 줄이기위해 사용x
-<<<<<<< HEAD
      * initialDelayString = (day1)으로 시작 후 1일 뒤 스케줄링 시작(개발용)
      */
     @Scheduled(initialDelay = 0,
             fixedDelayString = "#{T(java.time.Duration).ofDays(3).toMillis()}")
-=======
-     */
-    @Scheduled(initialDelay =0,fixedDelayString = "#{T(java.time.Duration).ofDays(3).toMillis()}")
->>>>>>> origin/Backup/main
     public void runJob()
     {
         long started = System.currentTimeMillis();
@@ -59,7 +54,6 @@ public class YouthSupportScheduler {
                     String baseKey = code.getSigunguCode() + ":" + tag.getValue();
                     String numKey = baseKey + ":NUM";
 
-<<<<<<< HEAD
                     ops.set(numKey,result.getTotCount(), Duration.ofDays(10));
 
                     listOps.set(baseKey,result.getDto(),Duration.ofDays(10));
@@ -67,15 +61,6 @@ public class YouthSupportScheduler {
                     log.info("Cached: {} (totCount={})", baseKey, result.getTotCount());
                 }catch(Exception e){
                     log.warn("Fail: code={}, tag={}", code, tag.name());
-=======
-                    ops.set(numKey,result.getTotCount(), Duration.ofDays(4));
-
-                    listOps.set(baseKey,result.getDto(),Duration.ofDays(4));
-
-                    log.info("Cached: {} (totCount={})", baseKey, result.getTotCount());
-                }catch(Exception e){
-                    log.warn("Fail: code={}, tag={}: {}", code, tag.name(), e.getMessage());
->>>>>>> origin/Backup/main
                 }
             }
         }

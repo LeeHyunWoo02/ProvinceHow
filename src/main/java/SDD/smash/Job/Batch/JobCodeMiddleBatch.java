@@ -7,10 +7,6 @@ import SDD.smash.Job.Entity.JobCodeMiddle;
 import SDD.smash.Job.Entity.JobCodeTop;
 import SDD.smash.Job.Repository.JobCodeMiddleRepository;
 import SDD.smash.Job.Repository.JobCodeTopRepository;
-<<<<<<< HEAD
-import lombok.RequiredArgsConstructor;
-=======
->>>>>>> origin/Backup/main
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -28,10 +24,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
-<<<<<<< HEAD
-=======
 import java.util.Arrays;
->>>>>>> origin/Backup/main
 import java.util.HashMap;
 import java.util.Map;
 
@@ -41,10 +34,6 @@ import static SDD.smash.Util.BatchTextUtil.normalize;
 
 @Configuration
 @Slf4j
-<<<<<<< HEAD
-@RequiredArgsConstructor
-=======
->>>>>>> origin/Backup/main
 public class JobCodeMiddleBatch {
 
     private final JobRepository jobRepository;
@@ -53,8 +42,6 @@ public class JobCodeMiddleBatch {
     private final JobCodeTopRepository jobCodeTopRepository;
 
 
-<<<<<<< HEAD
-=======
     public JobCodeMiddleBatch(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager, JobCodeMiddleRepository jobCodeMiddleRepository, JobCodeTopRepository jobCodeTopRepository) {
         this.jobRepository = jobRepository;
         this.platformTransactionManager = platformTransactionManager;
@@ -62,7 +49,6 @@ public class JobCodeMiddleBatch {
         this.jobCodeTopRepository = jobCodeTopRepository;
     }
 
->>>>>>> origin/Backup/main
     @Value("${jobCodeMiddle.filePath}")
     private String filePath;
 
@@ -105,26 +91,12 @@ public class JobCodeMiddleBatch {
                 .linesToSkip(1)
                 .skippedLinesCallback(line -> log.info("Skip header : {}", line))
                 .strict(true)
-<<<<<<< HEAD
-                .delimited()
-                    .delimiter(",")
-                    .quoteCharacter('\0')
-                    .includedFields(0,1,2)
-                    .strict(false)
-                    .names("jobCode", "name","upstream_code")
-                .fieldSetMapper(fieldSet -> {
-                    JobCodeMiddleDTO dto = new JobCodeMiddleDTO();
-                    dto.setCode(fieldSet.readString(0).trim());
-                    dto.setName(fieldSet.readString(1).trim());
-                    dto.setUpstream(fieldSet.readString(2).trim());
-=======
                 .lineMapper((line, lineNumber) -> {
                     String[] values = line.split(",", -1);
                     JobCodeMiddleDTO dto = new JobCodeMiddleDTO();
                     dto.setCode(values[0].trim());
                     dto.setName(String.join(",", Arrays.copyOfRange(values, 1, values.length - 1)).trim());
                     dto.setUpstream(values[values.length - 1].trim());
->>>>>>> origin/Backup/main
 
                     return dto;
                 })
@@ -136,10 +108,6 @@ public class JobCodeMiddleBatch {
         return dto -> {
             String jobCodeTop = addLeadingZero(normalize(dto.getUpstream()));
             JobCodeTop jct = resolveSido(jobCodeTop);
-<<<<<<< HEAD
-
-=======
->>>>>>> origin/Backup/main
             if (jct == null) {
                 return null;
             }

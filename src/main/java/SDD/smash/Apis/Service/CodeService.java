@@ -21,10 +21,6 @@ import java.util.stream.Collectors;
 public class CodeService {
 
     private final SidoRepository sidoRepository;
-<<<<<<< HEAD
-=======
-    private final SigunguRepository SigunguRepository;
->>>>>>> origin/Backup/main
     private final JobCodeTopRepository jobCodeTopRepository;
     private final JobCodeMiddleRepository jobCodeMiddleRepository;
     private final SigunguRepository sigunguRepository;

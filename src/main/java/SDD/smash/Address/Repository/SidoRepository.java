@@ -1,9 +1,5 @@
 package SDD.smash.Address.Repository;
 
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/Backup/main
 import SDD.smash.Address.Entity.Sido;
 import SDD.smash.Apis.Dto.CodeDTO;
 import org.springframework.data.jpa.repository.JpaRepository;

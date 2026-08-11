@@ -5,10 +5,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-<<<<<<< HEAD
-=======
-import org.springframework.context.annotation.Primary;
->>>>>>> origin/Backup/main
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -25,10 +21,6 @@ public class MetaDBConfig {
         return DataSourceBuilder.create().build();
     }
 
-<<<<<<< HEAD
-=======
-    @Primary
->>>>>>> origin/Backup/main
     @Bean(name = "batchTransactionManager")
     public PlatformTransactionManager batchTransactionManager() {
 

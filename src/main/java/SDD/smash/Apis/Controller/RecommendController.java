@@ -1,6 +1,5 @@
 package SDD.smash.Apis.Controller;
 
-<<<<<<< HEAD
 import SDD.smash.Apis.Dto.RecommendAggregateResponse;
 import SDD.smash.Apis.Dto.RecommendDTO;
 import SDD.smash.Apis.Service.RecommendService;
@@ -12,15 +11,6 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-=======
-import SDD.smash.Apis.Dto.RecommendDTO;
-import SDD.smash.Apis.Service.RecommendService;
-import SDD.smash.Dwelling.Entity.DwellingType;
-import SDD.smash.Infra.Entity.InfraImportance;
-import SDD.smash.Support.domain.SupportTag;
-import jakarta.validation.constraints.NotNull;
-import lombok.RequiredArgsConstructor;
->>>>>>> origin/Backup/main
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,7 +24,6 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
-<<<<<<< HEAD
 @Slf4j
 public class RecommendController {
 
@@ -65,22 +54,5 @@ public class RecommendController {
         }
         responseDTO = AiConverter.toResponseList(list,null);
         return ResponseEntity.ok(responseDTO);
-=======
-public class RecommendController {
-
-    private final RecommendService recommendService;
-
-    @GetMapping("/recommend")
-    public ResponseEntity<List<RecommendDTO>> recommend(
-            @RequestParam(name = "supportTag", required = false) SupportTag supportTag,
-            @RequestParam(name = "midJobCode", required = false) String midJobCode,
-            @RequestParam(name = "dwellingType", required = true) @NotNull(message = "주거 유형은 필수입니다.") DwellingType dwellingType,
-            @RequestParam(name = "price", required = true) @NotNull(message = "가격은 필수입니다.") Integer price,
-            @RequestParam(name = "infraImportance", required = true) @NotNull(message = "인프라 중요도는 필수입니다.") InfraImportance infraImportance
-            )
-    {
-        List<RecommendDTO> recommend = recommendService.recommend(supportTag, midJobCode, dwellingType, price, infraImportance);
-        return ResponseEntity.ok(recommend);
->>>>>>> origin/Backup/main
     }
 }

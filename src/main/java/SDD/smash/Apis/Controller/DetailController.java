@@ -1,14 +1,10 @@
 package SDD.smash.Apis.Controller;
 
 import SDD.smash.Apis.Dto.DetailDTO;
-<<<<<<< HEAD
 import SDD.smash.Apis.Dto.DetailResponseDTO;
 import SDD.smash.Apis.Service.DetailService;
 import SDD.smash.OpenAI.Converter.AiConverter;
 import SDD.smash.OpenAI.Service.DetailAiSummaryService;
-=======
-import SDD.smash.Apis.Service.DetailService;
->>>>>>> origin/Backup/main
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +21,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class DetailController {
 
     private final DetailService detailService;
-<<<<<<< HEAD
     private final DetailAiSummaryService detailAiSummaryService;
 
     @GetMapping("/detail")
@@ -44,17 +39,5 @@ public class DetailController {
 
         responseDTO = AiConverter.toResponseDTO(dto,null);
         return ResponseEntity.ok(responseDTO);
-=======
-
-
-    @GetMapping("/detail")
-    public ResponseEntity<DetailDTO> recommend(
-            @RequestParam(name = "sigunguCode", required = true) @NotNull(message = "지역코드는 필수입니다.") String sigunguCode,
-            @RequestParam(name = "midJobCode", required = false) String midJobCode
-    )
-    {
-        DetailDTO dto = detailService.details(sigunguCode, midJobCode);
-        return ResponseEntity.ok(dto);
->>>>>>> origin/Backup/main
     }
 }
