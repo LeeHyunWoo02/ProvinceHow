@@ -16,7 +16,12 @@ import java.util.HashMap;
 
 @Configuration
 @EnableJpaRepositories(
-        basePackages = "SDD.smash",
+        basePackages = {
+                "SDD.smash.address.infrastructure.persistence",
+                "SDD.smash.dwelling.infrastructure.persistence",
+                "SDD.smash.job.infrastructure.persistence",
+                "SDD.smash.infra.infrastructure.persistence"
+        },
         entityManagerFactoryRef = "dataEntityManager",
         transactionManagerRef = "dataTransactionManager"
 )
