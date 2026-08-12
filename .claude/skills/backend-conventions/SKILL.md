@@ -1,12 +1,14 @@
 ---
 name: backend-conventions
-description: smash(ProvinceHow)의 DDD 헥사고날 구조에서 도메인 모델·정책(Policy)·유스케이스(application)·컨트롤러(presentation)를 만드는 워크플로우와, 빈약한 모델에서 도메인으로 로직을 옮기는 분리 기준, 계층별 JUnit5/Mockito 테스트 전략을 정의한다. 새 기능이나 API를 추가하거나, 기존 서비스를 DDD로 리팩토링하거나, 도메인/유스케이스/어댑터 테스트를 작성할 때 사용한다. 계층 배치는 architecture-conventions, 명명·예외·DTO는 global-conventions, JPA 매핑은 persistence-conventions, 캐시는 redis-conventions를 따른다.
+description: smash(ProvinceHow)의 DDD 헥사고날 구조에서 도메인 모델·정책(Policy)·유스케이스(application)·컨트롤러(presentation)를 만드는 워크플로우와, 빈약한 모델을 피하는 로직 배치 기준, 계층별 JUnit5/Mockito 테스트 전략을 정의한다. 새 기능이나 API를 추가하거나, 도메인/유스케이스/어댑터 테스트를 작성할 때 사용한다. 계층 배치는 architecture-conventions, 명명·예외·DTO는 global-conventions, JPA 매핑은 persistence-conventions, 캐시는 redis-conventions를 따른다.
 ---
 
 # backend-conventions (DDD)
 
-Java 17 · Spring Boot 3.5.7 · Lombok · JUnit5 + Mockito(`spring-boot-starter-test`).
-`./gradlew test`, 단일 실행 `./gradlew test --tests "SDD.smash.dwelling.domain.*"`
+Java 17 · Spring Boot 3.5.7 · Lombok · JUnit5 + Mockito(`spring-boot-starter-test`) · Testcontainers.
+`.\gradlew.bat test`, 단일 실행 `.\gradlew.bat test --tests "SDD.smash.domain.dwelling.domain.*"`
+
+패키지는 `SDD.smash.domain.<context>.<layer>` / `SDD.smash.global.<area>` 다 → global-conventions §1
 
 ---
 
@@ -32,7 +34,7 @@ DDD에서는 **도메인부터 만들고 바깥으로 나온다.** 컨트롤러�
 ### 2.1 Aggregate Root
 
 ```java
-package SDD.smash.dwelling.domain.model;
+package SDD.smash.domain.dwelling.domain.model;
 
 /** 지역의 전월세 시세 (Aggregate Root) */
 public class DwellingMarket {
@@ -86,6 +88,7 @@ public record Money(int manwon) {                     // 만원 단위
 - `record`로 만들고 compact 생성자에서 검증한다.
 - **행위를 값 객체에 넣는다.** `Math.abs(a - b)`를 서비스에서 계산하지 말고 `diffTo`로 만든다.
 - 원시 타입 집착(primitive obsession)을 피한다: `int price` → `Money budget`, `String code` → `SigunguCode`.
+- 공유 커널(`SigunguCode`, `SidoCode`, `Score`, `Money`)은 `SDD.smash.global.domain.model`에 있다. 컨텍스트 고유 값 객체는 그 컨텍스트의 `domain/model`에 둔다.
 
 ### 2.3 도메인 enum에 행위 부여
 
@@ -104,7 +107,7 @@ public enum DwellingType {
 }
 ```
 
-기존 `DwellingScoreSerivce.validPrice()`의 `if (type == MONTHLY) ... else ...` 분기가 enum 안으로 들어가면 **분기 자체가 사라진다.** 타입별 분기를 서비스에서 발견하면 enum으로 옮길 신호다.
+타입별 `if (type == MONTHLY) ... else ...` 분기를 서비스에서 발견하면 **enum으로 옮길 신호**다. 옮기면 분기 자체가 사라진다.
 
 ---
 
@@ -113,7 +116,7 @@ public enum DwellingType {
 여러 Aggregate에 걸치거나 Aggregate 하나에 넣기 어색한 규칙을 담는다.
 
 ```java
-package SDD.smash.dwelling.domain.service;
+package SDD.smash.domain.dwelling.domain.service;
 
 /** 예산과 시세 중앙값의 차이로 주거 적합도를 계산한다. */
 public class DwellingScorePolicy {
@@ -138,7 +141,7 @@ public class DwellingScorePolicy {
 
 ---
 
-## 4. 빈약한 모델(anemic) 탈피 기준
+## 4. 로직을 어디에 둘 것인가
 
 ### 4.1 "이 코드는 어디로 가는가"
 
@@ -148,33 +151,27 @@ public class DwellingScorePolicy {
 | 타입/상태에 따른 **분기**인가 | `domain/model`의 **enum 메서드** |
 | **여러 Aggregate**의 데이터가 필요한 규칙인가 | `domain/service`의 Policy |
 | **저장소·캐시·외부 API 호출 순서**인가 | `application` |
-| **여러 컨텍스트**를 합치는가 | `recommendation/application` |
+| **여러 컨텍스트**를 합치는가 | `domain/recommendation/application` |
 | **기술 변환**(JSON, SQL, 문자열 정제)인가 | `infrastructure` |
 | HTTP 상태코드·JSON 필드명인가 | `presentation` |
 
-### 4.2 실제 분해 예시 — `DwellingScoreSerivce` 3분할
+### 4.2 표준 분해 형태 — 점수 기능의 4분할
 
-현재 이 클래스 하나에 Redis·JPA·도메인 규칙이 섞여 있다. DDD 전환 시 셋으로 나뉜다.
+점수 계산처럼 "규칙 + 조회 + 캐시"가 섞이는 기능은 항상 아래 형태로 나뉜다.
+`dwelling`이 이 패턴의 기준이고 `job`·`infra`·`support`가 같은 모양이다.
 
 ```
-As-Is: Dwelling/Service/DwellingScoreSerivce
-       ├─ validPrice()            가격 보정 규칙
-       ├─ calcMonthlyScore()      월세 점수 공식
-       ├─ calcJeonseScore()       전세 점수 공식
-       ├─ redisTemplate 캐시 조회/저장
-       └─ dwellingRepository 조회
-
-To-Be:
-  dwelling/domain/model/DwellingType.normalize()          ← 가격 보정 (분기 소멸)
-  dwelling/domain/service/DwellingScorePolicy.score()     ← 점수 공식 (순수)
-  dwelling/domain/port/DwellingMarketRepository           ← 조회 포트
-  dwelling/domain/port/DwellingScoreCache                 ← 캐시 포트
-  dwelling/application/DwellingScoreService                ← 캐시 확인 → 조회 → Policy 적용 → 캐시 저장
-  dwelling/infrastructure/cache/DwellingScoreRedisAdapter  ← Redis 상세
-  dwelling/infrastructure/persistence/DwellingRepositoryAdapter
+dwelling/domain/model/DwellingType.normalize()          ← 가격 보정 (타입 분기 소멸)
+dwelling/domain/service/DwellingScorePolicy.score()     ← 점수 공식 (순수 함수)
+dwelling/domain/port/DwellingMarketRepository           ← 조회 포트
+dwelling/domain/port/DwellingScoreCache                 ← 캐시 포트
+dwelling/application/DwellingScoreService               ← 캐시 확인 → 조회 → Policy 적용 → 캐시 저장
+dwelling/infrastructure/cache/DwellingScoreRedisAdapter ← Redis 상세 (키·TTL·직렬화)
+dwelling/infrastructure/persistence/DwellingRepositoryAdapter
 ```
 
-**판단 근거**: 점수 공식은 "주거비가 예산에 가까울수록 좋다"는 **도메인 지식**이므로 domain. 캐시는 **성능 최적화**이지 도메인 지식이 아니므로 application + infrastructure.
+**판단 근거**: 점수 공식은 "주거비가 예산에 가까울수록 좋다"는 **도메인 지식**이므로 domain.
+캐시는 **성능 최적화**이지 도메인 지식이 아니므로 application + infrastructure.
 
 ### 4.3 리팩토링 신호
 
@@ -193,12 +190,12 @@ To-Be:
 - **다른 컨텍스트가 호출하면** `application/port/in`에 `...UseCase` 인터페이스를 만든다.
 - **자기 컨텍스트 안에서만 쓰면** 인터페이스 없이 구현 클래스를 직접 주입한다. **불필요한 인터페이스를 만들지 않는다.**
 
-현재 구조상 `recommendation`이 다른 5개 컨텍스트를 호출하므로, **그 5개는 in-port가 필요**하다.
+`recommendation`이 나머지 5개 컨텍스트를 호출하므로, **그 5개는 in-port를 갖는다.**
 
 ### 5.2 템플릿
 
 ```java
-package SDD.smash.dwelling.application;
+package SDD.smash.domain.dwelling.application;
 
 @Service
 @RequiredArgsConstructor
@@ -251,7 +248,7 @@ public class DwellingScoreService implements DwellingScoreUseCase {
 ## 6. 컨트롤러(presentation) 작성
 
 ```java
-package SDD.smash.recommendation.presentation;
+package SDD.smash.domain.recommendation.presentation;
 
 @Validated
 @RestController
@@ -259,19 +256,34 @@ package SDD.smash.recommendation.presentation;
 @RequestMapping("/api")
 public class RecommendController {
 
-    private final RecommendRegionUseCase recommendRegionUseCase;   // in-port만
+    private final RecommendRegionUseCase recommendRegionUseCase;   // in-port
+    private final RegionPickProvider regionPickProvider;           // application/port/out (선택 기능)
 
     @GetMapping("/recommend")
-    public ResponseEntity<List<RecommendResponse>> recommend(@Valid RecommendRequest request) {
-        List<RegionRecommendation> result = recommendRegionUseCase.recommend(request.toCommand());
-        return ResponseEntity.ok(result.stream().map(RecommendResponse::from).toList());
+    public ResponseEntity<RecommendAggregateResponse> recommend(
+            @RequestParam @NotNull @Min(0) @Max(15) Integer supportChoice,
+            @RequestParam(required = false) String midJobCode,
+            @RequestParam @NotNull DwellingType dwellingType,
+            @RequestParam @NotNull Integer price,
+            @RequestParam @NotNull @Min(0) @Max(15) Integer infraChoice,
+            @RequestParam(defaultValue = "false") boolean aiUse) {
+
+        JobCode jobCode = (midJobCode == null) ? null : JobCode.of(midJobCode);
+        RecommendCommand command =
+                new RecommendCommand(supportChoice, jobCode, dwellingType, Money.of(price), infraChoice);
+
+        List<RegionRecommendation> list = recommendRegionUseCase.recommend(command);
+        List<RegionPick> picks = aiUse ? regionPickProvider.pick(list) : null;
+
+        return ResponseEntity.ok(AiConverter.toResponseList(list, picks));
     }
 }
 ```
 
 **규칙**
-- 컨트롤러는 **in-port 1개만** 주입한다.
-- 파라미터가 3개를 넘으면 `...Request` 레코드로 묶고 `@Valid`를 쓴다. 값 객체 변환은 `toCommand()`에서.
+- 컨트롤러는 **in-port**를 주입한다. 표현 계층의 선택 기능(예: `aiUse=true`일 때의 AI 호출)만 `application/port/out`을 직접 호출한다 → architecture-conventions §3.2
+- **`infrastructure`의 구현 클래스를 주입하지 않는다.** `presentation → infrastructure`는 역방향이다.
+- 원시 파라미터는 **메서드 안에서 즉시** 값 객체/`Command`로 승격한다. 파라미터가 많아 가독성이 떨어지면 `...Request` 레코드 + `toCommand()`로 묶는다.
 - **try/catch 금지.** 전역 핸들러가 처리한다 → global-conventions §3
 - 로직·분기·조합 금지. 위임과 응답 변환만.
 - 도메인 모델을 반환하지 않는다. `...Response`로 변환한다.
@@ -280,19 +292,26 @@ public class RecommendController {
 
 ## 7. 테스트 전략
 
-### 7.1 전제 (이 프로젝트의 제약)
+### 7.1 실행 환경
 
-- `src/main/resources`에 **`application.properties`가 없다.** `application-dev`/`application-prod`만 있고 값이 전부 `${ENV}`다.
-- `src/test/resources`도 **없다.**
-- 따라서 **`@SpringBootTest`는 프로필·환경변수 없이 뜨지 않는다.** 기존 `SmashApplicationTests`도 마찬가지다.
+| 종류 | Spring | DB | 비고 |
+|---|---|---|---|
+| domain 모델·정책 | ✕ | ✕ | 순수 JUnit. 가장 빠르고 가장 많다 |
+| application 유스케이스 | ✕ | ✕ | Mockito로 **포트** 목킹 |
+| infrastructure 매퍼 | ✕ | ✕ | 왕복 변환 순수 테스트 |
+| 컨트롤러 슬라이스 | `@WebMvcTest` | ✕ | in-port를 `@MockitoBean`으로 대체 |
+| 통합 | `@SpringBootTest` | **Testcontainers MySQL** | `IntegrationTestSupport`를 상속 |
 
-**DDD 전환은 이 문제를 크게 완화한다.** 도메인과 유스케이스가 프레임워크를 모르므로 **테스트의 대부분이 Spring 없이 실행**된다.
+- `src/main/resources`에는 `application-dev`/`application-prod`만 있고 값이 전부 `${ENV}`다.
+- `src/test/resources/application.properties`가 **프로파일 없이** 필요한 플레이스홀더를 전부 채운다. 시드 배치는 전부 `enabled=false`, 외부 API URL은 `localhost` 더미다.
+- **DataSource 접속 정보만** `IntegrationTestSupport`의 `@DynamicPropertySource`가 Testcontainers 값으로 덮어쓴다. **Docker 데몬이 떠 있어야 한다.**
+- 새 설정 프로퍼티(`${...}`)를 추가하면 **`src/test/resources/application.properties`에도 더미 값을 추가**한다. 빠뜨리면 통합 테스트가 컨텍스트 로딩에서 죽는다.
 
 ### 7.2 계층별 테스트 피라미드
 
 ```
         ▲  적음
-        │  infrastructure 어댑터 테스트   — 필요 최소한. @DataJpaTest 등
+        │  통합 테스트 (IntegrationTestSupport) — 최소한
         │  presentation 슬라이스 테스트   — @WebMvcTest
         │  application 유스케이스 테스트  — Mockito로 포트 목킹
         │  domain 모델·정책 테스트        — 순수 JUnit, 모킹 0    ★ 가장 많이
@@ -302,7 +321,7 @@ public class RecommendController {
 ### 7.3 domain 테스트 — 모킹 없음 (가장 중요)
 
 ```java
-package SDD.smash.dwelling.domain.service;
+package SDD.smash.domain.dwelling.domain.service;
 
 class DwellingScorePolicyTest {
 
@@ -331,7 +350,7 @@ class DwellingScorePolicyTest {
 ```
 
 **반드시 테스트할 것**
-- 값 객체의 **불변식 위반 시 `DomainException`과 `ErrorCode`** (`Score.of(101)`, `new SigunguCode("111")`)
+- 값 객체의 **불변식 위반 시 `DomainException`과 `ErrorCode`** (`Score.of(101)`, `SigunguCode.of("111")`)
 - 정책의 **경계값** (상·하한, 0점 클램프, null 입력)
 - enum의 행위 (`DwellingType.normalize()`의 구간 보정)
 - Aggregate 메서드의 정상/빈 데이터 경로
@@ -351,11 +370,11 @@ class DwellingScoreServiceTest {
     @DisplayName("캐시가 있으면 저장소를 조회하지 않는다")
     void returnsCachedScoresWithoutQueryingRepository() {
         given(dwellingScoreCache.find(any()))
-                .willReturn(Optional.of(Map.of(new SigunguCode("11110"), Score.of(100))));
+                .willReturn(Optional.of(Map.of(SigunguCode.of("11110"), Score.of(100))));
 
         Map<SigunguCode, Score> result = service.scoresFor(DwellingType.MONTHLY, Money.of(60));
 
-        assertThat(result).containsEntry(new SigunguCode("11110"), Score.of(100));
+        assertThat(result).containsEntry(SigunguCode.of("11110"), Score.of(100));
         then(dwellingMarketRepository).shouldHaveNoInteractions();
     }
 
@@ -372,7 +391,7 @@ class DwellingScoreServiceTest {
 }
 ```
 
-- **포트가 인터페이스이므로 목킹이 자연스럽다.** `RedisTemplate`/`HashOperations`의 다단계 스텁이 사라진다 — DDD 전환의 가장 큰 테스트 이득이다.
+- **포트가 인터페이스이므로 목킹이 자연스럽다.** `RedisTemplate`/`HashOperations`의 다단계 스텁을 쓰지 않는다.
 - 목킹 대신 **인메모리 Fake 포트**를 써도 좋다. 같은 포트를 여러 테스트가 쓰면 Fake가 더 읽기 쉽다.
   ```java
   class InMemoryDwellingScoreCache implements DwellingScoreCache {
@@ -384,21 +403,28 @@ class DwellingScoreServiceTest {
 - 스텁은 `BDDMockito`(`given/willReturn`), 검증은 `then(...).should()`, 단언은 **AssertJ**.
 - `MockitoExtension`은 strict stubbing이다. 쓰지 않는 스텁은 `lenient()`로 덮지 말고 **삭제**한다.
 
-### 7.5 infrastructure / presentation 테스트
+### 7.5 infrastructure / presentation / 통합 테스트
 
-- **어댑터**: 매핑(`XxxJpaMapper`)의 도메인↔JPA 왕복 변환은 순수 테스트로 검증한다. DB가 필요한 쿼리는 `@DataJpaTest` + H2를 쓰되, **`src/test/resources/application-test.properties`를 먼저 만들고** `@ActiveProfiles("test")`를 붙인다.
+- **어댑터**: 매핑(`XxxJpaMapper`)의 도메인↔JPA 왕복 변환과 캐시 어댑터의 키 조립은 **순수 테스트**로 검증한다.
 - **컨트롤러**: `@WebMvcTest(controllers = XxxController.class)` + in-port를 `@MockitoBean`으로 대체.
-  `SecurityConfig`가 로드되면 `${front_url}` 때문에 실패하므로 `@TestPropertySource(properties = "front_url=http://localhost:5173")` 또는 `excludeAutoConfiguration = SecurityAutoConfiguration.class`를 함께 준다.
-- **`@SpringBootTest`는 통합 환경이 갖춰지기 전까지 추가하지 않는다.**
+- **통합**: `IntegrationTestSupport`를 상속한다. 컨테이너는 static 초기화로 한 번 뜨고 JVM 종료까지 재사용된다. 테스트에서는 data/meta가 같은 스키마다.
+  - `ApplicationReadyEvent`/`@Scheduled`로 외부 API를 때리는 컴포넌트(`DwellingBatchRunner`, `SupportPolicyRefreshScheduler`)는 이미 `@MockitoBean`으로 대체돼 있다. **같은 성격의 컴포넌트를 새로 만들면 여기에도 추가**한다.
+- **실패 경로 테스트는 HTTP 상태뿐 아니라 응답의 `code`(=`ErrorCode` 이름)까지 단언**한다.
 
 ### 7.6 테스트 위치와 이름
 
+테스트 패키지는 **main 구조를 그대로 미러링**한다.
+
 ```
-src/test/java/SDD/smash/<context>/<layer>/<대상>Test.java
-예) src/test/java/SDD/smash/dwelling/domain/service/DwellingScorePolicyTest.java
-    src/test/java/SDD/smash/dwelling/application/DwellingScoreServiceTest.java
+src/test/java/SDD/smash/domain/<context>/<layer>/<대상>Test.java
+src/test/java/SDD/smash/global/<area>/<대상>Test.java
+
+예) src/test/java/SDD/smash/domain/dwelling/domain/service/DwellingScorePolicyTest.java
+    src/test/java/SDD/smash/domain/dwelling/application/DwellingScoreServiceTest.java
+    src/test/java/SDD/smash/global/domain/model/ScoreTest.java
 ```
 
+- 통합 테스트 베이스(`IntegrationTestSupport`)와 컨텍스트 로딩 테스트만 루트 `SDD.smash`에 둔다.
 - 클래스 `<대상>Test`, **메서드명은 영어 camelCase**(`returnsCachedScoresWithoutQueryingRepository`) + `@DisplayName`으로 한국어 문장 설명.
 - given/when/then 주석으로 구간을 나눈다.
 
@@ -407,7 +433,7 @@ src/test/java/SDD/smash/<context>/<layer>/<대상>Test.java
 ## 8. 체크리스트
 
 **도메인**
-- [ ] `domain` 패키지에 Spring/JPA/Redis import가 없는가
+- [ ] 계층 `domain` 패키지에 Spring/JPA/Redis import가 없는가
 - [ ] 불변식이 생성자/compact 생성자에서 강제되는가
 - [ ] 원시 타입 대신 값 객체(`SigunguCode`, `Money`, `Score`)를 쓰는가
 - [ ] 타입 분기(`if type == ...`)가 enum 메서드로 들어갔는가
@@ -420,12 +446,14 @@ src/test/java/SDD/smash/<context>/<layer>/<대상>Test.java
 - [ ] 트랜잭션 안에서 캐시/외부 API를 호출하지 않는가
 
 **표현**
-- [ ] 컨트롤러가 in-port 1개만 주입하고 로직이 없는가
+- [ ] 컨트롤러가 in-port를 주입하고 로직이 없는가 (`infrastructure` 주입 없음)
 - [ ] 도메인 모델이 아니라 `...Response`를 반환하는가
-- [ ] `@Validated`/`@Valid`가 있고 값 객체 변환이 `toCommand()`에 있는가
+- [ ] `@Validated`/`@Valid`가 있고 원시 파라미터가 즉시 값 객체로 승격되는가
 
 **테스트**
+- [ ] 테스트 패키지가 main 구조를 미러링하는가
 - [ ] 도메인 모델·정책 테스트가 **모킹 없이** 도는가
 - [ ] 값 객체 불변식 위반 테스트(`ErrorCode`까지)가 있는가
 - [ ] 유스케이스 테스트가 **포트**를 목킹하는가 (`RedisTemplate` 목킹이 남아 있지 않은가)
-- [ ] `./gradlew test` 통과
+- [ ] 새 설정 프로퍼티를 `src/test/resources/application.properties`에도 추가했는가
+- [ ] `.\gradlew.bat test` 통과

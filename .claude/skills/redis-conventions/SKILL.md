@@ -8,16 +8,15 @@ description: smash(ProvinceHow)의 DDD 헥사고날 구조에서 Redis를 다루
 ## 0. 제1원칙 — `RedisTemplate`은 `infrastructure/cache` 밖으로 나가지 않는다
 
 ```
-❌ As-Is                                  ✅ To-Be
-JobScoreService                           job/domain/port/JobScoreCache          (인터페이스)
- ├─ RedisTemplate 주입                     job/application/JobScoreService        (포트만 주입)
- ├─ 키 문자열 조립                          job/infrastructure/cache/
- ├─ TTL 상수                                 JobScoreRedisAdapter                 (키·TTL·직렬화)
- └─ 점수 계산
+domain/port/JobScoreCache                  ← 인터페이스 (도메인 언어)
+application/JobScoreService                ← 포트만 주입. 캐시가 무엇인지 모른다
+infrastructure/cache/JobScoreRedisAdapter  ← RedisTemplate, 키 조립, TTL, 직렬화
 ```
 
 `domain`과 `application`은 **캐시가 Redis인지, 인메모리인지, 아예 없는지 몰라야 한다.**
 키 문자열·TTL·직렬화는 전부 어댑터 내부의 구현 상세다.
+
+패키지는 `SDD.smash.domain.<context>.infrastructure.cache` 다 → global-conventions §1
 
 ---
 
@@ -39,16 +38,17 @@ JobScoreService                           job/domain/port/JobScoreCache         
 ### 2.1 캐시 포트
 
 ```java
-package SDD.smash.dwelling.domain.port;
+package SDD.smash.domain.dwelling.domain.port;
 
 public interface DwellingScoreCache {
     Optional<Map<SigunguCode, Score>> find(DwellingScoreKey key);
     void put(DwellingScoreKey key, Map<SigunguCode, Score> scores);
+    void evictAll();
 }
 ```
 
 ```java
-package SDD.smash.dwelling.domain.model;
+package SDD.smash.domain.dwelling.domain.model;
 
 /** 주거 점수 캐시의 도메인 식별자. 결과를 결정하는 모든 입력을 담는다. */
 public record DwellingScoreKey(DwellingType type, Money normalizedBudget) {
@@ -64,11 +64,12 @@ public record DwellingScoreKey(DwellingType type, Money normalizedBudget) {
 - **캐시 키를 값 객체로 만든다.** 이것이 "무엇이 결과를 결정하는가"를 도메인 언어로 못 박고, 문자열 조립 실수를 없앤다.
 - 키 값 객체의 팩토리에서 **구간화(normalize)를 강제**한다 → 카디널리티 폭발 방지(§4.2)
 - 조회는 `Optional`. `null`을 반환하지 않는다.
+- **`evictAll()`을 포트에 둔다.** 유스케이스가 키 패턴 문자열을 알면 안 된다(§6).
 
 ### 2.2 정본 저장소 포트 (support)
 
 ```java
-package SDD.smash.support.domain.port;
+package SDD.smash.domain.support.domain.port;
 
 public interface SupportPolicyRepository {
     List<SupportPolicy> findBy(SigunguCode code, SupportTag tag);
@@ -85,7 +86,7 @@ public interface SupportPolicyRepository {
 ## 3. 어댑터 구현 (infrastructure/cache)
 
 ```java
-package SDD.smash.dwelling.infrastructure.cache;
+package SDD.smash.domain.dwelling.infrastructure.cache;
 
 @Component
 @RequiredArgsConstructor
@@ -99,25 +100,26 @@ public class DwellingScoreRedisAdapter implements DwellingScoreCache {
 
     @Override
     public Optional<Map<SigunguCode, Score>> find(DwellingScoreKey key) {
+        String redisKey = redisKey(key);
         try {
-            Map<Object, Object> cached = redisTemplate.opsForHash().entries(redisKey(key));
+            Map<Object, Object> cached = redisTemplate.opsForHash().entries(redisKey);
             if (cached == null || cached.isEmpty()) return Optional.empty();
             return Optional.of(toDomain(cached));
         } catch (RuntimeException e) {
-            log.warn("[cache] 조회 실패 key={} — 미스로 처리", redisKey(key), e);
+            log.warn("[cache] 주거 점수 조회 실패 key={} - 미스로 처리", redisKey, e);
             return Optional.empty();               // ★ 캐시 장애를 미스로 흡수
         }
     }
 
     @Override
     public void put(DwellingScoreKey key, Map<SigunguCode, Score> scores) {
-        if (scores.isEmpty()) return;              // 빈 결과는 캐싱하지 않는다
+        if (scores == null || scores.isEmpty()) return;   // 빈 결과는 캐싱하지 않는다
+        String redisKey = redisKey(key);
         try {
-            String k = redisKey(key);
-            redisTemplate.opsForHash().putAll(k, toRaw(scores));
-            redisTemplate.expire(k, TTL);          // ★ putAll 뒤 expire는 한 쌍
+            redisTemplate.opsForHash().putAll(redisKey, toRaw(scores));
+            redisTemplate.expire(redisKey, TTL);   // ★ putAll 뒤 expire는 한 쌍
         } catch (RuntimeException e) {
-            log.warn("[cache] 저장 실패 key={}", redisKey(key), e);   // 저장 실패는 삼킨다
+            log.warn("[cache] 주거 점수 저장 실패 key={}", redisKey, e);   // 저장 실패는 삼킨다
         }
     }
 
@@ -130,12 +132,13 @@ public class DwellingScoreRedisAdapter implements DwellingScoreCache {
 **규칙**
 1. **키 조립·TTL·직렬화는 어댑터 안에서만.** 상수는 `private static final`.
 2. **Hash는 `putAll` 직후 `expire`를 반드시 호출한다.** Hash의 `putAll`에는 TTL 인자가 없어 빠뜨리면 **영구 키**가 된다. String은 `ops.set(k, v, ttl)` 한 줄로 되므로 그쪽을 우선한다.
-3. **캐시 조회 실패를 미스로 흡수한다.** Redis 장애가 API 500이 되면 안 된다. (As-Is는 예외를 그대로 흘려 500이 된다 — 전환 시 고친다.)
+3. **캐시 조회 실패를 미스로 흡수한다.** Redis 장애가 API 500이 되면 안 된다.
 4. **빈 결과를 캐싱하지 않는다.** 히트 판정이 "비어있지 않음"이므로 대칭을 맞춘다.
-5. 정본 저장소(`support`)는 다르다. **조회 실패를 삼키지 않고** 도메인 예외로 번역하거나 빈 결과를 명시적으로 반환한다(§6.3).
-6. 도메인 타입 ↔ Redis 저장 타입 변환은 어댑터가 한다. **Jackson 역직렬화용 DTO(기본 생성자 + setter)는 `infrastructure/cache` 안에 두고 도메인으로 새어나가지 않게 한다.**
+5. 정본 저장소(`support`)는 다르다. **조회 실패를 삼키지 않는다** — "데이터 없음"과 "저장소 장애"를 구분해야 하므로 예외를 그대로 흘려보낸다(§6.3).
+6. 값은 **원시 타입(String/Integer)** 으로 저장한다. `redis-cli`로 읽을 수 있어야 하고, 도메인 타입 직렬화 형식에 데이터가 묶이지 않아야 한다.
+7. 도메인 타입 ↔ Redis 저장 타입 변환은 어댑터가 한다. **Jackson 역직렬화용 DTO(기본 생성자 + setter)는 `infrastructure/cache` 안에 두고 도메인으로 새어나가지 않게 한다**(예: `SupportPolicyPayload`, `SupportPolicyListPayload`).
 
-### 3.1 RedisTemplate 빈 (common/config/RedisConfig)
+### 3.1 RedisTemplate 빈 (`global/config/RedisConfig`)
 
 | 빈 | 타입 | 직렬화 |
 |---|---|---|
@@ -146,6 +149,7 @@ public class DwellingScoreRedisAdapter implements DwellingScoreCache {
 - 전용 템플릿을 함부로 늘리지 않는다. 제네릭 컬렉션 페이로드일 때만 추가한다.
 - 의존성은 `data-redis-reactive`지만 **코드는 동기 `RedisTemplate`을 쓴다.** 리액티브와 혼용하지 않는다.
 - **Spring Cache 추상화(`@Cacheable`)를 쓰지 않는다.** 어노테이션이 application 계층에 캐시 관심사를 다시 끌어들이기 때문이다. 포트 + 어댑터로 명시한다.
+- Jackson은 **Jackson 2(`com.fasterxml.jackson`)** 다.
 
 ---
 
@@ -157,31 +161,31 @@ public class DwellingScoreRedisAdapter implements DwellingScoreCache {
 <context>:<용도>:<식별자...>
 ```
 
-| 키 패턴 | 구조 | 포트 | TTL |
-|---|---|---|---|
-| `job:score:{jobCode\|default}` | Hash `{sigunguCode: score}` | `JobScoreCache` | 12h |
-| `infra:score:{LOW\|MID\|HIGH}` | Hash | `InfraScoreCache` | 24h |
-| `dwelling:score:{MONTHLY\|JEONSE}:{예산}` | Hash | `DwellingScoreCache` | 30d |
-| `support:score:{tag\|default}` | Hash | `SupportScoreCache` | 4d |
-| `support:policy:{sigunguCode}:{tag}` | String(JSON) | `SupportPolicyRepository` | 4d |
-| `support:policy:{sigunguCode}:{tag}:count` | String(Integer) | `SupportPolicyRepository` | 4d |
+접두어 상수는 **콜론을 포함**한다(`"dwelling:score:"`). 사용처에서 `+ ":"`를 덧붙이지 않는다.
 
-> ⚠️ **As-Is에서 반드시 고칠 것**
-> 현재 정책 원본 키는 `11110:주거지원` / `11110:주거지원:NUM`으로 **네임스페이스가 없다.** 시군구 코드로 시작해 충돌 위험이 있고 패턴 정리도 어렵다.
-> 전환 시 **`support:policy:` 접두어를 붙인다.** 생산자(스케줄러)와 소비자(조회) 양쪽을 동시에 바꿔야 하므로 `support` 컨텍스트 전환 단계에서 한 번에 처리한다.
->
-> 또한 As-Is의 `dwelling:score`만 접두어 끝에 콜론이 없어 사용처에서 `+ ":"`를 덧붙인다. **접두어에 콜론을 포함**하는 쪽으로 통일한다.
+| 키 패턴 | 구조 | 포트 | TTL | evictAll |
+|---|---|---|---|---|
+| `job:score:{중분류코드\|default}` | Hash `{sigunguCode: score}` | `JobScoreCache` | 12h | SCAN (§6.2) |
+| `infra:score:{infraChoice 0~15}` | Hash | `InfraScoreCache` | 24h | 16개 열거 |
+| `dwelling:score:{MONTHLY\|JEONSE}:{구간화 예산}` | Hash | `DwellingScoreCache` | 30d | 유형×구간 열거 |
+| `support:score:{supportChoice 0~15}` | Hash | `SupportScoreCache` | 4d | 16개 열거 |
+| `support:policy:{sigunguCode}:{TAG_NAME}` | String(JSON) | `SupportPolicyRepository` | 4d | — (정본) |
+| `support:policy:{sigunguCode}:{TAG_NAME}:count` | String(Integer) | `SupportPolicyRepository` | 4d | — (정본) |
+
+- **enum은 `name()`을 키에 쓴다.** 한글 라벨(`tag.getValue()`)을 키에 넣지 않는다.
+- 선택 항목은 **비트마스크 정수(0~15)** 라 유효 키가 16개로 유한하다 → 열거 삭제가 가능하다.
 
 ### 4.2 새 키를 만들 때
 
-1. 네임스페이스 `<context>:<용도>:` 를 정한다.
+1. 네임스페이스 `<context>:<용도>:` 를 정한다(끝에 콜론 포함).
 2. **결과를 결정하는 모든 입력**을 키 값 객체(§2.1)에 담는다. 빠지면 다른 조건의 결과를 잘못 돌려준다.
 3. `null` 입력은 **`"default"` 리터럴**로 치환한다.
 4. **연속값을 그대로 키에 넣지 않는다.** 반드시 구간화한다.
    - `dwelling:score`는 예산을 `DwellingType.normalize()`로 구간화(월세 20~110 / 10단위, 전세 3000~21000 / 3000단위)해 키 수가 유한하다. 이 보정을 빼면 키가 무한 증식한다.
    - 구간화 규칙은 **도메인 지식**이므로 enum/값 객체에 둔다. 어댑터가 임의로 자르지 않는다.
-5. TTL을 §5 기준으로 정한다.
-6. 위 표에 행을 추가한다.
+5. **`evictAll`을 어떻게 구현할지 먼저 정한다.** 키를 열거할 수 있게 설계하는 것이 최선이다(§6.2).
+6. TTL을 §5 기준으로 정한다.
+7. §4.1 표에 행을 추가한다.
 
 ---
 
@@ -207,66 +211,70 @@ TTL은 **원본 데이터의 갱신 주기보다 짧거나 같게** 잡는다.
 
 ## 6. 정합성 유지
 
-### 6.1 무효화 책임은 유스케이스에 있다
+### 6.1 무효화 책임은 유스케이스(또는 배치)에 있다
 
-원본을 갱신하는 **유스케이스**가 파생 캐시 무효화까지 책임진다. 어댑터나 스케줄러가 아니다.
+원본을 갱신하는 쪽이 파생 캐시 무효화까지 책임진다. 어댑터나 스케줄러 자체가 아니다.
 
 ```java
-package SDD.smash.support.application;
+package SDD.smash.domain.support.application;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class RefreshSupportPolicyService implements RefreshSupportPolicyUseCase {
 
-    private final SigunguCodeQuery sigunguCodeQuery;
     private final SupportPolicyProvider provider;        // 외부 API 포트
     private final SupportPolicyRepository repository;    // 정본 저장 포트
     private final SupportScoreCache scoreCache;          // 파생 캐시 포트
 
     @Override
     public void refreshAll() {
-        long started = System.nanoTime();
-        int saved = 0;
-        for (SigunguCode code : sigunguCodeQuery.findAllCodes()) {
-            for (SupportTag tag : SupportTag.values()) {
-                try {
-                    repository.saveAll(code, tag, provider.fetch(code, tag));   // 항목 단위 즉시 저장
-                    saved++;
-                } catch (RuntimeException e) {
-                    log.warn("[SupportRefresh] 실패 sigungu={}, tag={}", code.value(), tag, e);
-                }
-            }
-        }
+        // ... 항목 단위로 fetch → saveAll, 실패는 catch 후 continue
         scoreCache.evictAll();          // ★ 원본이 바뀌었으므로 파생 캐시를 버린다
         log.info("[SupportRefresh] 완료 saved={}, elapsed={}ms", saved, elapsedMs(started));
     }
 }
 ```
 
-**규칙**
-- **파생 캐시를 새로 추가하면 그 원본을 갱신하는 유스케이스의 무효화 목록에도 추가한다.** 이 구조에서 가장 흔한 정합성 버그가 이걸 빠뜨리는 것이다.
-- 파생 관계를 포트 이름과 주석으로 드러낸다.
-- **무효화도 포트 메서드로 표현한다** (`evictAll()`, `evict(key)`). 유스케이스가 키 패턴 문자열을 알면 안 된다.
+RDB 원본을 배치가 갱신하는 경우에는 `infrastructure/batch`의 `...ScoreCacheCleaner`가 같은 역할을 한다
+(`DwellingScoreCacheCleaner`, `InfraScoreCacheCleaner`, `JobScoreCacheCleaner`).
 
-### 6.2 `evictAll` 구현 — `keys()` 금지
+**규칙**
+- **파생 캐시를 새로 추가하면 그 원본을 갱신하는 쪽의 무효화 목록에도 추가한다.** 이 구조에서 가장 흔한 정합성 버그가 이걸 빠뜨리는 것이다.
+- 파생 관계를 포트 이름과 주석으로 드러낸다.
+- **무효화도 포트 메서드로 표현한다** (`evictAll()`). 유스케이스가 키 패턴 문자열을 알면 안 된다.
+
+### 6.2 `evictAll` 구현 — 열거가 기본, `KEYS`는 금지
 
 ```java
+// ✅ 1순위 — 키를 열거할 수 있으면 직접 만든다 (support/infra/dwelling)
 @Override
 public void evictAll() {
-    // ✅ 삭제 대상을 열거할 수 있으면 직접 만든다
     List<String> keys = new ArrayList<>();
-    keys.add(KEY_PREFIX + "default");
-    for (SupportTag tag : SupportTag.values()) keys.add(KEY_PREFIX + tag.name());
-    redisTemplate.delete(keys);
+    for (int choice = MIN_CHOICE; choice <= MAX_CHOICE; choice++) {   // 0~15
+        keys.add(KEY_PREFIX + choice);
+    }
+    Long deleted = redisTemplate.delete(keys);
+    log.info("[cache] 무효화 대상={}, 삭제={}", keys.size(), deleted);
 }
 ```
 
-> ⚠️ **As-Is 문제**: `redisTemplate.delete(Objects.requireNonNull(redisTemplate.keys("support:score:*")))`
+```java
+// ✅ 2순위 — 열거 불가능하면 커서 기반 SCAN (job: 직종 중분류가 수백 개)
+ScanOptions options = ScanOptions.scanOptions().match(KEY_PREFIX + "*").count(500).build();
+try (Cursor<String> cursor = redisTemplate.scan(options)) {
+    while (cursor.hasNext()) keys.add(cursor.next());
+}
+```
+
+> ⚠️ **`redisTemplate.keys(pattern)`을 쓰지 않는다.**
 > - `KEYS`는 Redis를 블로킹하는 O(N) 명령이다
-> - 매칭 키가 없으면 `keys()`가 빈 셋/`null`을 반환해 **`requireNonNull`에서 NPE로 스케줄러가 죽는다**
+> - 매칭 키가 없으면 빈 셋/`null`을 반환하므로 `Objects.requireNonNull`로 감싸면 **NPE로 호출자가 죽는다**
 >
-> **신규 코드에서 `keys()`를 쓰지 않는다.** 열거 가능하면 직접 열거하고, 정말 패턴 스캔이 필요하면 `ScanOptions` 기반 `scan()`을 쓴다.
+> 열거 가능하면 열거하고, 정말 패턴 스캔이 필요하면 `ScanOptions` 기반 `scan()`을 **try-with-resources**로 쓴다.
+
+- `evictAll`의 실패도 **삼킨다**(`log.warn`). 캐시 정리 실패가 배치/스케줄러를 죽이면 안 된다.
+- 삭제 대상 수와 실제 삭제 수를 `log.info`로 남긴다.
 
 ### 6.3 장애 정책
 
@@ -274,8 +282,9 @@ public void evictAll() {
 |---|---|
 | 파생 캐시 조회 | **미스로 흡수** → 재계산. `log.warn` |
 | 파생 캐시 저장 | **삼킨다** → 다음 요청에 재시도. `log.warn` |
-| 정본 저장소(`support`) 조회 | 빈 결과를 명시적으로 반환. API 응답에서 해당 필드가 비는 것이 정상 |
-| 정본 저장소 저장(스케줄러) | 항목 단위 `catch` 후 continue. `log.warn`. 전체 실패는 `log.error` |
+| 파생 캐시 무효화 | **삼킨다** → `log.warn`. TTL이 결국 정리한다 |
+| 정본 저장소(`support`) 조회 | 예외를 흘려보낸다. "값 없음"은 실패가 아니라 빈 결과로 명시 반환 |
+| 정본 저장소 저장(리프레시) | 항목 단위 `catch` 후 continue. `log.warn`. 전체 실패는 `log.error` |
 
 - **캐시 때문에 기능이 죽지 않게 한다.** 이것이 캐시 포트와 저장소 포트를 나눈 이유다.
 - 로깅은 어댑터/유스케이스에서 한다. **domain에는 로그를 쓰지 않는다** → global-conventions §5
@@ -286,7 +295,7 @@ public void evictAll() {
 
 ### 7.1 유스케이스 — 포트를 목킹하거나 Fake로
 
-`RedisTemplate`/`HashOperations` 다단계 스텁이 **필요 없어지는 것**이 포트화의 가장 큰 이득이다.
+`RedisTemplate`/`HashOperations` 다단계 스텁이 **필요 없는 것**이 포트화의 가장 큰 이득이다.
 
 ```java
 @ExtendWith(MockitoExtension.class)
@@ -298,8 +307,8 @@ class DwellingScoreServiceTest {
 
     @Test
     @DisplayName("캐시 히트 시 저장소를 조회하지 않는다")
-    void 캐시히트시_저장소_미조회() {
-        given(cache.find(any())).willReturn(Optional.of(Map.of(new SigunguCode("11110"), Score.of(100))));
+    void returnsCachedScoresWithoutQueryingRepository() {
+        given(cache.find(any())).willReturn(Optional.of(Map.of(SigunguCode.of("11110"), Score.of(100))));
 
         service.scoresFor(DwellingType.MONTHLY, Money.of(60));
 
@@ -315,6 +324,7 @@ class InMemoryDwellingScoreCache implements DwellingScoreCache {
     final Map<DwellingScoreKey, Map<SigunguCode, Score>> store = new HashMap<>();
     public Optional<Map<SigunguCode, Score>> find(DwellingScoreKey k) { return Optional.ofNullable(store.get(k)); }
     public void put(DwellingScoreKey k, Map<SigunguCode, Score> v)   { store.put(k, v); }
+    public void evictAll()                                           { store.clear(); }
 }
 ```
 
@@ -322,18 +332,20 @@ class InMemoryDwellingScoreCache implements DwellingScoreCache {
 
 - **임베디드 Redis를 도입하지 않는다.** 어댑터의 순수 로직(키 조립, 도메인↔raw 변환)을 분리해 단위 테스트한다.
 - `RedisTemplate`을 목킹해야 한다면 `opsForHash()`/`opsForValue()`는 **매번 새 객체를 반환**하므로 반드시 스텁을 건다(안 걸면 NPE).
-- 검증 포인트: `putAll` **직후 `expire`가 호출되는지**, 빈 결과일 때 저장하지 않는지, 조회 예외가 `Optional.empty()`로 흡수되는지.
+- 검증 포인트: `putAll` **직후 `expire`가 호출되는지**, 빈 결과일 때 저장하지 않는지, 조회 예외가 `Optional.empty()`로 흡수되는지, `evictAll`이 만드는 키 목록이 §4.1 표와 일치하는지.
 
 ### 7.3 키 값 객체 테스트
 
 ```java
 @Test
 @DisplayName("예산이 구간으로 보정되어 키 카디널리티가 제한된다")
-void 예산이_구간화된다() {
+void normalizesBudgetIntoBuckets() {
     assertThat(DwellingScoreKey.of(DwellingType.MONTHLY, Money.of(63)))
             .isEqualTo(DwellingScoreKey.of(DwellingType.MONTHLY, Money.of(57)));   // 둘 다 60으로 보정
 }
 ```
+
+메서드명은 영어 camelCase + 한국어 `@DisplayName`이다 → backend-conventions §7.6
 
 ---
 
@@ -347,16 +359,16 @@ void 예산이_구간화된다() {
 
 **어댑터**
 - [ ] 키 조립·TTL·직렬화가 어댑터 안에만 있는가
-- [ ] 키에 네임스페이스(`<context>:<용도>:`)가 있고 접두어가 `:`로 끝나는가
+- [ ] 키에 네임스페이스(`<context>:<용도>:`)가 있고 접두어 상수가 `:`로 끝나는가
 - [ ] Hash에서 `putAll` 뒤 `expire`가 한 쌍으로 있는가
 - [ ] **TTL을 설정했는가**, §4.1 표를 갱신했는가
 - [ ] 연속값을 구간화해 카디널리티를 제한했는가
 - [ ] 빈 결과를 캐싱하지 않는가
 - [ ] 캐시 조회 실패를 미스로 흡수하는가 (500으로 흘리지 않는가)
-- [ ] `keys()`를 쓰지 않았는가
+- [ ] `keys()`를 쓰지 않았는가 (열거 또는 `scan()`)
 
 **정합성**
-- [ ] 새 파생 캐시를 **원본 갱신 유스케이스의 무효화 목록**에 추가했는가
+- [ ] 새 파생 캐시를 **원본 갱신 유스케이스/Cleaner의 무효화 목록**에 추가했는가
 - [ ] 무효화가 포트 메서드(`evictAll`)로 표현됐는가
 - [ ] 캐시 접근이 `@Transactional` 밖에 있는가
 - [ ] 점수 공식을 바꿨다면 키 버전을 올렸는가

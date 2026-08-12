@@ -1,13 +1,12 @@
 ---
 name: architecture-conventions
-description: smash(ProvinceHow)의 DDD 헥사고날(포트&어댑터) 아키텍처를 정의한다. 바운디드 컨텍스트 경계, domain/application/infrastructure/presentation 4계층과 의존 방향, Aggregate 경계와 ID 참조 규칙, 인바운드/아웃바운드 포트 설계, 컨텍스트 간 통신, 기존 레이어드 구조에서의 마이그레이션 매핑과 전환 순서를 담는다. 새 클래스를 어느 계층에 둘지 정하거나, 포트를 만들거나, 도메인 경계를 판단하거나, 기존 코드를 DDD로 옮길 때 사용한다. 명명·도메인 예외는 global-conventions, 유스케이스·도메인 모델 작성은 backend-conventions, JPA 엔티티 분리는 persistence-conventions, 캐시 포트는 redis-conventions를 따른다.
+description: smash(ProvinceHow)의 DDD 헥사고날(포트&어댑터) 아키텍처를 정의한다. 바운디드 컨텍스트 경계, domain/application/infrastructure/presentation 4계층과 의존 방향, Aggregate 경계와 ID 참조 규칙, 인바운드/아웃바운드 포트 설계, 컨텍스트 간 통신, 패키지 배치 지도와 구조 확장 규칙을 담는다. 새 클래스를 어느 계층에 둘지 정하거나, 포트를 만들거나, 도메인 경계를 판단하거나, 새 컨텍스트·어댑터를 추가할 때 사용한다. 명명·도메인 예외는 global-conventions, 유스케이스·도메인 모델 작성은 backend-conventions, JPA 엔티티 분리는 persistence-conventions, 캐시 포트는 redis-conventions를 따른다.
 ---
 
 # architecture-conventions (DDD / 헥사고날)
 
-이 프로젝트는 **레이어드 → DDD 헥사고날(포트 & 어댑터)** 로 리팩토링 중이다.
-이 문서는 **목표 구조(To-Be)** 를 정의하고, 각 절 끝에 **현재 코드(As-Is) → 목표 위치 매핑**을 함께 둔다.
-새 코드는 예외 없이 목표 구조로 작성한다. 기존 코드는 §9의 전환 순서를 따른다.
+이 프로젝트는 **DDD 헥사고날(포트 & 어댑터)** 구조다. 레이어드 구조에서의 전환은 완료됐다.
+이 문서는 **현재 구조**를 정의한다. 새 코드는 예외 없이 이 구조를 따른다.
 
 ---
 
@@ -45,7 +44,8 @@ description: smash(ProvinceHow)의 DDD 헥사고날(포트&어댑터) 아키텍�
 | `infra` | 지역별 생활 인프라 규모, 인프라 충실도 | Core | `RegionInfra`, `Industry` |
 | `support` | 청년 지원정책 (Redis가 정본, RDB 없음) | Supporting | `SupportPolicy` |
 | `recommendation` | 지역 추천·상세 조회. 여러 컨텍스트를 조합하는 **공개 API 계약** | Core (조합) | 없음 (조합 전용) |
-| `common` | 공유 커널(값 객체), 공통 예외, 기술 설정 | Shared Kernel | — |
+
+컨텍스트에 속하지 않는 공유 커널·기술 기반은 **`global`** 이다(§3). `global`은 컨텍스트가 아니다.
 
 ### 2.1 컨텍스트 맵
 
@@ -63,7 +63,7 @@ description: smash(ProvinceHow)의 DDD 헥사고날(포트&어댑터) 아키텍�
 ```
 
 - **`recommendation` → 각 컨텍스트**: Customer/Supplier. `recommendation`은 각 컨텍스트가 공개한 **인바운드 포트(UseCase 인터페이스)** 만 호출한다.
-- **모든 컨텍스트 → `address`**: Shared Kernel. `SigunguCode`/`SidoCode` **값 객체**만 공유한다. `address`의 Aggregate(`Sigungu` 객체)나 Repository를 직접 쓰지 않는다.
+- **모든 컨텍스트 → 공유 커널**: `SigunguCode`/`SidoCode` **값 객체**만 공유한다(`global.domain.model`). `address`의 Aggregate(`Sigungu` 객체)나 Repository를 직접 쓰지 않는다.
 - **컨텍스트 간 역방향 의존 금지.** `job`이 `dwelling`을 알면 안 된다.
 
 ### 2.2 새 컨텍스트를 만드는 기준
@@ -77,47 +77,63 @@ description: smash(ProvinceHow)의 DDD 헥사고날(포트&어댑터) 아키텍�
 
 ## 3. 디렉터리 구조
 
-패키지는 **전부 소문자**다 (`SDD.smash.dwelling.domain.model`).
+패키지는 **전부 소문자**다. 최상위는 두 갈래다 — 컨텍스트는 전부 `domain/` 아래, 공통 기반은 `global/` 아래.
 
 ```
 SDD/smash/
-├── common/
-│   ├── domain/model/          SigunguCode, SidoCode, Score, Money  ← 공유 커널 값 객체
-│   ├── exception/             DomainException, ErrorCode
-│   └── config/                DataDBConfig, MetaDBConfig, RedisConfig, SecurityConfig, ...
+├── SmashApplication.java
 │
-├── <context>/
-│   ├── domain/                ★ 순수 Java. 프레임워크 의존 0
-│   │   ├── model/             Aggregate Root, Entity, 값 객체, 도메인 enum
-│   │   ├── service/           도메인 서비스 / 정책(Policy) — 여러 Aggregate에 걸친 규칙
-│   │   └── port/              ★ out-port 인터페이스 (Repository, Provider, Cache)
-│   │
-│   ├── application/           유스케이스. domain만 의존
-│   │   ├── port/in/           in-port 인터페이스 — 다른 컨텍스트에 공개할 때만
-│   │   ├── port/out/          out-port 인터페이스 — ★ 예외적으로만 (아래 규칙 참조)
-│   │   ├── <Xxx>QueryService  유스케이스 구현 (@Service, @Transactional)
-│   │   └── dto/               유스케이스 입출력 DTO
-│   │
-│   ├── infrastructure/        모든 기술 상세
-│   │   ├── persistence/       XxxJpaEntity, XxxJpaRepository, XxxRepositoryAdapter, XxxJpaMapper
-│   │   ├── cache/             XxxRedisAdapter
-│   │   ├── external/          XxxApiAdapter (외부 HTTP)
-│   │   ├── batch/             Spring Batch Job/Step/Reader/Processor/Writer + Runner
-│   │   └── scheduler/         @Scheduled 컴포넌트
-│   │
-│   └── presentation/          HTTP inbound adapter
-│       ├── XxxController
-│       └── dto/               XxxRequest, XxxResponse
+├── global/                     ★ 컨텍스트에 속하지 않는 공통 기반
+│   ├── domain/model/           SigunguCode, SidoCode, Score, Money   ← 공유 커널 값 객체
+│   ├── exception/              DomainException, ErrorCode
+│   │   └── handler/            GlobalExceptionHandler, ErrorCodeHttpMapper, ErrorResponse
+│   ├── config/                 DataDBConfig, MetaDBConfig, RedisConfig, SecurityConfig,
+│   │                           MapperConfig, SeedProperties, YouthCenter*
+│   ├── security/               ApiRateLimitFilter, ApiRateLimitService
+│   ├── batch/                  BatchGuard
+│   └── util/                   BatchTextUtil, MapperUtil
 │
-└── SmashApplication.java
+└── domain/                     ★ 바운디드 컨텍스트는 전부 이 아래에 있다
+    └── <context>/              address | job | dwelling | infra | support | recommendation
+        ├── domain/             ★ 순수 Java. 프레임워크 의존 0
+        │   ├── model/          Aggregate Root, Entity, 값 객체, 도메인 enum
+        │   ├── service/        도메인 서비스 / 정책(Policy) — 여러 Aggregate에 걸친 규칙
+        │   └── port/           ★ out-port 인터페이스 (Repository, Provider, Cache)
+        │
+        ├── application/        유스케이스. domain만 의존
+        │   ├── port/in/        in-port 인터페이스 — 다른 컨텍스트에 공개할 때만
+        │   ├── port/out/       out-port 인터페이스 — ★ 예외적으로만 (§3.2)
+        │   ├── <Xxx>QueryService  유스케이스 구현 (@Service, @Transactional)
+        │   └── dto/            유스케이스 입출력 DTO
+        │
+        ├── infrastructure/     모든 기술 상세
+        │   ├── persistence/    XxxJpaEntity, XxxJpaRepository, XxxRepositoryAdapter, XxxJpaMapper
+        │   │   └── projection/ XxxRow (JPQL 생성자 프로젝션 대상 기술 DTO)
+        │   ├── cache/          XxxRedisAdapter
+        │   ├── external/       XxxApiAdapter (외부 HTTP) [+ dto/]
+        │   ├── batch/          Spring Batch Job/Step/Reader/Processor/Writer [+ dto/, runner/]
+        │   └── scheduler/      @Scheduled 컴포넌트
+        │
+        └── presentation/       HTTP inbound adapter
+            ├── XxxController
+            └── dto/            XxxRequest, XxxResponse
 ```
+
+### 3.1 `domain`이라는 이름이 두 번 나온다
+
+`SDD.smash.domain.dwelling.domain.model` 처럼 `domain`이 **두 번** 등장한다.
+- 첫 번째 `domain`은 **컨텍스트 묶음 디렉터리**다. 아키텍처적 의미가 없다.
+- 두 번째 `domain`은 **헥사고날의 domain 계층**이다. §4의 규칙이 걸리는 것은 이쪽이다.
+
+“domain 패키지에 Spring import 금지” 같은 규칙은 **두 번째 `domain`(= 계층)** 을 가리킨다.
+`SDD.smash.domain.` 접두어만 보고 계층을 판단하지 않는다.
 
 **규칙**
 - 필요 없는 디렉터리는 만들지 않는다(빈 패키지 금지). `support`는 RDB가 없어 `persistence/`가 없고 `cache/`가 그 역할을 한다.
-- `presentation`은 컨트롤러가 있는 컨텍스트에만 둔다. 현재 실질적으로 `recommendation`뿐이다.
-- `common/config`의 Spring 설정 클래스들은 컨텍스트에 속하지 않는 **애플리케이션 부트스트랩**이다.
+- `presentation`은 컨트롤러가 있는 컨텍스트에만 둔다. 현재 `recommendation`뿐이다.
+- `global/config`의 Spring 설정 클래스들은 컨텍스트에 속하지 않는 **애플리케이션 부트스트랩**이다.
 
-### 3.1 out-port는 기본이 `domain/port`다 — `application/port/out`은 예외
+### 3.2 out-port는 기본이 `domain/port`다 — `application/port/out`은 예외
 
 **기본 규칙**: out-port는 `domain/port`에 둔다(§4.2). 도메인이 필요로 하는 것을 도메인 언어로
 선언하고 `infrastructure`가 구현한다. 저장소·캐시·외부 공급 포트는 전부 여기다.
@@ -131,7 +147,7 @@ SDD/smash/
 
 | 현재 적용 사례 | 위치 | 근거 |
 |---|---|---|
-| `RegionPickProvider`<br>`RegionSummaryProvider` | `recommendation/application/port/out/` | 입력이 `RegionRecommendation`/`RegionDetailInfo`(여러 컨텍스트 조합 결과 = application DTO). AI 요약·추천은 도메인 규칙이 아니라 응답을 꾸미는 부가 기능이고, `recommendation`은 Aggregate가 없는 조합 전용 컨텍스트다(§2 표) |
+| `RegionPickProvider`<br>`RegionSummaryProvider` | `domain/recommendation/application/port/out/` | 입력이 `RegionRecommendation`/`RegionDetailInfo`(여러 컨텍스트 조합 결과 = application DTO). AI 요약·추천은 도메인 규칙이 아니라 응답을 꾸미는 부가 기능이고, `recommendation`은 Aggregate가 없는 조합 전용 컨텍스트다(§2 표) |
 
 - **이 예외를 늘리기 전에 먼저 "도메인 개념이 정말 없는가"를 따진다.** 도메인 규칙이 있다면
   값 객체·Aggregate를 만들고 포트를 `domain/port`로 되돌리는 것이 맞다.
@@ -145,12 +161,15 @@ SDD/smash/
 
 | 계층 | 의존 가능 | 절대 금지 | 프레임워크 |
 |---|---|---|---|
-| `domain/model` | 같은 컨텍스트 domain, `common.domain.model` | 다른 컨텍스트, application, infrastructure, presentation | **없음** (Lombok `@Getter` 정도만 허용) |
-| `domain/service` | 같은 컨텍스트 domain, `common.domain.model` | 위와 동일 + port 구현체 | 없음 |
+| `domain/model` | 같은 컨텍스트 domain, `global.domain.model` | 다른 컨텍스트, application, infrastructure, presentation | **없음** (Lombok `@Getter` 정도만 허용) |
+| `domain/service` | 같은 컨텍스트 domain, `global.domain.model` | 위와 동일 + port 구현체 | 없음 |
 | `domain/port` | 같은 컨텍스트 domain 모델 | 기술 타입(`Page`, `Optional`은 허용) | 없음 |
 | `application` | 자기 domain 전체, **다른 컨텍스트의 `application/port/in`** | 다른 컨텍스트의 domain/infrastructure, `HttpServletRequest`, `RedisTemplate`, JPA 타입 | `@Service`, `@Transactional`만 |
 | `infrastructure` | 자기 domain(port 구현), 자기 application(`port/out` 구현 포함) | 다른 컨텍스트의 infrastructure, **presentation** | 전부 허용 |
 | `presentation` | 자기/타 컨텍스트의 `application` (`port/in` · `port/out` 둘 다) | domain 모델 직접 노출, infrastructure, Repository | Spring Web |
+
+`global.exception`(`DomainException`, `ErrorCode`)은 프레임워크 의존이 없으므로 **모든 계층에서 쓸 수 있다.**
+`global.util`은 기술 유틸이므로 **domain에서 import하지 않는다** → global-conventions §6
 
 > ⚠️ **`infrastructure → presentation` 금지가 실수하기 쉬운 지점이다.**
 > 외부 API 어댑터가 응답 DTO(`presentation/dto`)를 직접 조립하면 이 방향이 생긴다.
@@ -159,7 +178,7 @@ SDD/smash/
 ### 4.1 domain — 무엇을 담는가
 
 ```java
-package SDD.smash.dwelling.domain.model;
+package SDD.smash.domain.dwelling.domain.model;
 
 /** 지역의 전월세 시세 (Aggregate Root) */
 public class DwellingMarket {
@@ -187,7 +206,7 @@ public class DwellingMarket {
 ### 4.2 domain/port — out-port
 
 ```java
-package SDD.smash.dwelling.domain.port;
+package SDD.smash.domain.dwelling.domain.port;
 
 public interface DwellingMarketRepository {
     Optional<DwellingMarket> findBy(SigunguCode code);
@@ -213,7 +232,7 @@ public interface RentRecordProvider {                    // 외부 API도 포트
 ### 4.3 application — 유스케이스
 
 ```java
-package SDD.smash.dwelling.application;
+package SDD.smash.domain.dwelling.application;
 
 @Service
 @RequiredArgsConstructor
@@ -240,7 +259,7 @@ public class DwellingQueryService implements DwellingQueryUseCase {   // in-port
 ### 4.4 infrastructure — 어댑터
 
 ```java
-package SDD.smash.dwelling.infrastructure.persistence;
+package SDD.smash.domain.dwelling.infrastructure.persistence;
 
 @Repository
 @RequiredArgsConstructor
@@ -263,7 +282,7 @@ public class DwellingRepositoryAdapter implements DwellingMarketRepository {   /
 ### 4.5 presentation
 
 ```java
-package SDD.smash.recommendation.presentation;
+package SDD.smash.domain.recommendation.presentation;
 
 @Validated
 @RestController
@@ -271,14 +290,11 @@ package SDD.smash.recommendation.presentation;
 @RequestMapping("/api")
 public class RecommendController {
 
-    private final RecommendRegionUseCase recommendRegionUseCase;   // in-port만 주입
+    private final RecommendRegionUseCase recommendRegionUseCase;   // in-port
+    private final RegionPickProvider regionPickProvider;           // application/port/out (§3.2)
 
     @GetMapping("/recommend")
-    public ResponseEntity<List<RecommendResponse>> recommend(@Valid RecommendRequest request) {
-        return ResponseEntity.ok(
-                recommendRegionUseCase.recommend(request.toCommand()).stream()
-                        .map(RecommendResponse::from).toList());
-    }
+    public ResponseEntity<RecommendAggregateResponse> recommend(...) { ... }
 }
 ```
 
@@ -308,29 +324,29 @@ public class RecommendController {
 2. **Aggregate 밖은 ID(값 객체)로만 참조한다.** JPA 연관관계로 다른 Aggregate를 물지 않는다.
 
    ```java
-   // ❌ As-Is — 다른 Aggregate를 객체로 참조
+   // ❌ 다른 Aggregate를 객체로 참조
    @ManyToOne(fetch = FetchType.LAZY)
    @JoinColumn(name = "sigungu_code")
    private Sigungu sigungu;
 
-   // ✅ To-Be — 도메인 모델
+   // ✅ 도메인 모델
    private final SigunguCode sigunguCode;
 
-   // ✅ To-Be — JPA 엔티티(infrastructure)
+   // ✅ JPA 엔티티(infrastructure)
    @Column(name = "sigungu_code", length = 5, nullable = false)
    private String sigunguCode;
    ```
 
-   > 이 변경은 **점수 테이블의 `@MapsId` 패턴(`DwellingScore`, `InfraScore`)도 함께 해체**한다. 파생 점수는 Aggregate의 계산 결과이므로 별도 테이블이 아니라 도메인 정책(`Policy`)의 산출물로 다룬다 → §5.4
+   > 파생 점수는 Aggregate의 계산 결과이므로 **별도 테이블이 아니라 도메인 정책(`Policy`)의 산출물**로 다룬다. `@MapsId`로 다른 Aggregate와 PK를 공유하는 점수 테이블을 새로 만들지 않는다 → §5.4
 3. **Aggregate는 작게.** 조회 편의를 위해 Aggregate를 키우지 않는다. 여러 Aggregate가 필요한 조회는 application에서 조합하거나 전용 조회 모델(§5.5)을 쓴다.
 4. **Aggregate Root를 통해서만 내부에 접근한다.** `RegionInfra.industryCounts()`로 꺼내고, `IndustryCount`를 별도 Repository로 조회하지 않는다.
 
 ### 5.3 값 객체 (Value Object)
 
-공유 커널(`common.domain.model`)과 컨텍스트 로컬로 나뉜다.
+공유 커널(`global.domain.model`)과 컨텍스트 로컬로 나뉜다.
 
 ```java
-// common/domain/model — 모든 컨텍스트가 공유
+// global/domain/model — 모든 컨텍스트가 공유
 public record SigunguCode(String value) {
     public SigunguCode {
         if (value == null || value.length() != 5)
@@ -354,25 +370,24 @@ public record Score(int value) {
 - `String sigunguCode`를 계층 사이로 넘기지 않는다. 경계(presentation/adapter)에서 값 객체로 바꾼다.
 - 공유 커널에 넣는 기준: **2개 이상 컨텍스트가 같은 의미로 쓰고, 정의가 바뀔 일이 거의 없는 것**. 그 외는 컨텍스트 로컬.
 
-| 값 객체 | 위치 | 대체 대상 |
-|---|---|---|
-| `SigunguCode`, `SidoCode` | `common` | 전 도메인의 `String sigunguCode` |
-| `Score` | `common` | `Integer score`, `@Min(0) @Max(100)` |
-| `Money` (만원 단위) | `common` | `Integer price`, `monthMid`, `jeonseMid` |
-| `JobCode` | `job` | `String topCode` / `midJobCode` |
-| `IndustryCode`, `Major` | `infra` | `String code`, `Major` enum |
-| `SupportTag` | `support` | 기존 `SupportTag` (유지) |
-| `DwellingType` | `dwelling/domain/model` | 기존 enum (이동) |
+| 값 객체 | 위치 |
+|---|---|
+| `SigunguCode`, `SidoCode` | `global/domain/model` |
+| `Score` | `global/domain/model` |
+| `Money` (만원 단위) | `global/domain/model` |
+| `JobCode` | `domain/job/domain/model` |
+| `IndustryCode`, `Major` | `domain/infra/domain/model` |
+| `SupportTag` | `domain/support/domain/model` |
+| `DwellingType` | `domain/dwelling/domain/model` |
 
-> `InfraImportance`는 머지 충돌 정리(2026-08-11)로 `infraChoice` 비트마스크(`Major`, 위 행) 방식에
-> 통합되며 삭제됐다. 코드에 없는 개념이니 되살리지 않는다.
+> 인프라·지원정책 선택은 `Major`/`SupportTag`의 **비트마스크 정수(`infraChoice`, `supportChoice`, 0~15)** 로 표현한다. 과거의 `InfraImportance` 등급 개념은 삭제됐으니 되살리지 않는다.
 
 ### 5.4 도메인 서비스 / 정책 (Policy)
 
 **한 Aggregate에 담기 애매한 규칙**은 `domain/service`의 정책 객체로 만든다.
 
 ```java
-package SDD.smash.dwelling.domain.service;
+package SDD.smash.domain.dwelling.domain.service;
 
 /** 예산과 시세 중앙값의 차이로 주거 적합도를 계산하는 정책 */
 public class DwellingScorePolicy {
@@ -408,21 +423,21 @@ public class DwellingScorePolicy {
 
 ### 6.1 HTTP (presentation)
 
-- 모든 공개 API는 `/api` 하위. 현재 `SecurityConfig`는 `/api/**` permitAll + **CORS GET/OPTIONS만 허용**이다. 다른 메서드를 열려면 설정도 함께 바꾼다.
-- 컨트롤러는 **in-port(UseCase 인터페이스)만** 주입한다.
+- 모든 공개 API는 `/api` 하위. `SecurityConfig`는 `/api/**` permitAll + **CORS GET/OPTIONS만 허용**이다. 다른 메서드를 열려면 설정도 함께 바꾼다.
+- 컨트롤러는 **in-port(UseCase 인터페이스)** 를 주입한다. AI 요약처럼 표현 계층의 선택 기능만 `application/port/out`을 직접 호출한다(§3.2).
 
 ### 6.2 배치 (infrastructure/batch)
 
 Seed 배치는 **외부 파일/API → 저장소**로 데이터를 밀어넣는 인바운드 어댑터다.
 
 ```
-<context>/infrastructure/batch/
+domain/<context>/infrastructure/batch/
 ├── DwellingBatchConfig.java     Job/Step/Reader/Processor/Writer 빈
-├── DwellingBatchRunner.java     @EventListener(ApplicationReadyEvent) + @Order
+├── runner/DwellingBatchRunner   @EventListener(ApplicationReadyEvent) + @Order
 └── dto/                         CSV 읽기 DTO, Upsert DTO (기술 DTO)
 ```
 
-- `spring.batch.job.enabled=false`이며 Runner의 `@Order`가 FK 선후관계를 통제한다. **이 순서 규칙은 DDD 전환 후에도 그대로 유지**한다.
+- `spring.batch.job.enabled=false`이며 Runner의 `@Order`가 FK 선후관계를 통제한다.
 
   | Order | Job | 컨텍스트 | 선행 의존 |
   |---|---|---|---|
@@ -436,15 +451,13 @@ Seed 배치는 **외부 파일/API → 저장소**로 데이터를 밀어넣는 
   | 8 | JobCount | job | Sigungu, JobCodeMiddle |
   | 9 | Dwelling | dwelling | Sigungu + 외부 API |
 
-  > 위 값은 2026-08-11 실제 코드에서 실측한 것이다. 이전 표에는 머지 충돌 정리 때 삭제된
-  > `InfraScore` 배치가 8번으로 남아 있어 `JobCount`·`Dwelling`이 한 칸씩 밀려 적혀 있었다.
-  > 코드를 표에 맞추지 말고 표를 코드에 맞춘다 — `@Order` 변경은 실행 순서 변경이다.
+  > **코드를 표에 맞추지 말고 표를 코드에 맞춘다** — `@Order` 변경은 실행 순서 변경이다.
 
-- 재실행 방지는 `BatchGuard.alreadyDone(jobName, seedVersion)` 유지. 위치는 `common/batch` 또는 각 컨텍스트 infrastructure.
-- **대량 적재 배치는 Aggregate를 거치지 않아도 된다.** `JdbcBatchItemWriter` + Upsert SQL로 직접 쓰는 현재 방식을 유지한다. 도메인 불변식은 Processor에서 값 객체 생성으로 검증한다.
+- 재실행 방지는 `BatchGuard.alreadyDone(jobName, seedVersion)`(`global/batch`).
+- **대량 적재 배치는 Aggregate를 거치지 않아도 된다.** `JdbcBatchItemWriter` + Upsert SQL로 직접 쓴다. 도메인 불변식은 Processor에서 값 객체 생성으로 검증한다.
   ```java
   // Processor에서 값 객체로 검증 → 실패 시 null 반환(skip)
-  try { new SigunguCode(raw); } catch (DomainException e) { return null; }
+  try { SigunguCode.of(raw); } catch (DomainException e) { return null; }
   ```
 
 ### 6.3 스케줄러 (infrastructure/scheduler)
@@ -464,9 +477,9 @@ Seed 배치는 **외부 파일/API → 저장소**로 데이터를 밀어넣는 
 
 ---
 
-## 7. 기술 인프라 (common/config)
+## 7. 기술 인프라 (global/config)
 
-DataSource 2개 구성은 DDD 전환과 무관하게 유지된다.
+DataSource 2개 구성을 쓴다.
 DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — 드라이버 `com.mysql.cj.jdbc.Driver`, 호스트는 compose 서비스명 `mysql`.
 
 | DataSource | 스키마 | 용도 | 트랜잭션 매니저 |
@@ -477,61 +490,67 @@ DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — �
 > ⚠️ `@Primary` **트랜잭션 매니저는 배치용**이다. application 계층에서 무수식 `@Transactional`을 쓰면 JPA 트랜잭션이 열리지 않는다.
 > **반드시 `@Transactional(transactionManager = "dataTransactionManager", readOnly = true)`** → persistence-conventions §6
 
-`@EnableJpaRepositories(basePackages = ...)`의 대상은 **`infrastructure.persistence` 하위로 좁힌다.** 그래야 도메인 패키지에 Spring Data 인터페이스가 생기는 실수를 컴파일 시점이 아니라 부팅 시점에라도 잡을 수 있다.
+`DataDBConfig`의 `@EnableJpaRepositories(basePackages = ...)`는 **`SDD.smash.domain.<context>.infrastructure.persistence` 를 하나씩 열거**한다. 도메인 패키지에 Spring Data 인터페이스가 생기는 실수를 부팅 시점에 잡기 위해 범위를 좁혀 둔 것이다.
+
+> ⚠️ 이 목록은 **손으로 유지하는 문자열**이다. 패키지를 옮기거나 컨텍스트를 추가하면 여기도 같이 고쳐야 한다.
+> 빠뜨리면 리포지토리 빈이 등록되지 않아 **부팅이 실패**한다. 같은 이유로 JPQL 생성자 프로젝션의 **FQCN 문자열**(`SELECT new SDD.smash.domain....Row(...)`)도 컴파일러가 잡아주지 않으니 함께 확인한다 → persistence-conventions §4.3
 
 ---
 
-## 8. As-Is → To-Be 매핑
+## 8. 패키지 배치 지도
 
-| 현재 | 목표 | 비고 |
-|---|---|---|
-| `Apis/Controller/*` | `recommendation/presentation/*` | Request/Response DTO 신설 |
-| `Apis/Service/RecommendService` | `recommendation/application/RecommendRegionService` | 각 컨텍스트 in-port만 호출 |
-| `Apis/Service/DetailService` | `recommendation/application/RegionDetailService` | |
-| `Apis/Service/CodeService` | `recommendation/application/RegionCodeService` | 코드 조회는 각 컨텍스트 in-port로 위임 |
-| `Apis/Dto/*` | `recommendation/presentation/dto/*` (응답) + `application/dto/*` (내부) | 2분리 |
-| `<D>/Entity/<E>.java` | `<c>/domain/model/<E>.java` (POJO) + `<c>/infrastructure/persistence/<E>JpaEntity.java` | **분리** |
-| `<D>/Entity/<Enum>.java` | `<c>/domain/model/<Enum>.java` | 이동만 |
-| `<D>/Repository/<R>.java` | `<c>/domain/port/<R>.java` (인터페이스) + `<c>/infrastructure/persistence/<R>JpaRepository.java` + `<R>Adapter.java` | **분리** |
-| `<D>/Service/<X>Service.java` (조회) | `<c>/application/<X>QueryService.java` | 규칙은 domain으로 내림 |
-| `<D>/Service/<X>ScoreService.java` | 계산 → `<c>/domain/service/<X>ScorePolicy`<br>캐시/조합 → `<c>/application/<X>ScoreService`<br>Redis → `<c>/infrastructure/cache/<X>ScoreRedisAdapter` | **3분할** |
-| `Address/Service/AddressVerifyService` | `common/domain/model/SigunguCode` 생성자 검증 + `address/domain/port/SigunguRepository.exists(...)` | 대부분 값 객체로 흡수 |
-| `<D>/Adapter/MolitAptRentAdapter` | `dwelling/infrastructure/external/MolitAptRentAdapter` (+ `domain/port/RentRecordProvider`) | 포트 신설 |
-| `Support/service/YouthCenterClient` | `support/infrastructure/external/YouthCenterApiAdapter` (+ `domain/port/SupportPolicyProvider`) | 이름 정정 |
-| `Support/service/SupportService` | `support/application/SupportQueryService` + `support/infrastructure/cache/SupportPolicyRedisAdapter` | Redis 접근 분리 |
-| `Support/scheduler/YouthSupportScheduler` | `support/infrastructure/scheduler/*` + `support/application/RefreshSupportPolicyService` | 로직을 유스케이스로 |
-| `<D>/Converter/*` | `<c>/infrastructure/persistence/<E>JpaMapper` 또는 배치 DTO 매퍼 | 도메인 밖 |
-| `<D>/Batch/*` | `<c>/infrastructure/batch/*` | 이동 |
-| `Exception/*` | `common/exception/*` | `ErrorCode`에서 `HttpStatus` 분리 → global-conventions §3 |
-| `Config/*` | `common/config/*` | 이동 |
-| `Util/BatchTextUtil`, `MapperUtil` | `common/util/` 또는 각 infrastructure | 기술 유틸 |
-| `Util/CalculateUtil` | `<c>/domain/service/` 또는 `common/domain/` | 도메인 계산이면 domain으로 |
+컨텍스트마다 실제로 존재하는 하위 패키지다. **없는 것은 필요가 없어서 없는 것이다** — 관례를 맞추려고 빈 패키지를 만들지 않는다.
+
+| 컨텍스트 | `domain` | `application` | `infrastructure` | `presentation` |
+|---|---|---|---|---|
+| `address` | model, port | port/in, dto | batch(dto, runner), persistence(projection) | — |
+| `job` | model, port, service | port/in, dto | batch(dto, runner), cache, external, persistence(projection) | — |
+| `dwelling` | model, port, service | port/in, dto | batch(dto), cache, external, persistence | — |
+| `infra` | model, port, service | port/in, dto | batch(dto, runner), cache, persistence(projection) | — |
+| `support` | model, port, service | port/in, dto | cache, external, scheduler | — |
+| `recommendation` | model, service | port/in, **port/out**, dto | external(dto) | dto |
+
+읽는 법
+- `address`에 `domain/service`가 없다 — 코드 체계에는 계산 규칙이 없다.
+- `recommendation`에 `domain/port`가 없다 — 조합 전용이라 자기 저장소가 없고, out-port가 §3.2의 예외 케이스뿐이다.
+- `support`에 `persistence`가 없다 — Redis가 정본이라 `cache`가 저장소 역할을 한다 → redis-conventions §2.2
+- `presentation`이 `recommendation`에만 있다 — 나머지 컨텍스트는 in-port로만 노출된다.
 
 ---
 
-## 9. 전환 순서 (Strangler)
+## 9. 구조를 확장할 때
 
-한 번에 전부 옮기지 않는다. **컨텍스트 하나씩, 아래 순서로** 진행한다.
+### 9.1 새 컨텍스트를 추가한다
 
-1. **`common` 골격** — `SigunguCode`/`SidoCode`/`Score`/`Money` 값 객체, `DomainException` + `ErrorCode`(HttpStatus 분리), `config` 이동
-2. **`address`** — 다른 모든 컨텍스트가 의존하므로 먼저. `Sigungu`/`Sido` 도메인 모델 + JPA 엔티티 분리 + 포트/어댑터
-3. **`dwelling`** — 도메인 로직(점수 계산)이 가장 뚜렷해 헥사고날 이득이 큼. 여기서 패턴을 확립한다
-4. **`job` → `infra`** — `dwelling`에서 만든 패턴을 복제
-5. **`support`** — Redis 포트화(§redis-conventions §2)
-6. **`recommendation`** — 각 컨텍스트의 in-port가 다 갖춰진 뒤 마지막에 조합 계층을 옮긴다
-7. **정리** — 옛 패키지 삭제, `@EnableJpaRepositories` 범위 축소, ArchUnit 규칙 도입(선택)
+1. §2.2의 세 기준을 통과하는지 먼저 확인한다. 아니면 기존 컨텍스트에 넣는다.
+2. `SDD/smash/domain/<context>/` 아래에 **필요한 계층만** 만든다(§8).
+3. 다른 컨텍스트가 호출한다면 `application/port/in`에 `...UseCase`를 만든다. 아니면 만들지 않는다 → backend-conventions §5.1
+4. JPA를 쓴다면 `DataDBConfig`의 `@EnableJpaRepositories` basePackages에 **새 패키지를 추가**한다(§7).
+5. Seed 배치가 있다면 `@Order`를 선행 의존보다 큰 값으로 정하고 §6.2 표에 행을 추가한다.
+6. §8 지도와 §2 표를 갱신한다.
 
-**전환 중 지켜야 할 것**
-- 한 컨텍스트를 옮기는 동안 **기존 패키지와 새 패키지가 공존**한다. 새 패키지가 옛 패키지를 참조해도 되지만, **옛 패키지가 새 패키지를 참조하게 만들지 않는다**(되돌리기 불가).
-- 각 단계 끝에 `./gradlew test`가 통과해야 한다. 도메인 모델과 정책의 단위 테스트를 먼저 쓰고 옮긴다 → backend-conventions §6
-- DB 스키마는 `hbm2ddl.auto=update`다. **FK 제거(§5.2)는 기존 컬럼을 그대로 두고 JPA 매핑만 바꾸는 방식**으로 하면 스키마 변경 없이 진행할 수 있다. 실제 FK 제약 삭제는 마지막에 별도 DDL로 한다.
+### 9.2 기존 컨텍스트에 어댑터를 추가한다
+
+- 먼저 **포트를 정의**한다(`domain/port`). 어댑터부터 만들면 기술 타입이 포트로 새어든다.
+- 캐시 어댑터는 redis-conventions §3, JPA 어댑터는 persistence-conventions §4를 따른다.
+- 새 파생 캐시를 만들면 **원본 갱신 유스케이스의 무효화 목록에도 추가**한다 → redis-conventions §6.1
+
+### 9.3 패키지를 옮긴다
+
+문자열로만 패키지를 참조하는 곳이 있어 **컴파일러가 잡아주지 않는다.** 이동 후 반드시 확인한다.
+
+- `DataDBConfig`의 `@EnableJpaRepositories(basePackages = ...)`
+- JPQL 생성자 프로젝션의 FQCN (`SELECT new SDD.smash.domain....Row(...)`)
+- `LocalContainerEntityManagerFactoryBean.setPackagesToScan(...)`
+- 테스트의 패키지 선언 — 테스트는 **main 구조를 그대로 미러링**한다 → backend-conventions §7.6
+- 확인 방법은 `.\gradlew.bat test`가 아니라 **애플리케이션 부팅**까지다. 위 세 가지는 컴파일이 아니라 부팅/쿼리 시점에 터진다.
 
 ---
 
 ## 10. 아키텍처 리뷰 체크리스트
 
 **계층**
-- [ ] `domain` 패키지에 Spring/JPA/Redis/Jackson import가 하나도 없는가
+- [ ] 계층 `domain` 패키지(`domain/<context>/domain/**`)에 Spring/JPA/Redis/Jackson import가 하나도 없는가
 - [ ] `application`이 포트 인터페이스만 주입받는가 (구현체 직접 주입 없음)
 - [ ] `presentation`이 도메인 모델을 그대로 응답하지 않는가
 - [ ] `infrastructure`가 다른 컨텍스트의 `infrastructure`를 참조하지 않는가
@@ -539,7 +558,7 @@ DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — �
 **컨텍스트**
 - [ ] 컨텍스트 간 호출이 `application/port/in`을 통해서만 일어나는가
 - [ ] 다른 컨텍스트의 domain 모델/Repository를 직접 쓰지 않는가
-- [ ] 공유하는 것이 값 객체(`SigunguCode` 등)뿐인가
+- [ ] 공유하는 것이 `global.domain.model`의 값 객체뿐인가
 
 **Aggregate**
 - [ ] 다른 Aggregate를 객체가 아니라 **ID 값 객체**로 참조하는가
@@ -554,4 +573,5 @@ DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — �
 **공통**
 - [ ] `@Transactional`에 `transactionManager = "dataTransactionManager"`가 있는가
 - [ ] 새 배치의 `@Order`가 선행 배치보다 큰가
-- [ ] `./gradlew test` 통과
+- [ ] 패키지를 옮겼다면 §9.3의 문자열 참조를 전부 고쳤는가
+- [ ] `.\gradlew.bat test` 통과
