@@ -20,7 +20,7 @@ import java.util.Optional;
 public interface InfraJpaRepository extends JpaRepository<InfraJpaEntity, Long> {
 
     @Query("""
-            SELECT new SDD.smash.infra.infrastructure.persistence.projection.MajorInfraSummaryRow(
+            SELECT new SDD.smash.domain.infra.infrastructure.persistence.projection.MajorInfraSummaryRow(
                 ind.major,
                 SUM(i.count),
                 AVG(i.score)
@@ -35,7 +35,7 @@ public interface InfraJpaRepository extends JpaRepository<InfraJpaEntity, Long> 
                                                     @Param("major") Major major);
 
     @Query("""
-            SELECT new SDD.smash.infra.infrastructure.persistence.projection.IndustryCountRow(
+            SELECT new SDD.smash.domain.infra.infrastructure.persistence.projection.IndustryCountRow(
                 ind.major,
                 ind.name,
                 i.count,
@@ -48,7 +48,7 @@ public interface InfraJpaRepository extends JpaRepository<InfraJpaEntity, Long> 
     List<IndustryCountRow> findIndustryCounts(@Param("sigunguCode") String sigunguCode);
 
     @Query("""
-            SELECT new SDD.smash.infra.infrastructure.persistence.projection.RegionMajorScoreRow(
+            SELECT new SDD.smash.domain.infra.infrastructure.persistence.projection.RegionMajorScoreRow(
                 i.sigunguCode,
                 ind.major,
                 AVG(i.score)

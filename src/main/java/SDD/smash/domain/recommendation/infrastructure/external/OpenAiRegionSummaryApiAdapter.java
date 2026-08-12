@@ -8,7 +8,6 @@ import SDD.smash.domain.recommendation.infrastructure.external.dto.OpenAiRequest
 import SDD.smash.domain.recommendation.infrastructure.external.dto.OpenAiResponse;
 import SDD.smash.domain.recommendation.infrastructure.external.dto.Tool;
 import SDD.smash.domain.recommendation.infrastructure.external.dto.UserLocation;
-import SDD.smash.recommendation.infrastructure.external.dto.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;

@@ -12,7 +12,7 @@ public interface JobCountJpaRepository extends JpaRepository<JobCountJpaEntity, 
 
     /** FK 객체 참조를 없앴으므로 As-Is 의 {@code j.sigungu.sigunguCode} 가 그냥 {@code j.sigunguCode} 다. */
     @Query("""
-            SELECT new SDD.smash.job.infrastructure.persistence.projection.RegionJobCountRow(
+            SELECT new SDD.smash.domain.job.infrastructure.persistence.projection.RegionJobCountRow(
                 j.sigunguCode,
                 SUM(j.count)
             )
@@ -22,7 +22,7 @@ public interface JobCountJpaRepository extends JpaRepository<JobCountJpaEntity, 
     List<RegionJobCountRow> findAllRegionTotals();
 
     @Query("""
-            SELECT new SDD.smash.job.infrastructure.persistence.projection.RegionJobCountRow(
+            SELECT new SDD.smash.domain.job.infrastructure.persistence.projection.RegionJobCountRow(
                 j.sigunguCode,
                 j.count
             )

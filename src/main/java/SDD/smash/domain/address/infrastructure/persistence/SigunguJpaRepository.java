@@ -22,7 +22,7 @@ public interface SigunguJpaRepository extends JpaRepository<SigunguJpaEntity, St
      * FK 객체 참조를 없앴으므로 조인을 명시한다. INNER JOIN 이라 결과 집합은 As-Is 와 같다.
      */
     @Query("""
-            SELECT new SDD.smash.address.infrastructure.persistence.projection.RegionCodeRow(
+            SELECT new SDD.smash.domain.address.infrastructure.persistence.projection.RegionCodeRow(
                 sd.sidoCode,
                 sd.name,
                 sg.sigunguCode,
@@ -34,7 +34,7 @@ public interface SigunguJpaRepository extends JpaRepository<SigunguJpaEntity, St
     List<RegionCodeRow> findAllRegionCodes();
 
     @Query("""
-            SELECT new SDD.smash.address.infrastructure.persistence.projection.RegionCodeRow(
+            SELECT new SDD.smash.domain.address.infrastructure.persistence.projection.RegionCodeRow(
                 sd.sidoCode,
                 sd.name,
                 sg.sigunguCode,
