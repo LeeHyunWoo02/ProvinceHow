@@ -1,7 +1,7 @@
 package SDD.smash;
 
-import SDD.smash.dwelling.infrastructure.batch.DwellingBatchRunner;
-import SDD.smash.support.infrastructure.scheduler.SupportPolicyRefreshScheduler;
+import SDD.smash.domain.dwelling.infrastructure.batch.DwellingBatchRunner;
+import SDD.smash.domain.support.infrastructure.scheduler.SupportPolicyRefreshScheduler;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;

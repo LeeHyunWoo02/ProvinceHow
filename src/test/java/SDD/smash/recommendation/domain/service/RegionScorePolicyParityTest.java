@@ -1,9 +1,10 @@
 package SDD.smash.recommendation.domain.service;
 
-import SDD.smash.common.domain.model.Score;
-import SDD.smash.common.domain.model.SidoCode;
-import SDD.smash.common.domain.model.SigunguCode;
-import SDD.smash.recommendation.domain.model.RegionScore;
+import SDD.smash.global.domain.model.Score;
+import SDD.smash.global.domain.model.SidoCode;
+import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.domain.recommendation.domain.model.RegionScore;
+import SDD.smash.domain.recommendation.domain.service.RegionScorePolicy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
