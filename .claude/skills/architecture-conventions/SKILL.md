@@ -62,7 +62,7 @@ description: smash(ProvinceHow)의 DDD 헥사고날(포트&어댑터) 아키텍�
                           SigunguCode (Shared Kernel)
 ```
 
-- **`recommendation` → 각 컨텍스트**: Customer/Supplier. `recommendation`은 각 컨텍스트가 공개한 **인바운드 포트(UseCase 인터페이스)** 만 호출한다.
+- **`recommendation` → 각 컨텍스트**: Customer/Supplier. `recommendation`은 각 컨텍스트의 **application `Service`** 만 호출한다(§3.3).
 - **모든 컨텍스트 → 공유 커널**: `SigunguCode`/`SidoCode` **값 객체**만 공유한다(`global.domain.model`). `address`의 Aggregate(`Sigungu` 객체)나 Repository를 직접 쓰지 않는다.
 - **컨텍스트 간 역방향 의존 금지.** `job`이 `dwelling`을 알면 안 된다.
 
@@ -101,9 +101,8 @@ SDD/smash/
         │   └── port/           ★ out-port 인터페이스 (Repository, Provider, Cache)
         │
         ├── application/        유스케이스. domain만 의존
-        │   ├── port/in/        in-port 인터페이스 — 다른 컨텍스트에 공개할 때만
+        │   ├── <Xxx>QueryService  유스케이스 (@Service, @Transactional) ← 컨텍스트의 공개 진입점
         │   ├── port/out/       out-port 인터페이스 — ★ 예외적으로만 (§3.2)
-        │   ├── <Xxx>QueryService  유스케이스 구현 (@Service, @Transactional)
         │   └── dto/            유스케이스 입출력 DTO
         │
         ├── infrastructure/     모든 기술 상세
@@ -155,6 +154,37 @@ SDD/smash/
   부가 기능(예: `aiUse=true`일 때만 AI 호출)을 유스케이스 계약에 억지로 밀어넣지 않기 위한 것이다.
   의존 방향은 `presentation → application`이므로 §4 표를 지킨다.
 
+### 3.3 in-port를 두지 않는다 — 컨텍스트의 공개 진입점은 application `Service`다
+
+**`application/port/in` 패키지와 `...UseCase` 인터페이스를 만들지 않는다.**
+컨트롤러와 다른 컨텍스트의 application은 **대상 컨텍스트의 application `Service` 클래스를
+직접 주입해 호출**한다.
+
+```java
+// ✅ recommendation 의 유스케이스가 다른 컨텍스트를 호출하는 방식
+@Service
+@RequiredArgsConstructor
+public class RecommendRegionService {
+
+    private final JobScoreService jobScoreService;          // job 컨텍스트의 application Service
+    private final DwellingQueryService dwellingQueryService; // dwelling 컨텍스트의 application Service
+    ...
+}
+```
+
+**근거**: 구현이 하나뿐인 in-port 인터페이스는 실질적 다형성 없이 파일 수와 간접 참조만
+늘린다. 이 프로젝트는 컨텍스트별 구현이 하나이고 교체 계획도 없어 그 비용을 받지 않는다.
+
+**그래도 지키는 것** — 이 완화는 **application 계층 사이에만** 적용된다.
+- 다른 컨텍스트의 **`domain` 모델 / `domain/port` / `infrastructure`** 직접 참조는 여전히 금지다.
+- 즉 컨텍스트의 경계는 그대로이고, 그 경계를 넘는 **문(門)이 인터페이스에서 `Service` 클래스로
+  바뀌었을 뿐**이다.
+- `Service`의 `public` 메서드가 곧 컨텍스트의 공개 계약이다. 다른 컨텍스트가 쓸 일이 없는
+  메서드는 `public`으로 열지 않는다.
+
+> **out-port(`domain/port`, `application/port/out`)는 그대로 인터페이스다.** 폐기한 것은
+> in-port뿐이다. out-port는 의존 역전(§1-3)이 목적이라 인터페이스가 반드시 필요하다.
+
 ---
 
 ## 4. 계층별 규칙과 의존 방향
@@ -164,9 +194,9 @@ SDD/smash/
 | `domain/model` | 같은 컨텍스트 domain, `global.domain.model` | 다른 컨텍스트, application, infrastructure, presentation | **없음** (Lombok `@Getter` 정도만 허용) |
 | `domain/service` | 같은 컨텍스트 domain, `global.domain.model` | 위와 동일 + port 구현체 | 없음 |
 | `domain/port` | 같은 컨텍스트 domain 모델 | 기술 타입(`Page`, `Optional`은 허용) | 없음 |
-| `application` | 자기 domain 전체, **다른 컨텍스트의 `application/port/in`** | 다른 컨텍스트의 domain/infrastructure, `HttpServletRequest`, `RedisTemplate`, JPA 타입 | `@Service`, `@Transactional`만 |
+| `application` | 자기 domain 전체, **다른 컨텍스트의 application `Service`** | 다른 컨텍스트의 domain/infrastructure, `HttpServletRequest`, `RedisTemplate`, JPA 타입 | `@Service`, `@Transactional`만 |
 | `infrastructure` | 자기 domain(port 구현), 자기 application(`port/out` 구현 포함) | 다른 컨텍스트의 infrastructure, **presentation** | 전부 허용 |
-| `presentation` | 자기/타 컨텍스트의 `application` (`port/in` · `port/out` 둘 다) | domain 모델 직접 노출, infrastructure, Repository | Spring Web |
+| `presentation` | 자기/타 컨텍스트의 `application` (`Service` · `port/out` 둘 다) | domain 모델 직접 노출, infrastructure, Repository | Spring Web |
 
 `global.exception`(`DomainException`, `ErrorCode`)은 프레임워크 의존이 없으므로 **모든 계층에서 쓸 수 있다.**
 `global.util`은 기술 유틸이므로 **domain에서 import하지 않는다** → global-conventions §6
@@ -236,7 +266,7 @@ package SDD.smash.domain.dwelling.application;
 
 @Service
 @RequiredArgsConstructor
-public class DwellingQueryService implements DwellingQueryUseCase {   // in-port 구현
+public class DwellingQueryService {                                   // 컨텍스트의 공개 진입점
 
     private final DwellingMarketRepository dwellingMarketRepository;  // out-port 주입
     private final DwellingScoreCache dwellingScoreCache;
@@ -290,7 +320,7 @@ package SDD.smash.domain.recommendation.presentation;
 @RequestMapping("/api")
 public class RecommendController {
 
-    private final RecommendRegionUseCase recommendRegionUseCase;   // in-port
+    private final RecommendRegionService recommendRegionService;   // 자기 컨텍스트의 application Service
     private final RegionPickProvider regionPickProvider;           // application/port/out (§3.2)
 
     @GetMapping("/recommend")
@@ -424,7 +454,7 @@ public class DwellingScorePolicy {
 ### 6.1 HTTP (presentation)
 
 - 모든 공개 API는 `/api` 하위. `SecurityConfig`는 `/api/**` permitAll + **CORS GET/OPTIONS만 허용**이다. 다른 메서드를 열려면 설정도 함께 바꾼다.
-- 컨트롤러는 **in-port(UseCase 인터페이스)** 를 주입한다. AI 요약처럼 표현 계층의 선택 기능만 `application/port/out`을 직접 호출한다(§3.2).
+- 컨트롤러는 **application `Service`** 를 주입한다(§3.3). AI 요약처럼 표현 계층의 선택 기능만 `application/port/out`을 직접 호출한다(§3.2).
 
 ### 6.2 배치 (infrastructure/batch)
 
@@ -467,10 +497,10 @@ domain/<context>/infrastructure/batch/
   @Component
   @RequiredArgsConstructor
   public class SupportPolicyRefreshScheduler {
-      private final RefreshSupportPolicyUseCase refreshUseCase;
+      private final RefreshSupportPolicyService refreshSupportPolicyService;
 
       @Scheduled(initialDelay = 0, fixedDelayString = "#{T(java.time.Duration).ofDays(3).toMillis()}")
-      public void refresh() { refreshUseCase.refreshAll(); }
+      public void refresh() { refreshSupportPolicyService.refreshAll(); }
   }
   ```
 - 갱신 후 파생 캐시 무효화 책임은 **유스케이스**가 진다 → redis-conventions §5
@@ -503,18 +533,19 @@ DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — �
 
 | 컨텍스트 | `domain` | `application` | `infrastructure` | `presentation` |
 |---|---|---|---|---|
-| `address` | model, port | port/in, dto | batch(dto, runner), persistence(projection) | — |
-| `job` | model, port, service | port/in, dto | batch(dto, runner), cache, external, persistence(projection) | — |
-| `dwelling` | model, port, service | port/in, dto | batch(dto), cache, external, persistence | — |
-| `infra` | model, port, service | port/in, dto | batch(dto, runner), cache, persistence(projection) | — |
-| `support` | model, port, service | port/in, dto | cache, external, scheduler | — |
-| `recommendation` | model, service | port/in, **port/out**, dto | external(dto) | dto |
+| `address` | model, port | dto | batch(dto, runner), persistence(projection) | — |
+| `job` | model, port, service | dto | batch(dto, runner), cache, external, persistence(projection) | — |
+| `dwelling` | model, port, service | dto | batch(dto), cache, external, persistence | — |
+| `infra` | model, port, service | dto | batch(dto, runner), cache, persistence(projection) | — |
+| `support` | model, port, service | dto | cache, external, scheduler | — |
+| `recommendation` | model, service | **port/out**, dto | external(dto) | dto |
 
 읽는 법
 - `address`에 `domain/service`가 없다 — 코드 체계에는 계산 규칙이 없다.
 - `recommendation`에 `domain/port`가 없다 — 조합 전용이라 자기 저장소가 없고, out-port가 §3.2의 예외 케이스뿐이다.
 - `support`에 `persistence`가 없다 — Redis가 정본이라 `cache`가 저장소 역할을 한다 → redis-conventions §2.2
-- `presentation`이 `recommendation`에만 있다 — 나머지 컨텍스트는 in-port로만 노출된다.
+- 어느 컨텍스트에도 `application/port/in`이 없다 — in-port를 두지 않는 것이 이 프로젝트의 규칙이다(§3.3). `recommendation`의 `port/out`만 §3.2의 예외로 남는다.
+- `presentation`이 `recommendation`에만 있다 — 나머지 컨텍스트는 application `Service`로만 노출된다.
 
 ---
 
@@ -524,7 +555,7 @@ DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — �
 
 1. §2.2의 세 기준을 통과하는지 먼저 확인한다. 아니면 기존 컨텍스트에 넣는다.
 2. `SDD/smash/domain/<context>/` 아래에 **필요한 계층만** 만든다(§8).
-3. 다른 컨텍스트가 호출한다면 `application/port/in`에 `...UseCase`를 만든다. 아니면 만들지 않는다 → backend-conventions §5.1
+3. 공개 진입점은 `application`의 `...Service`다. **in-port 인터페이스를 만들지 않는다**(§3.3). 다른 컨텍스트가 쓸 메서드만 `public`으로 연다 → backend-conventions §5.1
 4. JPA를 쓴다면 `DataDBConfig`의 `@EnableJpaRepositories` basePackages에 **새 패키지를 추가**한다(§7).
 5. Seed 배치가 있다면 `@Order`를 선행 의존보다 큰 값으로 정하고 §6.2 표에 행을 추가한다.
 6. §8 지도와 §2 표를 갱신한다.
@@ -556,7 +587,8 @@ DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — �
 - [ ] `infrastructure`가 다른 컨텍스트의 `infrastructure`를 참조하지 않는가
 
 **컨텍스트**
-- [ ] 컨텍스트 간 호출이 `application/port/in`을 통해서만 일어나는가
+- [ ] 컨텍스트 간 호출이 대상 컨텍스트의 application `Service`를 통해서만 일어나는가
+- [ ] `...UseCase` 인터페이스나 `application/port/in` 패키지를 새로 만들지 않았는가
 - [ ] 다른 컨텍스트의 domain 모델/Repository를 직접 쓰지 않는가
 - [ ] 공유하는 것이 `global.domain.model`의 값 객체뿐인가
 

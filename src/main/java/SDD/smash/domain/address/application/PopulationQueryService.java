@@ -1,6 +1,5 @@
 package SDD.smash.domain.address.application;
 
-import SDD.smash.domain.address.application.port.in.PopulationQueryUseCase;
 import SDD.smash.domain.address.domain.model.Population;
 import SDD.smash.domain.address.domain.port.PopulationRepository;
 import SDD.smash.domain.address.domain.port.SigunguRepository;
@@ -19,12 +18,15 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Service
 @RequiredArgsConstructor
-public class PopulationQueryService implements PopulationQueryUseCase {
+public class PopulationQueryService {
 
     private final SigunguRepository sigunguRepository;
     private final PopulationRepository populationRepository;
 
-    @Override
+    /**
+     * 해당 시군구의 인구수. 시군구는 존재하지만 인구가 적재되지 않았으면 {@code null} 이다.
+     * 존재하지 않는 시군구면 {@code ADDRESS_CODE_NOT_FOUND} 를 던진다.
+     */
     @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
     public Integer getPopulation(SigunguCode sigunguCode) {
         if (!sigunguRepository.existsBy(sigunguCode)) {

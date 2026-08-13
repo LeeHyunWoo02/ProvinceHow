@@ -3,7 +3,6 @@ package SDD.smash.domain.dwelling.application;
 import SDD.smash.global.domain.model.Money;
 import SDD.smash.global.domain.model.Score;
 import SDD.smash.global.domain.model.SigunguCode;
-import SDD.smash.domain.dwelling.application.port.in.DwellingScoreUseCase;
 import SDD.smash.domain.dwelling.domain.model.DwellingMarket;
 import SDD.smash.domain.dwelling.domain.model.DwellingScoreKey;
 import SDD.smash.domain.dwelling.domain.model.DwellingType;
@@ -32,14 +31,14 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-public class DwellingScoreService implements DwellingScoreUseCase {
+public class DwellingScoreService {
 
     private final DwellingMarketRepository dwellingMarketRepository;
     private final DwellingScoreCache dwellingScoreCache;
 
     private final DwellingScorePolicy policy = new DwellingScorePolicy();
 
-    @Override
+    /** 전 시군구의 주거 적합도. 실거래가 없는 시군구도 0점으로 포함된다. */
     public Map<SigunguCode, Score> scoresFor(DwellingType type, Money budget) {
 
         DwellingScoreKey key = DwellingScoreKey.of(type, budget);

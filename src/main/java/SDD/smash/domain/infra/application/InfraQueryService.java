@@ -1,10 +1,9 @@
 package SDD.smash.domain.infra.application;
 
-import SDD.smash.domain.address.application.port.in.AddressQueryUseCase;
+import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.infra.application.dto.IndustryCountView;
 import SDD.smash.domain.infra.application.dto.MajorInfraSummaryView;
-import SDD.smash.domain.infra.application.port.in.InfraQueryUseCase;
 import SDD.smash.domain.infra.domain.model.Major;
 import SDD.smash.domain.infra.domain.port.InfraMajorSummaryRepository;
 import SDD.smash.domain.infra.domain.port.RegionInfraRepository;
@@ -18,14 +17,14 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 인프라 조회 유스케이스. As-Is {@code InfraService} 를 옮긴 것이다.
+ * 인프라 조회 유스케이스. {@code recommendation} 이 infra 를 호출하는 통로다.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class InfraQueryService implements InfraQueryUseCase {
+public class InfraQueryService {
 
-    private final AddressQueryUseCase addressQueryUseCase;
+    private final AddressQueryService addressQueryService;
     private final InfraMajorSummaryRepository infraMajorSummaryRepository;
     private final RegionInfraRepository regionInfraRepository;
 
@@ -34,10 +33,9 @@ public class InfraQueryService implements InfraQueryUseCase {
      * <b>예외를 던지지 않고 로그만 남긴 뒤 목록에서 뺀다</b> — As-Is 도 "적재된 데이터의 문제"로
      * 보고 건너뛰었다.
      */
-    @Override
     @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
     public List<MajorInfraSummaryView> getMajorInfraSummaries(SigunguCode sigunguCode) {
-        addressQueryUseCase.checkSigunguExistsOrThrow(sigunguCode);
+        addressQueryService.checkSigunguExistsOrThrow(sigunguCode);
 
         List<MajorInfraSummaryView> result = new ArrayList<>();
         for (Major major : Major.values()) {
@@ -52,10 +50,9 @@ public class InfraQueryService implements InfraQueryUseCase {
         return result;
     }
 
-    @Override
     @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
     public List<IndustryCountView> getInfraDetails(SigunguCode sigunguCode) {
-        addressQueryUseCase.checkSigunguExistsOrThrow(sigunguCode);
+        addressQueryService.checkSigunguExistsOrThrow(sigunguCode);
 
         return regionInfraRepository.findBy(sigunguCode).industryCounts().stream()
                 .map(IndustryCountView::from)

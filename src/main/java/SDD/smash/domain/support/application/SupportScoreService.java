@@ -1,9 +1,8 @@
 package SDD.smash.domain.support.application;
 
-import SDD.smash.domain.address.application.port.in.AddressQueryUseCase;
+import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.Score;
 import SDD.smash.global.domain.model.SigunguCode;
-import SDD.smash.domain.support.application.port.in.SupportScoreUseCase;
 import SDD.smash.domain.support.domain.model.SupportScoreKey;
 import SDD.smash.domain.support.domain.model.SupportTag;
 import SDD.smash.domain.support.domain.port.SupportPolicyRepository;
@@ -22,22 +21,22 @@ import java.util.Optional;
  * <b>오케스트레이션 부분만</b> 옮긴 것이다.
  *
  * <p>순서를 그대로 유지한다 — 캐시 확인이 선택 태그 판정보다 먼저다(infra 와 같은 순서).
- * 시군구 목록은 옛 {@code SigunguRepository} 대신 address 의 in-port 에서 받는다.
+ * 시군구 목록은 address 컨텍스트의 application Service 에서 받는다.
  *
  * <p>{@code @Transactional} 을 붙이지 않는다. RDB 가 없는 컨텍스트이고, 캐시 접근을
  * 포함하는 메서드다.
  */
 @Service
 @RequiredArgsConstructor
-public class SupportScoreService implements SupportScoreUseCase {
+public class SupportScoreService {
 
-    private final AddressQueryUseCase addressQueryUseCase;
+    private final AddressQueryService addressQueryService;
     private final SupportPolicyRepository supportPolicyRepository;
     private final SupportScoreCache supportScoreCache;
 
     private final SupportScorePolicy policy = new SupportScorePolicy();
 
-    @Override
+    /** 전 시군구의 지원정책 적합도. 선택한 태그가 없으면 빈 맵이다. */
     public Map<SigunguCode, Score> scoresFor(Integer supportChoice) {
 
         SupportScoreKey key = SupportScoreKey.of(supportChoice);
@@ -56,7 +55,7 @@ public class SupportScoreService implements SupportScoreUseCase {
 
         // 3) 시군구별로 선택한 태그들의 개수를 모아 정책을 적용한다.
         Map<SigunguCode, Score> scores = new LinkedHashMap<>();
-        for (SigunguCode sigunguCode : addressQueryUseCase.getAllSigunguCodes()) {
+        for (SigunguCode sigunguCode : addressQueryService.getAllSigunguCodes()) {
             Map<SupportTag, Integer> countsByTag = new LinkedHashMap<>();
             for (SupportTag tag : selectedTags) {
                 countsByTag.put(tag, supportPolicyRepository.countBy(sigunguCode, tag));

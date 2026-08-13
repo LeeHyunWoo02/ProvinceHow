@@ -185,12 +185,25 @@ dwelling/infrastructure/persistence/DwellingRepositoryAdapter
 
 ## 5. 유스케이스(application) 작성
 
-### 5.1 in-port는 언제 만드는가
+### 5.1 컨텍스트의 공개 진입점은 `Service` 자체다
 
-- **다른 컨텍스트가 호출하면** `application/port/in`에 `...UseCase` 인터페이스를 만든다.
-- **자기 컨텍스트 안에서만 쓰면** 인터페이스 없이 구현 클래스를 직접 주입한다. **불필요한 인터페이스를 만들지 않는다.**
+**`...UseCase` 인터페이스를 만들지 않는다.** 컨트롤러도, 다른 컨텍스트의 application도
+**대상 컨텍스트의 application `Service` 클래스를 직접 주입**한다 → architecture-conventions §3.3
 
-`recommendation`이 나머지 5개 컨텍스트를 호출하므로, **그 5개는 in-port를 갖는다.**
+```java
+// ✅ recommendation 이 다른 컨텍스트를 호출하는 방식
+private final JobScoreService jobScoreService;
+private final DwellingQueryService dwellingQueryService;
+
+// ❌ 만들지 않는다
+public interface JobScoreUseCase { ... }
+```
+
+- **`Service`의 `public` 메서드가 곧 컨텍스트의 공개 계약**이다. 다른 컨텍스트가 쓸 일이 없는
+  메서드는 `public`으로 열지 않는다.
+- 이 완화는 **application 계층 사이에만** 적용된다. 다른 컨텍스트의 `domain` 모델 /
+  `domain/port` / `infrastructure` 직접 참조는 여전히 금지다.
+- **out-port(`domain/port`)는 그대로 인터페이스다.** 의존 역전이 목적이라 인터페이스가 필요하다.
 
 ### 5.2 템플릿
 
@@ -199,7 +212,7 @@ package SDD.smash.domain.dwelling.application;
 
 @Service
 @RequiredArgsConstructor
-public class DwellingScoreService implements DwellingScoreUseCase {
+public class DwellingScoreService {
 
     private final DwellingMarketRepository dwellingMarketRepository;  // out-port
     private final DwellingScoreCache dwellingScoreCache;              // out-port
@@ -256,7 +269,7 @@ package SDD.smash.domain.recommendation.presentation;
 @RequestMapping("/api")
 public class RecommendController {
 
-    private final RecommendRegionUseCase recommendRegionUseCase;   // in-port
+    private final RecommendRegionService recommendRegionService;   // 자기 컨텍스트의 application Service
     private final RegionPickProvider regionPickProvider;           // application/port/out (선택 기능)
 
     @GetMapping("/recommend")
@@ -272,7 +285,7 @@ public class RecommendController {
         RecommendCommand command =
                 new RecommendCommand(supportChoice, jobCode, dwellingType, Money.of(price), infraChoice);
 
-        List<RegionRecommendation> list = recommendRegionUseCase.recommend(command);
+        List<RegionRecommendation> list = recommendRegionService.recommend(command);
         List<RegionPick> picks = aiUse ? regionPickProvider.pick(list) : null;
 
         return ResponseEntity.ok(AiConverter.toResponseList(list, picks));
@@ -281,7 +294,7 @@ public class RecommendController {
 ```
 
 **규칙**
-- 컨트롤러는 **in-port**를 주입한다. 표현 계층의 선택 기능(예: `aiUse=true`일 때의 AI 호출)만 `application/port/out`을 직접 호출한다 → architecture-conventions §3.2
+- 컨트롤러는 **application `Service`** 를 주입한다(§5.1). 표현 계층의 선택 기능(예: `aiUse=true`일 때의 AI 호출)만 `application/port/out`을 직접 호출한다 → architecture-conventions §3.2
 - **`infrastructure`의 구현 클래스를 주입하지 않는다.** `presentation → infrastructure`는 역방향이다.
 - 원시 파라미터는 **메서드 안에서 즉시** 값 객체/`Command`로 승격한다. 파라미터가 많아 가독성이 떨어지면 `...Request` 레코드 + `toCommand()`로 묶는다.
 - **try/catch 금지.** 전역 핸들러가 처리한다 → global-conventions §3
@@ -299,7 +312,7 @@ public class RecommendController {
 | domain 모델·정책 | ✕ | ✕ | 순수 JUnit. 가장 빠르고 가장 많다 |
 | application 유스케이스 | ✕ | ✕ | Mockito로 **포트** 목킹 |
 | infrastructure 매퍼 | ✕ | ✕ | 왕복 변환 순수 테스트 |
-| 컨트롤러 슬라이스 | `@WebMvcTest` | ✕ | in-port를 `@MockitoBean`으로 대체 |
+| 컨트롤러 슬라이스 | `@WebMvcTest` | ✕ | application `Service`를 `@MockitoBean`으로 대체 |
 | 통합 | `@SpringBootTest` | **Testcontainers MySQL** | `IntegrationTestSupport`를 상속 |
 
 - `src/main/resources`에는 `application-dev`/`application-prod`만 있고 값이 전부 `${ENV}`다.
@@ -406,7 +419,7 @@ class DwellingScoreServiceTest {
 ### 7.5 infrastructure / presentation / 통합 테스트
 
 - **어댑터**: 매핑(`XxxJpaMapper`)의 도메인↔JPA 왕복 변환과 캐시 어댑터의 키 조립은 **순수 테스트**로 검증한다.
-- **컨트롤러**: `@WebMvcTest(controllers = XxxController.class)` + in-port를 `@MockitoBean`으로 대체.
+- **컨트롤러**: `@WebMvcTest(controllers = XxxController.class)` + application `Service`를 `@MockitoBean`으로 대체. `Service`가 인터페이스가 아니라 클래스이므로 Mockito가 클래스 목을 만든다 — `final` 클래스/메서드로 만들지 않는다.
 - **통합**: `IntegrationTestSupport`를 상속한다. 컨테이너는 static 초기화로 한 번 뜨고 JVM 종료까지 재사용된다. 테스트에서는 data/meta가 같은 스키마다.
   - `ApplicationReadyEvent`/`@Scheduled`로 외부 API를 때리는 컴포넌트(`DwellingBatchRunner`, `SupportPolicyRefreshScheduler`)는 이미 `@MockitoBean`으로 대체돼 있다. **같은 성격의 컴포넌트를 새로 만들면 여기에도 추가**한다.
 - **실패 경로 테스트는 HTTP 상태뿐 아니라 응답의 `code`(=`ErrorCode` 이름)까지 단언**한다.
@@ -446,7 +459,7 @@ src/test/java/SDD/smash/global/<area>/<대상>Test.java
 - [ ] 트랜잭션 안에서 캐시/외부 API를 호출하지 않는가
 
 **표현**
-- [ ] 컨트롤러가 in-port를 주입하고 로직이 없는가 (`infrastructure` 주입 없음)
+- [ ] 컨트롤러가 application `Service`를 주입하고 로직이 없는가 (`infrastructure` 주입 없음)
 - [ ] 도메인 모델이 아니라 `...Response`를 반환하는가
 - [ ] `@Validated`/`@Valid`가 있고 원시 파라미터가 즉시 값 객체로 승격되는가
 

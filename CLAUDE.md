@@ -47,9 +47,15 @@ areas, also read `architecture-conventions`.
 This project follows Domain-Driven Design with a hexagonal (ports & adapters) structure.
 Each bounded context has up to four layers — `domain`, `application`, `infrastructure`,
 `presentation` — and dependencies only ever point inward
-(`presentation`/`infrastructure` → `application` → `domain`). Cross-context calls go
-through the target context's `application/port/in` use-case interface; the only thing
+(`presentation`/`infrastructure` → `application` → `domain`).
+
+Cross-context calls go through the target context's **application `Service` class** —
+this project deliberately does **not** define `application/port/in` use-case interfaces.
+The relaxation applies between `application` layers only: reaching into another context's
+`domain`, `domain/port`, or `infrastructure` is still forbidden, and the only thing
 contexts share directly is the value objects in `SDD.smash.global.domain.model`.
+Out-ports (`domain/port`, `application/port/out`) remain interfaces — dependency
+inversion needs them.
 
 ## Agent Routing
 

@@ -45,9 +45,14 @@ SDD.smash.global.<area>              컨텍스트가 아닌 공통 기반:
 
 이 프로젝트는 DDD 헥사고날(포트 & 어댑터) 구조다. 각 바운디드 컨텍스트는 최대 4계층
 (`domain`, `application`, `infrastructure`, `presentation`)을 가지며 의존은 항상 안쪽으로만
-흐른다(`presentation`/`infrastructure` → `application` → `domain`). 컨텍스트 간 호출은
-대상 컨텍스트의 `application/port/in` 유스케이스 인터페이스를 통하고, 컨텍스트가 직접
-공유하는 것은 `SDD.smash.global.domain.model`의 값 객체뿐이다.
+흐른다(`presentation`/`infrastructure` → `application` → `domain`).
+
+컨텍스트 간 호출은 대상 컨텍스트의 **application `Service` 클래스**를 통한다 —
+이 프로젝트는 `application/port/in` 유스케이스 인터페이스를 **두지 않는다**.
+이 완화는 `application` 계층 사이에만 적용되며, 다른 컨텍스트의 `domain`·`domain/port`·
+`infrastructure` 직접 참조는 여전히 금지다. 컨텍스트가 직접 공유하는 것은
+`SDD.smash.global.domain.model`의 값 객체뿐이다.
+out-port(`domain/port`, `application/port/out`)는 의존 역전이 목적이므로 그대로 인터페이스다.
 
 ## 에이전트 라우팅
 

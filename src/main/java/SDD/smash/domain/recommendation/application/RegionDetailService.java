@@ -1,11 +1,11 @@
 package SDD.smash.domain.recommendation.application;
 
-import SDD.smash.domain.address.application.port.in.AddressQueryUseCase;
-import SDD.smash.domain.address.application.port.in.PopulationQueryUseCase;
+import SDD.smash.domain.address.application.AddressQueryService;
+import SDD.smash.domain.address.application.PopulationQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
-import SDD.smash.domain.dwelling.application.port.in.DwellingQueryUseCase;
-import SDD.smash.domain.infra.application.port.in.InfraQueryUseCase;
-import SDD.smash.domain.job.application.port.in.JobQueryUseCase;
+import SDD.smash.domain.dwelling.application.DwellingQueryService;
+import SDD.smash.domain.infra.application.InfraQueryService;
+import SDD.smash.domain.job.application.JobQueryService;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.recommendation.application.dto.DwellingInfoSummary;
 import SDD.smash.domain.recommendation.application.dto.IndustryDetailItem;
@@ -14,40 +14,37 @@ import SDD.smash.domain.recommendation.application.dto.MajorInfraSummaryItem;
 import SDD.smash.domain.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.domain.recommendation.application.dto.SupportPolicyItem;
 import SDD.smash.domain.recommendation.application.dto.SupportPolicyListSummary;
-import SDD.smash.domain.recommendation.application.port.in.RegionDetailUseCase;
-import SDD.smash.domain.support.application.port.in.SupportQueryUseCase;
+import SDD.smash.domain.support.application.SupportQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 /**
- * 지역 상세 조회 유스케이스. As-Is {@code DetailService.details} 를 옮긴 것이다.
+ * 지역 상세 조회 유스케이스.
  *
- * <p>시군구 존재 검증과 코드명 조회는 address in-port로, 직종 코드 존재 검증은
- * job in-port({@code getJobInfo(sigungu, jobCode)} 내부)가 각각 담당한다 —
- * As-Is가 {@code DetailService} 안에서 직접 하던 검증을 각 컨텍스트로 내렸을 뿐
- * 던지는 {@code ErrorCode} 는 동일하다.
+ * <p>시군구 존재 검증과 코드명 조회는 address 의 application Service 로, 직종 코드 존재
+ * 검증은 job 의 application Service({@code getJobInfo(sigungu, jobCode)} 내부)가 각각
+ * 담당한다 — 검증을 각 컨텍스트가 소유하며 던지는 {@code ErrorCode} 는 그 컨텍스트의 것이다.
  */
 @Service
 @RequiredArgsConstructor
-public class RegionDetailService implements RegionDetailUseCase {
+public class RegionDetailService {
 
-    private final AddressQueryUseCase addressQueryUseCase;
-    private final PopulationQueryUseCase populationQueryUseCase;
-    private final JobQueryUseCase jobQueryUseCase;
-    private final SupportQueryUseCase supportQueryUseCase;
-    private final DwellingQueryUseCase dwellingQueryUseCase;
-    private final InfraQueryUseCase infraQueryUseCase;
+    private final AddressQueryService addressQueryService;
+    private final PopulationQueryService populationQueryService;
+    private final JobQueryService jobQueryService;
+    private final SupportQueryService supportQueryService;
+    private final DwellingQueryService dwellingQueryService;
+    private final InfraQueryService infraQueryService;
 
-    @Override
     public RegionDetailInfo details(SigunguCode sigunguCode, JobCode midJobCode) {
 
-        addressQueryUseCase.checkSigunguExistsOrThrow(sigunguCode);
+        addressQueryService.checkSigunguExistsOrThrow(sigunguCode);
 
-        // As-Is 는 코드명 조회 전에 midJobCode 존재를 미리 검증했다. 여기서는
-        // getJobInfo(sigungu, jobCode) 호출 시점에 같은 검증이 일어나므로 순서를 먼저 당겨온다.
-        JobInfoSummary fitJobInfo = JobInfoSummary.from(jobQueryUseCase.getJobInfo(sigunguCode, midJobCode));
+        // 코드명 조회보다 midJobCode 검증이 먼저다. getJobInfo(sigungu, jobCode) 호출 시점에
+        // 직종 코드 검증이 일어나므로 순서를 앞으로 당겨온다.
+        JobInfoSummary fitJobInfo = JobInfoSummary.from(jobQueryService.getJobInfo(sigunguCode, midJobCode));
 
-        var regionCode = addressQueryUseCase.getRegionCode(sigunguCode).orElseThrow();
+        var regionCode = addressQueryService.getRegionCode(sigunguCode).orElseThrow();
 
         return RegionDetailInfo.builder()
                 .sidoCode(regionCode.sidoCode().value())
@@ -55,23 +52,23 @@ public class RegionDetailService implements RegionDetailUseCase {
                 .sigunguCode(regionCode.sigunguCode().value())
                 .sigunguName(regionCode.sigunguName())
 
-                .population(populationQueryUseCase.getPopulation(sigunguCode))
+                .population(populationQueryService.getPopulation(sigunguCode))
 
-                .totalJobInfo(JobInfoSummary.from(jobQueryUseCase.getJobInfo(sigunguCode)))
+                .totalJobInfo(JobInfoSummary.from(jobQueryService.getJobInfo(sigunguCode)))
                 .fitJobInfo(fitJobInfo)
 
-                .totalSupportNum(supportQueryUseCase.getAllSupportCount(sigunguCode))
+                .totalSupportNum(supportQueryService.getAllSupportCount(sigunguCode))
                 .supportList(new SupportPolicyListSummary(
-                        supportQueryUseCase.getAllSupportPolicies(sigunguCode).stream()
+                        supportQueryService.getAllSupportPolicies(sigunguCode).stream()
                                 .map(SupportPolicyItem::from)
                                 .toList()))
 
-                .dwellingInfo(DwellingInfoSummary.from(dwellingQueryUseCase.getDwellingInfo(sigunguCode)))
+                .dwellingInfo(DwellingInfoSummary.from(dwellingQueryService.getDwellingInfo(sigunguCode)))
 
-                .infraDetails(infraQueryUseCase.getInfraDetails(sigunguCode).stream()
+                .infraDetails(infraQueryService.getInfraDetails(sigunguCode).stream()
                         .map(IndustryDetailItem::from)
                         .toList())
-                .infraMajors(infraQueryUseCase.getMajorInfraSummaries(sigunguCode).stream()
+                .infraMajors(infraQueryService.getMajorInfraSummaries(sigunguCode).stream()
                         .map(MajorInfraSummaryItem::from)
                         .toList())
                 .build();

@@ -51,7 +51,10 @@ domain/model → domain/service(Policy) → domain/port → application → infr
 - **의존은 바깥 → 안쪽 단방향.** 역방향이 필요하면 `domain/port` 인터페이스로 뒤집고 `infrastructure`가 구현한다.
 - **application은 포트 인터페이스만 주입받는다.** 어댑터 구현체·`RedisTemplate`·`XxxJpaRepository` 직접 주입 금지.
 - **Aggregate 밖은 ID 값 객체로만 참조한다.** `@ManyToOne`으로 다른 Aggregate를 물지 않는다.
-- **컨텍스트 간 호출은 `application/port/in`(UseCase)을 통해서만** 한다.
+- **컨텍스트 간 호출은 대상 컨텍스트의 application `Service` 클래스를 통해서만** 한다.
+  **`...UseCase` 인터페이스나 `application/port/in` 패키지를 만들지 않는다.**
+  단 이 완화는 application 계층 사이에만 적용되며, 다른 컨텍스트의 `domain`·`domain/port`·
+  `infrastructure` 직접 참조는 여전히 금지다. out-port는 그대로 인터페이스다.
 - **엔티티·컬럼·enum 값은 기존 코드가 정본이다.** 새 값을 지어내지 않는다.
   정본 위치는 `SDD/smash/domain/<context>/infrastructure/persistence/*JpaEntity` 다.
 - **패키지를 옮기면 문자열 참조도 함께 고친다.** 컴파일러가 잡아주지 않는다:

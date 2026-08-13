@@ -16,7 +16,7 @@ import java.util.List;
  * 다시 만든다({@code AiConverter.toResponseList} 참고) — OpenAI 내부를 재구조화하지
  * 말라는 지시 때문에 그 호출 형태를 그대로 받아줄 수 있는 모양을 유지해야 한다.
  *
- * <p>또한 {@code RecommendController} 가 {@code recommendRegionUseCase.recommend(...)} 의
+ * <p>또한 {@code RecommendController} 가 {@code recommendRegionService.recommend(...)} 의
  * 반환값을 가공 없이 그대로 {@code aiRecommendService.summarize(list)} 에 넘기므로,
  * 이 타입은 <b>유스케이스의 출력이자 최종 HTTP 응답({@code RecommendAggregateResponse.items})의
  * 원소 타입이기도 하다.</b> backend-conventions §6 예시(도메인→Response 매핑)와 다르게

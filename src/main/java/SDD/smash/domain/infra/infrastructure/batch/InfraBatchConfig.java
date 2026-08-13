@@ -1,6 +1,6 @@
 package SDD.smash.domain.infra.infrastructure.batch;
 
-import SDD.smash.domain.address.application.port.in.AddressQueryUseCase;
+import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.infra.infrastructure.batch.dto.InfraCsvRow;
 import SDD.smash.domain.infra.infrastructure.batch.dto.InfraUpsertRow;
@@ -43,7 +43,7 @@ import static SDD.smash.global.util.BatchTextUtil.normalize;
  * 그대로 유지한다. {@code data/infra.csv} 에 UTF-8 BOM 이 있어도 헤더 줄만 오염되고
  * 헤더는 {@code linesToSkip(1)} 으로 건너뛰므로 데이터 행에는 영향이 없다(As-Is 에서 실측 확인됨).
  *
- * <p>시군구 목록은 옛 {@code SigunguRepository} 대신 address 의 in-port 에서 받는다.
+ * <p>시군구 목록은 address 컨텍스트의 application Service 에서 받는다.
  */
 @Configuration
 @Slf4j
@@ -53,7 +53,7 @@ public class InfraBatchConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
     private final IndustryJpaRepository industryJpaRepository;
-    private final AddressQueryUseCase addressQueryUseCase;
+    private final AddressQueryService addressQueryService;
     private final @Qualifier("dataDBSource") DataSource dataDataSource;
 
     private Set<String> sigunguCodeCache = null;
@@ -61,7 +61,7 @@ public class InfraBatchConfig {
 
     private boolean isKnownSigunguCode(String sigunguCode) {
         if (sigunguCodeCache == null) {
-            sigunguCodeCache = addressQueryUseCase.getAllSigunguCodes()
+            sigunguCodeCache = addressQueryService.getAllSigunguCodes()
                     .stream()
                     .map(SigunguCode::value)
                     .collect(Collectors.toSet());

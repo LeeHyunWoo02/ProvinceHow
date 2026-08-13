@@ -221,7 +221,7 @@ package SDD.smash.domain.support.application;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class RefreshSupportPolicyService implements RefreshSupportPolicyUseCase {
+public class RefreshSupportPolicyService {
 
     private final SupportPolicyProvider provider;        // 외부 API 포트
     private final SupportPolicyRepository repository;    // 정본 저장 포트

@@ -22,7 +22,7 @@ SDD.smash.global.<area>[.<sublayer>]                ← 컨텍스트에 속하�
 | 갈래 | 값 |
 |---|---|
 | 컨텍스트 (`domain.` 아래) | `address`, `job`, `dwelling`, `infra`, `support`, `recommendation` |
-| 계층 | `domain`(`.model` / `.service` / `.port`), `application`(`.port.in` / `.port.out` / `.dto`), `infrastructure`(`.persistence[.projection]` / `.cache` / `.external[.dto]` / `.batch[.dto,.runner]` / `.scheduler`), `presentation`(`.dto`) |
+| 계층 | `domain`(`.model` / `.service` / `.port`), `application`(`.port.out` / `.dto`), `infrastructure`(`.persistence[.projection]` / `.cache` / `.external[.dto]` / `.batch[.dto,.runner]` / `.scheduler`), `presentation`(`.dto`) |
 | `global` 영역 | `domain.model`(공유 커널 값 객체), `exception`(`.handler`), `config`, `security`, `batch`, `util` |
 
 예)
@@ -57,10 +57,9 @@ SDD.smash.global.exception.handler.GlobalExceptionHandler
 | `domain.port` | out-port (외부 공급) | `...Provider` | `RentRecordProvider`, `SupportPolicyProvider` |
 | `domain.port` | out-port (캐시) | `...Cache` | `DwellingScoreCache` |
 | `domain.port` | out-port (조회 전용) | `...Query` | `RegionCodeQuery` |
-| `application.port.in` | in-port (유스케이스 계약) | `...UseCase` | `DwellingQueryUseCase`, `RecommendRegionUseCase` |
 | `application.port.out` | out-port — **예외적으로만** (architecture-conventions §3.2) | `...Provider` | `RegionPickProvider`, `RegionSummaryProvider` |
-| `application` | 유스케이스 구현 (조회) | `...QueryService` | `DwellingQueryService`, `RegionDetailService` |
-| `application` | 유스케이스 구현 (변경/갱신·계산) | `...Service` | `RefreshSupportPolicyService`, `DwellingScoreService` |
+| `application` | 유스케이스 (조회) — **컨텍스트의 공개 진입점** | `...QueryService` | `DwellingQueryService`, `RegionDetailService` |
+| `application` | 유스케이스 (변경/갱신·계산) | `...Service` | `RefreshSupportPolicyService`, `DwellingScoreService` |
 | `application.dto` | 유스케이스 입력 | `...Command` / `...Query` | `RecommendCommand` |
 | `application.dto` | 유스케이스 출력 | `...Info` / `...View` | `DwellingInfo`, `RegionCodeView`, `SupportPolicyView` |
 | `infrastructure.persistence` | JPA 매핑 클래스 | `...JpaEntity` | `DwellingJpaEntity`, `SigunguJpaEntity` |
@@ -84,6 +83,7 @@ SDD.smash.global.exception.handler.GlobalExceptionHandler
 - **`Service`는 application에만 쓴다.** 도메인 규칙 객체는 `Policy`다. 이 구분이 "지금 도메인 규칙을 쓰는지, 오케스트레이션을 쓰는지"를 이름만으로 드러낸다. (`global.security`의 `ApiRateLimitService`는 컨텍스트 밖의 기술 컴포넌트라 예외다.)
 - **`Repository`는 두 개가 있다.** `domain.port.XxxRepository`(인터페이스, 도메인 언어)와 `infrastructure.persistence.XxxJpaRepository`(Spring Data). 헷갈리면 import 경로를 본다.
 - **out-port는 기본이 `domain.port`다.** `application.port.out`은 포트 시그니처가 `application/dto`를 요구할 때만 쓰는 예외다 → architecture-conventions §3.2
+- **`...UseCase` 인터페이스와 `application.port.in` 패키지는 쓰지 않는다.** 컨텍스트의 공개 진입점은 application `Service` 클래스 자체다 → architecture-conventions §3.3. 폐기한 것은 in-port뿐이고 out-port는 그대로 인터페이스다.
 - **`Entity`라는 이름을 도메인에 쓰지 않는다.** DDD의 Entity는 개념이지 접미사가 아니다. JPA 매핑 클래스만 `JpaEntity`를 붙인다.
 - **`DTO` 접미사를 쓰지 않는다.** 역할에 따라 `Command`/`Info`/`View`/`Request`/`Response`/`Row`로 나눈다(§4).
 

@@ -1,6 +1,6 @@
 package SDD.smash.domain.job.infrastructure.batch;
 
-import SDD.smash.domain.address.application.port.in.AddressQueryUseCase;
+import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.job.infrastructure.batch.dto.JobCountCsvRow;
 import SDD.smash.domain.job.infrastructure.batch.dto.JobCountUpsertRow;
@@ -41,7 +41,7 @@ import static SDD.smash.global.util.BatchTextUtil.normalize;
  * <p>Job 이름("jobCountJob")과 빈 이름, chunk 크기, CSV 인코딩({@code MS949}),
  * Upsert SQL 을 그대로 유지한다. 테이블명 {@code JobCount} 도 As-Is 그대로다.
  *
- * <p>시군구 목록은 옛 {@code SigunguRepository} 대신 address 의 in-port 에서 받는다.
+ * <p>시군구 목록은 address 컨텍스트의 application Service 에서 받는다.
  */
 @Configuration
 @Slf4j
@@ -51,7 +51,7 @@ public class JobCountBatchConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
     private final JobCodeMiddleJpaRepository jobCodeMiddleJpaRepository;
-    private final AddressQueryUseCase addressQueryUseCase;
+    private final AddressQueryService addressQueryService;
     private final JobScoreCacheCleaner jobScoreCacheCleaner;
     private final @Qualifier("dataDBSource") DataSource dataDataSource;
 
@@ -60,7 +60,7 @@ public class JobCountBatchConfig {
 
     private boolean isKnownSigunguCode(String sigunguCode) {
         if (sigunguCodeCache == null) {
-            sigunguCodeCache = addressQueryUseCase.getAllSigunguCodes()
+            sigunguCodeCache = addressQueryService.getAllSigunguCodes()
                     .stream()
                     .map(SigunguCode::value)
                     .collect(Collectors.toSet());

@@ -1,6 +1,6 @@
 package SDD.smash.domain.dwelling.infrastructure.batch;
 
-import SDD.smash.domain.address.application.port.in.AddressQueryUseCase;
+import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.exception.DomainException;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
@@ -44,7 +44,7 @@ import static SDD.smash.global.exception.ErrorCode.NOT_FOUND_YEARMONTH;
  * {@code BatchGuard} 가 Job 이름으로 재실행 여부를 판단하고 Runner 가 {@code @Qualifier} 로 찾는다.
  *
  * <p>바뀐 것은 협력자뿐이다.
- * 시군구 목록은 address 의 in-port 로, 외부 API 호출은 {@code RentRecordProvider} 포트로,
+ * 시군구 목록은 address 의 application Service 로, 외부 API 호출은 {@code RentRecordProvider} 포트로,
  * 평균·중앙값 계산은 {@code RentStatCalculator} 도메인 서비스로 간다.
  */
 @Configuration
@@ -55,7 +55,7 @@ public class DwellingBatchConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
     private final RentRecordProvider rentRecordProvider;
-    private final AddressQueryUseCase addressQueryUseCase;
+    private final AddressQueryService addressQueryService;
     private final DwellingScoreCacheCleaner dwellingScoreCacheCleaner;
     private final @Qualifier("dataDBSource") DataSource dataDataSource;
 
@@ -99,7 +99,7 @@ public class DwellingBatchConfig {
         YearMonth to = YearMonth.parse(dealYmd, DateTimeFormatter.ofPattern("yyyyMM"));
         YearMonth from = to.minusMonths(months - 1);
 
-        List<WorkItem> items = addressQueryUseCase.getAllSigunguCodes().stream()
+        List<WorkItem> items = addressQueryService.getAllSigunguCodes().stream()
                 .map(code -> new WorkItem(code, from, to))
                 .toList();
 

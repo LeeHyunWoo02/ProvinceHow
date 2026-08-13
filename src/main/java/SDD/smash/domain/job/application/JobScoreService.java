@@ -4,7 +4,6 @@ import SDD.smash.global.domain.model.Score;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.exception.DomainException;
 import SDD.smash.global.exception.ErrorCode;
-import SDD.smash.domain.job.application.port.in.JobScoreUseCase;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.job.domain.model.JobScoreKey;
 import SDD.smash.domain.job.domain.model.RegionJobCount;
@@ -34,7 +33,7 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-public class JobScoreService implements JobScoreUseCase {
+public class JobScoreService {
 
     private final JobCountRepository jobCountRepository;
     private final JobCategoryRepository jobCategoryRepository;
@@ -42,7 +41,10 @@ public class JobScoreService implements JobScoreUseCase {
 
     private final JobScorePolicy policy = new JobScorePolicy();
 
-    @Override
+    /**
+     * 전 시군구의 일자리 적합도. {@code jobCode} 가 {@code null} 이면 전체 일자리 수 기준이다.
+     * 유효하지 않은 직종 코드면 {@code JOB_CODE_NOT_FOUND} 를 던진다.
+     */
     public Map<SigunguCode, Score> scoresFor(JobCode jobCode) {
 
         if (jobCode != null && !jobCategoryRepository.existsSubCategory(jobCode)) {

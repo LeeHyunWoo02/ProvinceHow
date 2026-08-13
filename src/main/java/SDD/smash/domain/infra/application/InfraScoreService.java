@@ -2,7 +2,6 @@ package SDD.smash.domain.infra.application;
 
 import SDD.smash.global.domain.model.Score;
 import SDD.smash.global.domain.model.SigunguCode;
-import SDD.smash.domain.infra.application.port.in.InfraScoreUseCase;
 import SDD.smash.domain.infra.domain.model.InfraScoreKey;
 import SDD.smash.domain.infra.domain.model.Major;
 import SDD.smash.domain.infra.domain.model.RegionMajorScore;
@@ -35,14 +34,14 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
-public class InfraScoreService implements InfraScoreUseCase {
+public class InfraScoreService {
 
     private final RegionMajorScoreRepository regionMajorScoreRepository;
     private final InfraScoreCache infraScoreCache;
 
     private final InfraScorePolicy policy = new InfraScorePolicy();
 
-    @Override
+    /** 전 시군구의 인프라 적합도. 선택한 대분류가 없으면 빈 맵이다. */
     public Map<SigunguCode, Score> scoresFor(Integer infraChoice) {
 
         InfraScoreKey key = InfraScoreKey.of(infraChoice);

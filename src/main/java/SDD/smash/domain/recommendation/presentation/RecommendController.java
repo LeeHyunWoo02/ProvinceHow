@@ -6,7 +6,7 @@ import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.recommendation.application.dto.RecommendCommand;
 import SDD.smash.domain.recommendation.application.dto.RegionPick;
 import SDD.smash.domain.recommendation.application.dto.RegionRecommendation;
-import SDD.smash.domain.recommendation.application.port.in.RecommendRegionUseCase;
+import SDD.smash.domain.recommendation.application.RecommendRegionService;
 import SDD.smash.domain.recommendation.application.port.out.RegionPickProvider;
 import SDD.smash.domain.recommendation.presentation.dto.RecommendAggregateResponse;
 import jakarta.validation.constraints.Max;
@@ -24,16 +24,13 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * As-Is {@code Apis.Controller.RecommendController} 를 옮긴 것이다.
- * 경로·파라미터명·검증 애노테이션을 그대로 유지한다. {@code dwellingType} 요청 파라미터는
- * 이제 {@code dwelling.domain.model.DwellingType}(새 enum)으로 바인딩된다 — 상수 이름
- * (MONTHLY/JEONSE)이 같아 쿼리스트링 값은 바뀌지 않는다.
+ * 지역 추천 API.
  *
- * <p>주입 대상은 <b>application 계층의 포트 2개</b>다 — 조회 in-port 와 AI out-port.
- * 이전에는 {@code infrastructure/external} 의 구현 클래스를 직접 주입해
- * <b>presentation → infrastructure</b> 역방향 의존이 있었다.
- * AI 요약은 응답을 꾸미는 표현 계층의 선택 기능({@code aiUse})이므로
- * 유스케이스 안으로 넣지 않고 여기서 포트를 호출한다.
+ * <p>주입 대상은 <b>application 계층의 둘</b>이다 — 자기 컨텍스트의 추천 Service 와 AI out-port.
+ * {@code infrastructure/external} 의 구현 클래스를 직접 주입하면
+ * <b>presentation → infrastructure</b> 역방향 의존이 되므로 하지 않는다.
+ * AI 추천은 응답을 꾸미는 표현 계층의 선택 기능({@code aiUse})이므로
+ * 유스케이스 안으로 넣지 않고 여기서 포트를 호출한다(architecture-conventions §3.2).
  */
 @Validated
 @RestController
@@ -42,7 +39,7 @@ import java.util.List;
 @Slf4j
 public class RecommendController {
 
-    private final RecommendRegionUseCase recommendRegionUseCase;
+    private final RecommendRegionService recommendRegionService;
     private final RegionPickProvider regionPickProvider;
 
     @GetMapping("/recommend")
@@ -64,7 +61,7 @@ public class RecommendController {
         JobCode jobCode = (midJobCode == null) ? null : JobCode.of(midJobCode);
         RecommendCommand command = new RecommendCommand(supportChoice, jobCode, dwellingType, Money.of(price), infraChoice);
 
-        List<RegionRecommendation> list = recommendRegionUseCase.recommend(command);
+        List<RegionRecommendation> list = recommendRegionService.recommend(command);
 
         // aiUse=false 면 AI 를 호출하지 않는다(As-Is 분기 유지).
         // AI 호출이 실패하면 포트가 빈 목록을 돌려주므로 aiPick 만 빈 배열이 된다.
