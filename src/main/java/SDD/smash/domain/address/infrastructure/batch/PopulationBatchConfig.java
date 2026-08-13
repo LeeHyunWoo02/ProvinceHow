@@ -36,8 +36,12 @@ import static SDD.smash.global.util.BatchTextUtil.normalize;
 /**
  * 인구 시드 배치. As-Is {@code PopulationBatch} 를 옮긴 것이다.
  *
- * <p>Upsert SQL 문자열과 네임드 파라미터는 한 글자도 바꾸지 않았다.
- * 테이블명 {@code Population} 도 As-Is 그대로다.
+ * <p>네임드 파라미터는 As-Is 그대로다.
+ *
+ * <p><b>테이블명은 {@code population}(소문자)이다.</b> {@code hbm2ddl.auto=update} 가 만드는 테이블은
+ * {@code PopulationJpaEntity} 의 {@code @Table(name = "population")} 이므로 Upsert SQL 도 그 이름이어야 한다.
+ * As-Is 는 {@code Population} 이었는데, {@code lower_case_table_names=1} 인 Windows/macOS MySQL 에서는
+ * 대소문자를 구분하지 않아 드러나지 않고 <b>리눅스(기본 0)에서만 "table doesn't exist" 로 터진다</b>.
  */
 @Configuration
 @Slf4j
@@ -120,7 +124,7 @@ public class PopulationBatchConfig {
     @Bean
     public JdbcBatchItemWriter<PopulationUpsertRow> populationWriter() {
         String upsertSql = """
-        INSERT INTO Population (sigungu_code, population_count)
+        INSERT INTO population (sigungu_code, population_count)
         VALUES (:sigunguCode, :population)
         ON DUPLICATE KEY UPDATE population_count = VALUES(population_count)
             """;

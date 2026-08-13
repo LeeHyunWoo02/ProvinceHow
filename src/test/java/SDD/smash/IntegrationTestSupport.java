@@ -1,6 +1,5 @@
 package SDD.smash;
 
-import SDD.smash.domain.dwelling.infrastructure.batch.DwellingBatchRunner;
 import SDD.smash.domain.support.infrastructure.scheduler.SupportPolicyRefreshScheduler;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -32,12 +31,11 @@ public abstract class IntegrationTestSupport {
         MYSQL.start();
     }
 
-    /**
-     * ApplicationReadyEvent 를 받아 국토부 API 를 호출하는 배치 러너.
-     * 시드 배치들과 달리 @ConditionalOnProperty 가 없어 테스트에서 대역으로 바꾼다.
+    /*
+     * 기동 시 배치를 돌리는 경로는 SeedMasterJobLauncher 하나뿐이고,
+     * src/test/resources/application.properties 의 seed.master.enabled=false 가 그것을 끈다.
+     * 그래서 배치 러너를 대역으로 바꿀 필요가 없다.
      */
-    @MockitoBean
-    private DwellingBatchRunner dwellingBatchRunner;
 
     /**
      * @Scheduled(initialDelay = 0) 이라 컨텍스트가 뜨자마자 청년정책 API 를 전 시군구에 대해 호출한다.
