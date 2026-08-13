@@ -71,8 +71,8 @@ public class SeedMasterJobConfig {
     @Value("${jobCodeTop.filePath:}")     private String jobCodeTopFilePath;
     @Value("${jobCodeMiddle.filePath:}")  private String jobCodeMiddleFilePath;
     @Value("${apis.kosis.api-key:}")     private String kosisApiKey;
-    @Value("${industry.filePath:}")       private String industryFilePath;
-    @Value("${infra.filePath:}")          private String infraFilePath;
+    @Value("${infra.industry-master.location:classpath:infra/industry-master.yml}")
+    private String industryMasterLocation;
     @Value("${apis.datagokr.service-key:}") private String dataGoKrServiceKey;
     @Value("${apis.molit.service-key:}")  private String molitServiceKey;
 
@@ -117,10 +117,10 @@ public class SeedMasterJobConfig {
                 configs("apis.kosis.api-key", kosisApiKey), List.of(SIGUNGU), null));
 
         specs.add(new SeedStepSpec("industryStep", SeedGroup.EXTERNAL, industryEnabled, BASE_DATE,
-                configs("industry.filePath", industryFilePath), List.of(), null));
+                configs("infra.industry-master.location", industryMasterLocation), List.of(), null));
 
         specs.add(new SeedStepSpec("infraStep", SeedGroup.EXTERNAL, infraEnabled, BASE_DATE,
-                configs("infra.filePath", infraFilePath), List.of(SIGUNGU, INDUSTRY), null));
+                configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, INDUSTRY), null));
 
         specs.add(new SeedStepSpec("jobCountStep", SeedGroup.EXTERNAL, jobCountEnabled, BASE_DATE,
                 configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, JOB_CODE_MIDDLE), null));
