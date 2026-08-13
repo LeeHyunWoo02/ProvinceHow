@@ -86,6 +86,30 @@ class LocalDataBulkCsvAdapterTest {
     }
 
     @Test
+    @DisplayName("지번주소와 도로명주소를 둘 다 읽는다 - 일반구 재분배의 단서다")
+    void readsBothAddressColumns() {
+        String csv = "관리번호,영업상태코드,개방자치단체코드,도로명주소,지번주소\n"
+                + "S-1,01,3740000,경기도 수원시 장안구 정자로 2,경기도 수원시 장안구 정자동 1\n";
+
+        List<InfraFacility> facilities = adapter.parse(csv, JONGNO);
+
+        assertThat(facilities).hasSize(1);
+        assertThat(facilities.get(0).lotAddress()).isEqualTo("경기도 수원시 장안구 정자동 1");
+        assertThat(facilities.get(0).roadAddress()).isEqualTo("경기도 수원시 장안구 정자로 2");
+        assertThat(facilities.get(0).addressCandidates())
+                .containsExactly("경기도 수원시 장안구 정자동 1", "경기도 수원시 장안구 정자로 2");
+    }
+
+    @Test
+    @DisplayName("주소 컬럼이 없어도 실패하지 않는다 - 일반구가 없는 자치단체는 코드로 확정된다")
+    void toleratesMissingAddressColumns() {
+        List<InfraFacility> facilities = adapter.parse("관리번호,영업상태코드\nA-1,01\n", JONGNO);
+
+        assertThat(facilities).hasSize(1);
+        assertThat(facilities.get(0).addressCandidates()).isEmpty();
+    }
+
+    @Test
     @DisplayName("인증키 없이 쓸 수 있지만 Referer 는 필수다")
     void requiresRefererButNoServiceKey() {
         assertThat(adapter.isReady()).isTrue();

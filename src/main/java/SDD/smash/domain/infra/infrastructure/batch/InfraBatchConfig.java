@@ -130,17 +130,22 @@ public class InfraBatchConfig {
 
         stepExecution.getExecutionContext().put(InfraStepLogger.CTX_SUMMARY, String.format(
                 "source=%s, ratioBasis=%s, targets=%d, apiCalls=%d, read=%d, filteredOut=%d, "
-                        + "duplicates=%d, unmappedRegions=%d, unmappedIndustries=%d, rows=%d, collectElapsed=%dms",
+                        + "duplicates=%d, unmappedRegions=%d, unmappedIndustries=%d, "
+                        + "districtResolved=%d, districtUnresolved=%d, rows=%d, collectElapsed=%dms",
                 snapshotAssembler.source(), snapshotAssembler.ratioBasis(), snapshot.targets(),
                 snapshot.apiCalls(), snapshot.readCount(), snapshot.filteredOutCount(),
                 snapshot.duplicateCount(), snapshot.unmappedRegions(), snapshot.unmappedIndustries(),
+                snapshot.districtResolved(), snapshot.districtUnresolved(),
                 snapshot.rows().size(), elapsedMs));
 
         log.info("[infraJob] 수집 완료 baseDate={}, source={}, targets={}, apiCalls={}, read={}, "
-                        + "filteredOut={}, duplicates={}, unmappedRegions={}, unmappedIndustries={}, rows={}, elapsed={}ms",
+                        + "filteredOut={}, duplicates={}, unmappedRegions={}, unmappedIndustries={}, "
+                        + "districtResolved={}, districtUnresolved={}, rows={}, elapsed={}ms",
                 baseDate, snapshotAssembler.source(), snapshot.targets(), snapshot.apiCalls(),
                 snapshot.readCount(), snapshot.filteredOutCount(), snapshot.duplicateCount(),
-                snapshot.unmappedRegions(), snapshot.unmappedIndustries(), snapshot.rows().size(), elapsedMs);
+                snapshot.unmappedRegions(), snapshot.unmappedIndustries(),
+                snapshot.districtResolved(), snapshot.districtUnresolved(),
+                snapshot.rows().size(), elapsedMs);
 
         return new IteratorItemReader<>(snapshot.rows());
     }

@@ -49,7 +49,22 @@ import java.util.Set;
  *   <li>업종 마스터에 없는 서비스 식별자 → <b>임의 분류하지 않고</b> 로그를 남기고 제외</li>
  *   <li>시군구 매핑에 없는 개방자치단체코드 → 로그를 남기고 제외(주소 문자열로 추정하지 않는다)</li>
  *   <li>영업/정상(01)이 아닌 사업장 → 개수에서 제외</li>
+ *   <li>일반구 시인데 주소에서 구를 못 찾은 사업장 → 로그를 남기고 제외(§일반구 재분배)</li>
  * </ul>
+ *
+ * <h2>일반구 재분배</h2>
+ * LOCALDATA 는 인허가 권한이 있는 시 단위로만 자료를 줘서 수원·성남 등 12개 시는 개방자치단체코드
+ * 하나가 일반구 시군구코드 여러 개에 대응한다. 이 경우에만 <b>사업장 주소 문자열</b>로 하위 구를
+ * 가른다(정책 결정 2026-08-13). 주소 후보 순서와 구 이름 매칭 규칙은
+ * {@code InfraFacility.addressCandidates()} 와 {@code RegionCodeMapping.DistrictSplit} 이 정의한다.
+ *
+ * <p><b>구를 못 찾으면 상위 시 코드로 떨어뜨리지 않고 버린다.</b> 상위 시(예: 수원시 41110)도
+ * {@code sigungu} 테이블에 실재하므로 그대로 적재하면 41111~41117 과 <b>같은 사업장이 두 번</b>
+ * 집계된다. 시군구 내 구성비({@code ratio})와 업종별 전국 백분위({@code score}) 둘 다
+ * 왜곡되므로, 일부 손실을 감수하고 제외한 뒤 건수를 로그로 드러낸다.
+ *
+ * <p>재분배는 {@code ratio}/{@code score} 계산 <b>전</b>에 끝난다 — 개수 집계 맵에 하위 구 코드로
+ * 적립한 뒤 그 맵 전체를 {@code InfraStatPolicy} 에 넘기므로, 두 값은 일반구 단위로 계산된다.
  */
 @Component
 @Slf4j
@@ -122,11 +137,14 @@ public class InfraSnapshotAssembler {
                 ? fromLegacyCsv(master)
                 : fromProvider(industries);
 
+        // ★ 순서가 중요하다. counts 에는 이미 일반구 재분배가 끝난 코드만 들어 있고,
+        //   ratio/score 는 그 맵 전체를 보고 계산되므로 백분위 모집단이 일반구 단위다.
         List<RegionIndustryStat> stats = new InfraStatPolicy(ratioBasis).stats(collected.counts);
 
         return new InfraSnapshot(stats, collected.targets, collected.apiCalls, collected.readCount,
                 collected.filteredOut, collected.duplicates,
-                collected.unmappedRegions.size(), collected.unmappedIndustries.size());
+                collected.unmappedRegions.size(), collected.unmappedIndustries.size(),
+                collected.districtResolved, collected.districtUnresolved);
     }
 
     // ------------------------------------------------------------------ 외부 수집
@@ -140,6 +158,7 @@ public class InfraSnapshotAssembler {
         }
 
         Map<LocalDataRegionCode, SigunguCode> index = mapping.asMap();
+        Map<SigunguCode, RegionCodeMapping.DistrictSplit> splits = mapping.splitIndex();
         Collected collected = new Collected();
         Map<Key, Integer> counts = new LinkedHashMap<>();
 
@@ -154,7 +173,7 @@ public class InfraSnapshotAssembler {
                 collected.duplicates += collection.duplicatesDropped();
 
                 // 사업장이 들고 있는 개방자치단체코드를 우선한다. 요청이 시도 전체(_ALL)일 수 있어
-                // 요청 코드로 뭉뚱그리면 시군구가 뭉개진다. 주소 문자열은 쓰지 않는다.
+                // 요청 코드로 뭉뚱그리면 시군구가 뭉개진다.
                 for (var facility : collection.facilities()) {
                     if (!facility.countsAsInfra()) {
                         continue;
@@ -166,6 +185,22 @@ public class InfraSnapshotAssembler {
                         collected.unmappedFacilityCount++;
                         continue;
                     }
+
+                    // 일반구를 둔 시라면 여기서만 주소를 본다. 그 외 지역은 코드로 확정된다.
+                    RegionCodeMapping.DistrictSplit split = splits.get(sigunguCode);
+                    if (split != null) {
+                        SigunguCode district = split.resolveAny(facility.addressCandidates()).orElse(null);
+                        if (district == null) {
+                            // 상위 시로 떨어뜨리면 일반구와 이중 집계가 된다. 버리고 세어 둔다.
+                            collected.districtUnresolved++;
+                            collected.unresolvedCities.add(
+                                    split.cityName() == null ? sigunguCode.value() : split.cityName());
+                            continue;
+                        }
+                        collected.districtResolved++;
+                        sigunguCode = district;
+                    }
+
                     counts.merge(new Key(sigunguCode, industry.code()), 1, Integer::sum);
                 }
             }
@@ -175,6 +210,13 @@ public class InfraSnapshotAssembler {
             log.warn("[infraJob] 시군구 매핑에 없는 개방자치단체코드 {}종({}건)을 제외했다. codes={}",
                     collected.unmappedRegions.size(), collected.unmappedFacilityCount,
                     collected.unmappedRegions);
+        }
+        if (collected.districtUnresolved > 0) {
+            log.warn("[infraJob] 주소에서 일반구를 찾지 못해 {}건을 제외했다(상위 시로 떨어뜨리지 않는다)."
+                            + " resolved={}, cities={}",
+                    collected.districtUnresolved, collected.districtResolved, collected.unresolvedCities);
+        } else if (collected.districtResolved > 0) {
+            log.info("[infraJob] 일반구 재분배 완료 resolved={}, unresolved=0", collected.districtResolved);
         }
 
         collected.counts = toCounts(counts);
@@ -322,7 +364,10 @@ public class InfraSnapshotAssembler {
         private int filteredOut;
         private int duplicates;
         private int unmappedFacilityCount;
+        private int districtResolved;
+        private int districtUnresolved;
         private final Set<String> unmappedRegions = new LinkedHashSet<>();
         private final Set<String> unmappedIndustries = new LinkedHashSet<>();
+        private final Set<String> unresolvedCities = new LinkedHashSet<>();
     }
 }

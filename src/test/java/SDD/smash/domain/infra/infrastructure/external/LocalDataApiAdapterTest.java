@@ -99,6 +99,37 @@ class LocalDataApiAdapterTest {
     }
 
     @Test
+    @DisplayName("지번주소와 도로명주소를 둘 다 옮긴다 - 일반구 재분배의 단서다")
+    void carriesBothAddressFields() {
+        String withAddresses = """
+                {"MNG_NO":"S-1","SALS_STTS_CD":"01","OPN_ATMY_GRP_CD":"3000000",
+                 "LOTNO_ADDR":"경기도 수원시 장안구 정자동 1",
+                 "ROAD_NM_ADDR":"경기도 수원시 장안구 정자로 2"}
+                """;
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withSuccess(body(1, withAddresses), MediaType.APPLICATION_JSON));
+
+        FacilityCollection collection = adapter("test-key", 100).collect(RESTAURANT, JONGNO);
+
+        assertThat(collection.facilities()).hasSize(1);
+        assertThat(collection.facilities().get(0).addressCandidates())
+                .containsExactly("경기도 수원시 장안구 정자동 1", "경기도 수원시 장안구 정자로 2");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("주소 필드가 없는 업종도 그대로 수집된다")
+    void collectsFacilitiesWithoutAddressFields() {
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withSuccess(body(1, item("S-2", "01", "3000000")), MediaType.APPLICATION_JSON));
+
+        FacilityCollection collection = adapter("test-key", 100).collect(RESTAURANT, JONGNO);
+
+        assertThat(collection.facilities().get(0).addressCandidates()).isEmpty();
+        server.verify();
+    }
+
+    @Test
     @DisplayName("totalCount 가 0이면 추가 호출 없이 빈 결과다")
     void returnsEmptyWhenTotalCountIsZero() {
         server.expect(requestTo(url(1, 100)))

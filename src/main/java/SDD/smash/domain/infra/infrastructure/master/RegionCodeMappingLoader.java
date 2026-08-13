@@ -19,6 +19,7 @@ import java.util.Map;
 public final class RegionCodeMappingLoader {
 
     private static final String KEY_REGIONS = "regions";
+    private static final String KEY_DISTRICT_SPLITS = "districtSplits";
 
     private RegionCodeMappingLoader() {
     }
@@ -54,7 +55,81 @@ public final class RegionCodeMappingLoader {
                 }
             }
         }
-        return new RegionCodeMapping(entries);
+        return new RegionCodeMapping(entries, toDistrictSplits(root.get(KEY_DISTRICT_SPLITS)));
+    }
+
+    /**
+     * {@code districtSplits} 는 <b>선택</b> 항목이다. 없으면 빈 목록이라 옛 형식 파일도 그대로 읽힌다.
+     */
+    private static List<RegionCodeMapping.DistrictSplit> toDistrictSplits(Object parsed) {
+        if (!(parsed instanceof List<?> list)) {
+            return List.of();
+        }
+        List<RegionCodeMapping.DistrictSplit> splits = new ArrayList<>(list.size());
+        for (Object element : list) {
+            if (element instanceof Map<?, ?> row) {
+                RegionCodeMapping.DistrictSplit split = toDistrictSplit(row);
+                if (split != null) {
+                    splits.add(split);
+                }
+            }
+        }
+        return splits;
+    }
+
+    private static RegionCodeMapping.DistrictSplit toDistrictSplit(Map<?, ?> row) {
+        String parentSigunguCode = text(row.get("parentSigunguCode"));
+        String cityName = text(row.get("cityName"));
+
+        if (parentSigunguCode == null) {
+            log.warn("[regionMapping] parentSigunguCode 가 없는 일반구 분해 항목을 건너뛴다. cityName={}", cityName);
+            return null;
+        }
+        if (!(row.get("districts") instanceof List<?> rawDistricts) || rawDistricts.isEmpty()) {
+            log.warn("[regionMapping] districts 가 비어 있어 일반구 분해 항목을 건너뛴다. parent={}", parentSigunguCode);
+            return null;
+        }
+
+        List<RegionCodeMapping.District> districts = new ArrayList<>(rawDistricts.size());
+        for (Object element : rawDistricts) {
+            if (element instanceof Map<?, ?> districtRow) {
+                RegionCodeMapping.District district = toDistrict(districtRow, parentSigunguCode);
+                if (district != null) {
+                    districts.add(district);
+                }
+            }
+        }
+        if (districts.isEmpty()) {
+            log.warn("[regionMapping] 유효한 하위 구가 하나도 없어 분해 항목을 건너뛴다. parent={}", parentSigunguCode);
+            return null;
+        }
+
+        try {
+            return new RegionCodeMapping.DistrictSplit(
+                    SigunguCode.of(parentSigunguCode), cityName, districts);
+        } catch (DomainException e) {
+            log.warn("[regionMapping] 형식이 잘못된 상위 시 코드라 분해 항목을 건너뛴다. parent={}, reason={}",
+                    parentSigunguCode, e.getMessage());
+            return null;
+        }
+    }
+
+    private static RegionCodeMapping.District toDistrict(Map<?, ?> row, String parentSigunguCode) {
+        String name = text(row.get("name"));
+        String sigunguCode = text(row.get("sigunguCode"));
+
+        if (name == null || sigunguCode == null) {
+            log.warn("[regionMapping] name/sigunguCode 가 없는 하위 구를 건너뛴다. parent={}, name={}",
+                    parentSigunguCode, name);
+            return null;
+        }
+        try {
+            return new RegionCodeMapping.District(name, SigunguCode.of(sigunguCode));
+        } catch (DomainException e) {
+            log.warn("[regionMapping] 형식이 잘못된 하위 구를 건너뛴다. parent={}, name={}, sigunguCode={}, reason={}",
+                    parentSigunguCode, name, sigunguCode, e.getMessage());
+            return null;
+        }
     }
 
     private static RegionCodeMapping.Entry toEntry(Map<?, ?> row) {

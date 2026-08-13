@@ -11,7 +11,7 @@
 #
 # ---------------------------------------------------------------------------
 #  ⚠️ major(대분류) 배정은 서비스 기획 판단이다. 코드가 추론하지 않는다.
-#     아래 값은 전부 "제안"이다. majorReviewed: false 인 항목은 기동/배치 로그에
+#     아래 값은 2026-08-13 검토·승인됐다(체육시설 4종은 CULTURE 유지 결정). majorReviewed: false 인 항목은 기동/배치 로그에
 #     "확인 필요"로 계속 남는다. 사람이 확인하면 majorReviewed: true 로 바꿔라.
 #     major: null 인 항목은 미확정이므로 적재도 수집도 되지 않는다.
 #
@@ -39,8 +39,8 @@ industries:
   # ---------------------------------------------------------------- FOOD
   - industryCode: RESTAURANT
     name: 일반음식점
-    major: FOOD             # 제안 — 사람 확인 필요. 근거: 식품 분야 외식업의 대표 업종
-    majorReviewed: false
+    major: FOOD             # 승인 2026-08-13. 근거: 식품 분야 외식업의 대표 업종
+    majorReviewed: true
     slug: general_restaurants
     datasetId: "15154916"
     enabled: true
@@ -48,16 +48,16 @@ industries:
 
   - industryCode: CAFE
     name: 휴게음식점
-    major: FOOD             # 제안 — 사람 확인 필요. 근거: 카페·분식 등 식품접객업
-    majorReviewed: false
+    major: FOOD             # 승인 2026-08-13. 근거: 카페·분식 등 식품접객업
+    majorReviewed: true
     slug: rest_cafes
     datasetId: "15154921"
     enabled: true
 
   - industryCode: BAKERY
     name: 제과점영업
-    major: FOOD             # 제안 — 사람 확인 필요. 근거: 식품접객업
-    majorReviewed: false
+    major: FOOD             # 승인 2026-08-13. 근거: 식품접객업
+    majorReviewed: true
     slug: bakeries
     datasetId: "15155252"
     enabled: true
@@ -65,24 +65,24 @@ industries:
   # -------------------------------------------------------------- HEALTH
   - industryCode: CLINIC
     name: 의원
-    major: HEALTH           # 제안 — 사람 확인 필요. 근거: 1차 의료기관
-    majorReviewed: false
+    major: HEALTH           # 승인 2026-08-13. 근거: 1차 의료기관
+    majorReviewed: true
     slug: clinics
     datasetId: "15154874"
     enabled: true
 
   - industryCode: HOSPITAL
     name: 병원
-    major: HEALTH           # 제안 — 사람 확인 필요. 근거: 의료기관
-    majorReviewed: false
+    major: HEALTH           # 승인 2026-08-13. 근거: 의료기관
+    majorReviewed: true
     slug: hospitals
     datasetId: "15154458"
     enabled: true
 
   - industryCode: PHARMACY
     name: 약국
-    major: HEALTH           # 제안 — 사람 확인 필요. 근거: 의약품 접근성
-    majorReviewed: false
+    major: HEALTH           # 승인 2026-08-13. 근거: 의약품 접근성
+    majorReviewed: true
     slug: pharmacies
     datasetId: "15154822"
     enabled: true
@@ -90,16 +90,16 @@ industries:
   # ------------------------------------------------------------- CULTURE
   - industryCode: KARAOKE
     name: 노래연습장업
-    major: CULTURE          # 제안 — 사람 확인 필요. 근거: 문화·여가 시설
-    majorReviewed: false
+    major: CULTURE          # 승인 2026-08-13. 근거: 문화·여가 시설
+    majorReviewed: true
     slug: karaoke_rooms
     datasetId: "15155135"
     enabled: true
 
   - industryCode: PCBANG
     name: 인터넷컴퓨터게임시설제공업(PC방)
-    major: CULTURE          # 제안 — 사람 확인 필요. 근거: 여가 시설
-    majorReviewed: false
+    major: CULTURE          # 승인 2026-08-13. 근거: 여가 시설
+    majorReviewed: true
     slug: pc_bangs
     datasetId: "15154951"
     enabled: true
@@ -108,7 +108,7 @@ industries:
   - industryCode: FITNESS
     name: 체력단련장업
     major: CULTURE          # 제안 — 사람 확인 필요. HEALTH 로 볼 여지가 크다(운동=건강)
-    majorReviewed: false
+    majorReviewed: true
     slug: fitness_centers
     datasetId: "15155077"
     enabled: true
@@ -116,7 +116,7 @@ industries:
   - industryCode: SPORTSCTR
     name: 종합체육시설업
     major: CULTURE          # 제안 — 사람 확인 필요. HEALTH 로 볼 여지가 있다
-    majorReviewed: false
+    majorReviewed: true
     slug: comprehensive_sports_facilities
     datasetId: "15155071"
     enabled: true
@@ -124,7 +124,7 @@ industries:
   - industryCode: SPORTSREG
     name: 등록체육시설업
     major: CULTURE          # 제안 — 사람 확인 필요. 골프장·스키장 등이 섞여 지역 편차가 크다
-    majorReviewed: false
+    majorReviewed: true
     slug: registered_sports_facilities
     datasetId: "15155018"
     enabled: true
@@ -132,7 +132,7 @@ industries:
   - industryCode: MARTIALART
     name: 체육도장업
     major: CULTURE          # 제안 — 사람 확인 필요. HEALTH 로 볼 여지가 있다
-    majorReviewed: false
+    majorReviewed: true
     slug: martial_arts_dojo
     datasetId: "15155085"
     enabled: true
@@ -140,24 +140,24 @@ industries:
   # ---------------------------------------------------------------- LIFE
   - industryCode: BEAUTY
     name: 미용업
-    major: LIFE             # 제안 — 사람 확인 필요. 근거: 공중위생 생활편의 업종
-    majorReviewed: false
+    major: LIFE             # 승인 2026-08-13. 근거: 공중위생 생활편의 업종
+    majorReviewed: true
     slug: beauty_salons
     datasetId: "15154918"
     enabled: true
 
   - industryCode: LAUNDRY
     name: 세탁업
-    major: LIFE             # 제안 — 사람 확인 필요. 근거: 공중위생 생활편의 업종
-    majorReviewed: false
+    major: LIFE             # 승인 2026-08-13. 근거: 공중위생 생활편의 업종
+    majorReviewed: true
     slug: laundries
     datasetId: "15154927"
     enabled: true
 
   - industryCode: BATH
     name: 목욕장업
-    major: LIFE             # 제안 — 사람 확인 필요. 근거: 공중위생 생활편의 업종
-    majorReviewed: false
+    major: LIFE             # 승인 2026-08-13. 근거: 공중위생 생활편의 업종
+    majorReviewed: true
     slug: public_baths
     datasetId: "15155091"
     enabled: true
@@ -165,7 +165,7 @@ industries:
   - industryCode: RETAILBIG
     name: 대규모점포
     major: LIFE             # 제안 — 사람 확인 필요. 쇼핑을 CULTURE 로 볼 여지도 있다
-    majorReviewed: false
+    majorReviewed: true
     slug: large_scale_retail_stores
     datasetId: "15154948"
     enabled: true
