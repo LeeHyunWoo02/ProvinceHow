@@ -1,4 +1,4 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.seed;
 
 /**
  * 시드 Step 의 성격 구분. 실패했을 때의 처리가 완전히 다르다.

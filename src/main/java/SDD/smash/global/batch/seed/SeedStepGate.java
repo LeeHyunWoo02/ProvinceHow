@@ -1,4 +1,6 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.seed;
+
+import SDD.smash.global.batch.launch.BatchGuard;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.JobExecution;

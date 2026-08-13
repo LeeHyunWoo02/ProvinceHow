@@ -1,4 +1,4 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.launch;
 
 import org.springframework.batch.core.JobExecution;
 

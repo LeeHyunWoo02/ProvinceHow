@@ -1,4 +1,4 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.seed;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

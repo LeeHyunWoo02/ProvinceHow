@@ -1,4 +1,4 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.listener;
 
 import org.springframework.batch.core.step.AbstractStep;
 import org.springframework.beans.factory.config.BeanPostProcessor;
