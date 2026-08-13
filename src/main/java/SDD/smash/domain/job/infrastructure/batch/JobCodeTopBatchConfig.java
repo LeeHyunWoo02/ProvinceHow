@@ -26,7 +26,8 @@ import java.nio.charset.StandardCharsets;
  * 직종 대분류 시드 배치. As-Is {@code JobCodeTopBatch} 를 옮긴 것이다.
  *
  * <p>Job 이름("jcTopJob")과 빈 이름, chunk 크기를 그대로 유지한다.
- * {@code BatchGuard} 가 Job 이름으로 재실행 여부를 판단하고 Runner 가 {@code @Qualifier} 로 찾는다.
+ * Step 빈 이름("jcTopStep")은 {@code seedMasterJob} 이 {@code @Qualifier} 로 찾고
+ * {@code BatchGuard} 가 STEP_NAME 으로 재실행 여부를 판단하므로 바꾸지 않는다.
  *
  * <p>CSV 는 <b>UTF-8(BOM 없음)</b> 이며 표준 CSV 큰따옴표를 그대로 해석한다.
  * 열 개수가 어긋난 행은 skip 하지 않고 {@code FlatFileParseException} 으로 배치를 실패시킨다.
