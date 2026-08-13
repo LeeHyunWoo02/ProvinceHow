@@ -1,6 +1,19 @@
 HELP.md
-data/
-/scripts
+
+# data/ 는 기본적으로 추적하지 않되, 정적 기준 데이터(시도/시군구/직종코드)는 예외로 추적한다.
+# 새 서버에서 최초 구동할 때 이 4개 CSV 가 없으면 필수 기준 데이터 적재가 불가능하다.
+/data/*
+!/data/static/
+# 수집 배치가 만들어내는 산출물은 추적하지 않고 디렉터리만 유지한다.
+# (git 은 제외된 디렉터리 안으로 내려가지 않으므로 디렉터리를 먼저 되살려야 한다.)
+!/data/generated/
+/data/generated/*
+!/data/generated/.gitkeep
+
+/scripts/*
+# 수집 스크립트는 팀이 공유해야 하므로 추적한다.
+!/scripts/work24/
+
 backend.env
 backend.prod.env
 !backend.env.example
