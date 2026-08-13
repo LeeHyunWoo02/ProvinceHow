@@ -80,7 +80,32 @@
 | Database | MySQL 8 (Docker 컨테이너) |
 | Infra | Oracle Cloud Infrastructure(OCI), Docker Compose, Nginx, Vercel |
 | CI/CD | GitHub Actions |
-| Data Source | 공공데이터포털 API (고용24, 국토교통부, LOCALDATA 등) |
+| Data Source | 공공데이터포털 API (워크넷 채용정보, 국토교통부 실거래가, LOCALDATA), KOSIS 통계 |
+
+---
+
+## 🗂️ 데이터 배치 파이프라인
+
+기준 데이터와 외부 갱신 데이터는 Spring Batch 로 적재한다. 기동 시 `seedMasterJob`
+하나가 FK 순서를 보장하며 9개 Step 을 돌리고, 이후 갱신은 cron 스케줄러가 맡는다.
+
+```bash
+cp backend.env.example backend.env   # 인증키는 나중에 채워도 된다
+docker compose build backend
+docker compose up -d
+```
+
+**인증키가 비어 있어도 서버는 정상 기동한다.** 필수 기준 데이터(시도·시군구·직종코드)만
+적재되고 외부 데이터는 "미적재" 경고와 함께 건너뛴다. 키를 채우고 재기동하면 해당
+배치만 살아난다.
+
+| 문서 | 내용 |
+|------|------|
+| [batch-data-pipeline.md](docs/batch-data-pipeline.md) | **전체 흐름, 실행 주기, 수동 실행·재실행·복구 절차** |
+| [external-api-spec.md](docs/external-api-spec.md) | KOSIS / LOCALDATA / 국토부 공식 스펙 검증 결과 |
+| [worknet-job-api.md](docs/worknet-job-api.md) | 워크넷 채용정보 API, 코드 매핑 정책 |
+| [localdata-infra.md](docs/localdata-infra.md) | 업종 마스터, 지역코드 매핑, ratio/score 계산식 |
+| [work24-crawling-assessment.md](docs/work24-crawling-assessment.md) | 고용24 공개검색 수집 불가 판정 근거 |
 
 ---
 
