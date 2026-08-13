@@ -1,4 +1,4 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.seed;
 
 import SDD.smash.IntegrationTestSupport;
 import org.junit.jupiter.api.DisplayName;

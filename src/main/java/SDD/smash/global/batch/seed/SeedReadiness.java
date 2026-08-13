@@ -1,4 +1,4 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.seed;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

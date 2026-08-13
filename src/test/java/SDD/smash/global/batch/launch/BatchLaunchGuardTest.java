@@ -1,4 +1,6 @@
-package SDD.smash.global.batch;
+package SDD.smash.global.batch.launch;
+
+import SDD.smash.global.batch.seed.SeedStepSpec;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
