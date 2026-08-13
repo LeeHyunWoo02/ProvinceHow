@@ -39,7 +39,10 @@ import static org.assertj.core.api.Assertions.assertThat;
         "sigungu.filePath=src/test/resources/seed/sigungu.csv",
         "jobCodeTop.filePath=src/test/resources/seed/level_top.csv",
         "jobCodeMiddle.filePath=src/test/resources/seed/level_middle.csv",
-        "apis.molit.service-key="
+        "apis.molit.service-key=",
+        // industryStep 은 번들 YAML 마스터를 읽으므로 기본값이면 항상 실행된다.
+        // 이 테스트는 "소스가 하나도 없는 환경" 을 만드는 것이 목적이라 위치도 비운다.
+        "infra.industry-master.location="
 })
 class SeedMasterJobIntegrationTest extends IntegrationTestSupport {
 
