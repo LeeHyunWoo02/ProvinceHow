@@ -42,8 +42,13 @@ import java.util.List;
  *
  * <h2>형식</h2>
  * 인코딩 <b>CP949</b>, 헤더는 한글 컬럼명, 컬럼 집합은 업종마다 다르다.
- * 이 어댑터도 API 어댑터와 같은 세 값만 읽는다 — {@code 관리번호} / {@code 영업상태코드} /
- * {@code 개방자치단체코드}. 헤더 이름으로 위치를 찾으므로 컬럼 순서가 달라도 동작한다.
+ * 이 어댑터도 API 어댑터와 같은 값만 읽는다 — {@code 관리번호} / {@code 영업상태코드} /
+ * {@code 개방자치단체코드} / {@code 지번주소} / {@code 도로명주소}.
+ * 헤더 이름으로 위치를 찾으므로 컬럼 순서가 달라도 동작한다.
+ *
+ * <p>주소 두 컬럼은 <b>선택</b>이다. 없어도 실패시키지 않는다 — 일반구를 두지 않은 자치단체는
+ * 개방자치단체코드만으로 시군구가 확정되기 때문이다. 일반구 시(수원·성남 등)에서 주소가 비면
+ * 그 사업장은 조립 단계에서 매핑 실패로 집계된다.
  */
 @Component
 @Slf4j
@@ -52,6 +57,8 @@ public class LocalDataBulkCsvAdapter implements InfraFacilityProvider {
     static final String HEADER_MANAGEMENT_NO = "관리번호";
     static final String HEADER_STATUS_CODE = "영업상태코드";
     static final String HEADER_ORG_CODE = "개방자치단체코드";
+    static final String HEADER_LOT_ADDRESS = "지번주소";
+    static final String HEADER_ROAD_ADDRESS = "도로명주소";
 
     private static final Charset CP949 = Charset.forName("MS949");
 
@@ -141,6 +148,8 @@ public class LocalDataBulkCsvAdapter implements InfraFacilityProvider {
         int managementNoIndex = indexOf(header, HEADER_MANAGEMENT_NO);
         int statusIndex = indexOf(header, HEADER_STATUS_CODE);
         int orgCodeIndex = indexOf(header, HEADER_ORG_CODE);
+        int lotAddressIndex = indexOf(header, HEADER_LOT_ADDRESS);
+        int roadAddressIndex = indexOf(header, HEADER_ROAD_ADDRESS);
 
         if (managementNoIndex < 0 || statusIndex < 0) {
             throw new LocalDataApiException(
@@ -169,7 +178,8 @@ public class LocalDataBulkCsvAdapter implements InfraFacilityProvider {
                     orgCode = fallbackOrgCode;
                 }
             }
-            facilities.add(new InfraFacility(managementNo, status, orgCode));
+            facilities.add(new InfraFacility(managementNo, status, orgCode,
+                    at(columns, lotAddressIndex), at(columns, roadAddressIndex)));
         }
         return facilities;
     }

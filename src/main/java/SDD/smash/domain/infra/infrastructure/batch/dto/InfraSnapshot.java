@@ -19,6 +19,9 @@ import java.util.List;
  * @param duplicateCount    관리번호 중복으로 버린 사업장 수
  * @param unmappedRegions   시군구 매핑에 실패한 자치단체 수
  * @param unmappedIndustries 업종 마스터에 없어 제외한 외부 서비스 식별자 수
+ * @param districtResolved   일반구 시에서 주소로 하위 구를 찾아 재분배한 사업장 수
+ * @param districtUnresolved 일반구 시인데 주소에서 구를 찾지 못해 <b>제외</b>한 사업장 수.
+ *                           상위 시로 떨어뜨리면 일반구와 이중 집계가 되므로 버린다
  */
 public record InfraSnapshot(List<RegionIndustryStat> rows,
                             int targets,
@@ -27,14 +30,16 @@ public record InfraSnapshot(List<RegionIndustryStat> rows,
                             int filteredOutCount,
                             int duplicateCount,
                             int unmappedRegions,
-                            int unmappedIndustries) {
+                            int unmappedIndustries,
+                            int districtResolved,
+                            int districtUnresolved) {
 
     public InfraSnapshot {
         rows = rows == null ? List.of() : List.copyOf(rows);
     }
 
     public static InfraSnapshot empty() {
-        return new InfraSnapshot(List.of(), 0, 0, 0, 0, 0, 0, 0);
+        return new InfraSnapshot(List.of(), 0, 0, 0, 0, 0, 0, 0, 0, 0);
     }
 
     public boolean isEmpty() {
