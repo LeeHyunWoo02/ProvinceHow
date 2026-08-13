@@ -67,10 +67,10 @@ public class SeedMasterJobConfig {
     @Value("${sigungu.filePath:}")        private String sigunguFilePath;
     @Value("${jobCodeTop.filePath:}")     private String jobCodeTopFilePath;
     @Value("${jobCodeMiddle.filePath:}")  private String jobCodeMiddleFilePath;
-    @Value("${population.filePath:}")     private String populationFilePath;
+    @Value("${apis.kosis.api-key:}")     private String kosisApiKey;
     @Value("${industry.filePath:}")       private String industryFilePath;
     @Value("${infra.filePath:}")          private String infraFilePath;
-    @Value("${jobCount.filePath:}")       private String jobCountFilePath;
+    @Value("${apis.datagokr.service-key:}") private String dataGoKrServiceKey;
     @Value("${apis.molit.service-key:}")  private String molitServiceKey;
 
     @Value("${seed.jobs.sido.enabled:true}")             private boolean sidoEnabled;
@@ -111,7 +111,7 @@ public class SeedMasterJobConfig {
                 configs("jobCodeMiddle.filePath", jobCodeMiddleFilePath), List.of(JOB_CODE_TOP), JOB_CODE_MIDDLE));
 
         specs.add(new SeedStepSpec("populationStep", SeedGroup.EXTERNAL, populationEnabled, BASE_MONTH,
-                configs("population.filePath", populationFilePath), List.of(SIGUNGU), null));
+                configs("apis.kosis.api-key", kosisApiKey), List.of(SIGUNGU), null));
 
         specs.add(new SeedStepSpec("industryStep", SeedGroup.EXTERNAL, industryEnabled, BASE_DATE,
                 configs("industry.filePath", industryFilePath), List.of(), null));
@@ -120,7 +120,7 @@ public class SeedMasterJobConfig {
                 configs("infra.filePath", infraFilePath), List.of(SIGUNGU, INDUSTRY), null));
 
         specs.add(new SeedStepSpec("jobCountStep", SeedGroup.EXTERNAL, jobCountEnabled, BASE_DATE,
-                configs("jobCount.filePath", jobCountFilePath), List.of(SIGUNGU, JOB_CODE_MIDDLE), null));
+                configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, JOB_CODE_MIDDLE), null));
 
         specs.add(new SeedStepSpec("dwellingStep", SeedGroup.EXTERNAL, dwellingEnabled, BASE_MONTH,
                 configs("apis.molit.service-key", molitServiceKey), List.of(SIGUNGU), null));
