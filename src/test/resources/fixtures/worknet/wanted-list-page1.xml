@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wantedRoot>
+    <total>3</total>
+    <startPage>1</startPage>
+    <display>2</display>
+    <wanted>
+        <wantedAuthNo>KJAU002608130001</wantedAuthNo>
+        <company>가나다케어</company>
+        <title>[재가요양보호사 모집] 종로</title>
+        <regionCd>11110</regionCd>
+        <jobsCd>011</jobsCd>
+        <regDt>2026-08-13</regDt>
+        <closeDt>2026-10-12</closeDt>
+    </wanted>
+    <wanted>
+        <wantedAuthNo>KJAU002608130002</wantedAuthNo>
+        <company>라마바물류</company>
+        <title>물류센터 상하차</title>
+        <regionCd>11140,11170</regionCd>
+        <jobsCd>011,012</jobsCd>
+        <regDt>2026-08-13</regDt>
+        <closeDt>2026-09-30</closeDt>
+    </wanted>
+</wantedRoot>
