@@ -20,15 +20,24 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * 직종 대분류 시드 배치. As-Is {@code JobCodeTopBatch} 를 옮긴 것이다.
  *
- * <p>Job 이름("jcTopJob")과 빈 이름, chunk 크기, CSV 인코딩({@code MS949})을 그대로 유지한다.
- * {@code BatchGuard} 가 Job 이름으로 재실행 여부를 판단하고 Runner 가 {@code @Qualifier} 로 찾는다.
+ * <p>Job 이름("jcTopJob")과 빈 이름, chunk 크기를 그대로 유지한다.
+ * Step 빈 이름("jcTopStep")은 {@code seedMasterJob} 이 {@code @Qualifier} 로 찾고
+ * {@code BatchGuard} 가 STEP_NAME 으로 재실행 여부를 판단하므로 바꾸지 않는다.
+ *
+ * <p>CSV 는 <b>UTF-8(BOM 없음)</b> 이며 표준 CSV 큰따옴표를 그대로 해석한다.
+ * 열 개수가 어긋난 행은 skip 하지 않고 {@code FlatFileParseException} 으로 배치를 실패시킨다.
  */
 @Slf4j
 @Configuration
 public class JobCodeTopBatchConfig {
+
+    /** {@code code,name} */
+    private static final int TOP_COLUMN_COUNT = 2;
 
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
@@ -68,17 +77,23 @@ public class JobCodeTopBatchConfig {
         return new FlatFileItemReaderBuilder<JobCodeTopCsvRow>()
                 .name("jcTopCsvReader")
                 .resource(new FileSystemResource(filePath))
-                .encoding("MS949")
+                .encoding(StandardCharsets.UTF_8.name())
                 .linesToSkip(1)
                 .skippedLinesCallback(line -> log.info("Skip header : {}", line))
                 .strict(true)
                 .delimited()
                 .delimiter(",")
-                .quoteCharacter('\0')
-                .names("jobCode", "name")
-                .fieldSetMapper(fieldSet -> new JobCodeTopCsvRow(
-                        fieldSet.readString(0).trim(),
-                        fieldSet.readString(1).trim()))
+                .names("code", "name")
+                .fieldSetMapper(fieldSet -> {
+                    if (fieldSet.getFieldCount() != TOP_COLUMN_COUNT) {
+                        throw new IllegalArgumentException(
+                                "직종 대분류 CSV 는 %d 개 열이어야 한다. 실제=%d"
+                                        .formatted(TOP_COLUMN_COUNT, fieldSet.getFieldCount()));
+                    }
+                    return new JobCodeTopCsvRow(
+                            fieldSet.readString(0).trim(),
+                            fieldSet.readString(1).trim());
+                })
                 .build();
     }
 

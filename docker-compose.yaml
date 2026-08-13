@@ -11,7 +11,10 @@ services:
     env_file:
       - ./backend.env
     volumes:
-      - ./data:/app/data:ro
+      # 정적 기준 데이터(시도/시군구/직종코드)는 사람이 관리하는 원본이라 읽기 전용이다.
+      - ./data/static:/app/data/static:ro
+      # 수집 배치가 생성하는 CSV/메타데이터는 컨테이너가 써야 하므로 쓰기 가능해야 한다.
+      - ./data/generated:/app/data/generated
     depends_on:
       mysql:
         condition: service_healthy

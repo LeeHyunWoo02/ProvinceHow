@@ -15,6 +15,7 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
@@ -53,6 +54,7 @@ public class JobCountBatchConfig {
     private final JobCodeMiddleJpaRepository jobCodeMiddleJpaRepository;
     private final AddressQueryService addressQueryService;
     private final JobScoreCacheCleaner jobScoreCacheCleaner;
+    private final WorknetJobCountItemReader worknetJobCountItemReader;
     private final @Qualifier("dataDBSource") DataSource dataDataSource;
 
     private Set<String> sigunguCodeCache = null;
@@ -81,6 +83,13 @@ public class JobCountBatchConfig {
     @Value("${jobCount.filePath}")
     private String filePath;
 
+    /**
+     * 적재 소스 스위치. 기본은 <b>워크넷 채용정보 API</b> 다.
+     * {@code false} 로 두면 예전 {@code jobCount.filePath} CSV 경로로 되돌아간다(레거시 옵션).
+     */
+    @Value("${worknet.job.batch.enabled:true}")
+    private boolean worknetApiEnabled;
+
     @Bean
     public Job jobCountJob() {
         return new JobBuilder("jobCountJob", jobRepository)
@@ -94,10 +103,25 @@ public class JobCountBatchConfig {
 
         return new StepBuilder("jobCountStep", jobRepository)
                 .<JobCountCsvRow, JobCountUpsertRow> chunk(1000, platformTransactionManager)
-                .reader(jobCountCsvReader())
+                .reader(jobCountSourceReader())
                 .processor(jobCountCsvProcessor())
                 .writer(jobCountWriter())
                 .build();
+    }
+
+    /**
+     * Reader 만 갈아끼운다. Processor(시군구/직종 FK 검증)와 Writer(Upsert SQL)는 두 경로가 공유한다.
+     *
+     * <p>빈으로 등록하지 않는다 — 두 Reader 중 하나만 Step 에 들어가야 하고,
+     * 빈이 되면 쓰이지 않는 쪽까지 컨텍스트에 남아 오해를 만든다.
+     */
+    private ItemReader<JobCountCsvRow> jobCountSourceReader() {
+        if (worknetApiEnabled) {
+            log.info("[jobCountStep] 적재 소스 = 워크넷 채용정보 API");
+            return worknetJobCountItemReader;
+        }
+        log.info("[jobCountStep] 적재 소스 = 레거시 CSV (worknet.job.batch.enabled=false)");
+        return jobCountCsvReader();
     }
 
     @Bean

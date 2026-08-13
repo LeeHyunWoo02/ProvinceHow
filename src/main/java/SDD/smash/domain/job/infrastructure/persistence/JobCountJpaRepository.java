@@ -1,5 +1,6 @@
 package SDD.smash.domain.job.infrastructure.persistence;
 
+import SDD.smash.domain.job.infrastructure.persistence.projection.JobCountKeyRow;
 import SDD.smash.domain.job.infrastructure.persistence.projection.RegionJobCountRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -41,6 +42,20 @@ public interface JobCountJpaRepository extends JpaRepository<JobCountJpaEntity, 
             WHERE j.sigunguCode = :sigunguCode
             """)
     Long sumCountBySigunguCode(@Param("sigunguCode") String sigunguCode);
+
+    /**
+     * 이미 적재된 (시군구, 직종중분류) 키 전량.
+     *
+     * <p>스냅샷 교체 배치가 "이번 스냅샷에서 사라진 조합"을 0 으로 내리는 데 쓴다.
+     */
+    @Query("""
+            SELECT new SDD.smash.domain.job.infrastructure.persistence.projection.JobCountKeyRow(
+                j.sigunguCode,
+                j.jobCodeMiddleCode
+            )
+            FROM JobCountJpaEntity j
+            """)
+    List<JobCountKeyRow> findAllKeys();
 
     /** 단일 행 조회. 적재된 행이 없으면 비어 있다. */
     @Query("""
