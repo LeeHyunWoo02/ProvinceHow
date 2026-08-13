@@ -9,6 +9,21 @@
 
 백엔드 전용 Spring Boot API 서버. Java 17, Gradle wrapper.
 
+## 패키지 구조
+
+```
+SDD.smash.domain.<context>.<layer>   바운디드 컨텍스트: address, job, dwelling, infra,
+                                     support, recommendation
+                                     계층: domain / application / infrastructure / presentation
+SDD.smash.global.<area>              컨텍스트가 아닌 공통 기반:
+                                     domain.model(공유 커널 값 객체),
+                                     exception[.handler], config, security, batch, util
+```
+
+`SDD.smash.domain.dwelling.domain.model` 처럼 `domain`이 두 번 나오는 점에 주의한다.
+앞의 `domain`은 컨텍스트를 묶는 디렉터리일 뿐이고, 뒤의 `domain`이 헥사고날의 domain 계층이다.
+"domain에 JPA import 금지" 같은 규칙은 뒤쪽을 가리킨다.
+
 ## AI 에이전트 중요 규칙
 
 사용자가 명시적으로 요청하지 않은 코드베이스 변경이나 작업을 수행하지 않는다.
@@ -18,22 +33,28 @@
 
 | 대상 | 규칙 파일 |
 | --- | --- |
-| 공통 아키텍처, 의존 방향, Contract, messaging | `.claude/skills/architecture-conventions/SKILL.md` |
-| 명명 규칙, 공통 기반, DTO, Controller/Service | `.claude/skills/backend-conventions/SKILL.md` |
-| Entity, Enum, Repository Port/Adapter, QueryDSL, 페이지네이션·정렬, N+1 | `.claude/skills/persistence-conventions/SKILL.md` |
-| 응답 봉투, `ErrorCode`, 예외 처리, Swagger | `.claude/skills/global-conventions/SKILL.md` |
+| 바운디드 컨텍스트, 4계층과 의존 방향, Aggregate, 포트 설계, 패키지 배치 | `.claude/skills/architecture-conventions/SKILL.md` |
+| 도메인 모델, Policy, 유스케이스, 컨트롤러, 테스트 전략 | `.claude/skills/backend-conventions/SKILL.md` |
+| JPA 엔티티, Repository 포트/어댑터, JPQL 프로젝션, 트랜잭션 경계, 배치 Upsert | `.claude/skills/persistence-conventions/SKILL.md` |
+| 패키지·클래스 명명, 유비쿼터스 언어, `DomainException`/`ErrorCode`, DTO 분리, 로깅 | `.claude/skills/global-conventions/SKILL.md` |
+| Redis 캐시·저장소 포트, 키 네이밍, TTL, 무효화 | `.claude/skills/redis-conventions/SKILL.md` |
+| 시드 CSV, Spring Batch 시드 잡, `@Order`, `BatchGuard`, 재적재 절차 | `.claude/skills/seed-data/SKILL.md` |
 
 위 대상의 작업을 할 때 해당 규칙 파일을 먼저 확인한다. 여러 영역에 걸친 작업은
-`architecture-conventions`도 함께 확인한다. 이 프로젝트는 Domain-Driven-Development(DDD)다
-(각 도메인 내부는 3계층, 도메인 간은 `{Domain}Contract` 또는 `global/messaging`으로만,
-Business 계층 없음).
+`architecture-conventions`도 함께 확인한다.
+
+이 프로젝트는 DDD 헥사고날(포트 & 어댑터) 구조다. 각 바운디드 컨텍스트는 최대 4계층
+(`domain`, `application`, `infrastructure`, `presentation`)을 가지며 의존은 항상 안쪽으로만
+흐른다(`presentation`/`infrastructure` → `application` → `domain`). 컨텍스트 간 호출은
+대상 컨텍스트의 `application/port/in` 유스케이스 인터페이스를 통하고, 컨텍스트가 직접
+공유하는 것은 `SDD.smash.global.domain.model`의 값 객체뿐이다.
 
 ## 에이전트 라우팅
 
 | 역할 | 파일 | 권한 |
 | --- | --- | --- |
-| backend-developer | `.claude/agents/backend-developer.md` | 할당된 범위의 유일한 작성자. 새 기능을 목표 DDD 구조로 바로 구현한다 |
-| ddd-refactorer | `.claude/agents/ddd-refactorer.md` | 기존 레이어드 코드를 DDD 헥사고날 구조로 이관하는 유일한 작성자. 구조만 옮기고 동작은 바꾸지 않는다 |
+| backend-developer | `.claude/agents/backend-developer.md` | 할당된 범위의 유일한 작성자. 새 기능을 DDD 헥사고날 구조로 구현한다 |
+| code-reviewer | `.claude/agents/code-reviewer.md` | 읽기 전용. 변경 파일을 DDD 아키텍처·프로젝트 규칙과 대조해 리뷰하며 코드를 수정하지 않는다 |
 
 
 ## 일반 규칙

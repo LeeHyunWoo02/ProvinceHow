@@ -10,6 +10,21 @@ settle in and relocate to local areas.
 
 Backend-only Spring Boot API server. Java 17, Gradle wrapper.
 
+## Package Structure
+
+```
+SDD.smash.domain.<context>.<layer>   Bounded contexts: address, job, dwelling, infra,
+                                     support, recommendation
+                                     Layers: domain / application / infrastructure / presentation
+SDD.smash.global.<area>              Shared foundation, not a context:
+                                     domain.model (shared-kernel value objects),
+                                     exception[.handler], config, security, batch, util
+```
+
+Note that `domain` appears twice in a package such as `SDD.smash.domain.dwelling.domain.model`.
+The first is only a grouping directory for contexts; the second is the hexagonal domain layer.
+Rules like "no JPA imports in domain" refer to the second one.
+
 ## Critical Rules for AI Agents
 
 Do not make codebase changes or perform work that the user has not explicitly requested.
@@ -19,22 +34,29 @@ Follow the user's instructions strictly; do not make proactive modifications or 
 
 | Scope | Rules file |
 | --- | --- |
-| Shared architecture, dependency direction, Contract, messaging | `.claude/skills/architecture-conventions/SKILL.md` |
-| Naming conventions, shared foundations, DTOs, Controllers/Services | `.claude/skills/backend-conventions/SKILL.md` |
-| Entities, Enums, Repository Ports/Adapters, QueryDSL, pagination/sorting, N+1 | `.claude/skills/persistence-conventions/SKILL.md` |
-| Response envelope, `ErrorCode`, exception handling, Swagger | `.claude/skills/global-conventions/SKILL.md` |
+| Bounded contexts, the four layers and dependency direction, Aggregates, port design, package layout | `.claude/skills/architecture-conventions/SKILL.md` |
+| Domain models, Policies, use cases, controllers, test strategy | `.claude/skills/backend-conventions/SKILL.md` |
+| JPA entities, Repository ports/adapters, JPQL projections, transaction boundaries, batch upserts | `.claude/skills/persistence-conventions/SKILL.md` |
+| Package/class naming, ubiquitous language, `DomainException`/`ErrorCode`, DTO separation, logging | `.claude/skills/global-conventions/SKILL.md` |
+| Cache and repository ports over Redis, key naming, TTL, invalidation | `.claude/skills/redis-conventions/SKILL.md` |
+| Seed CSV files, Spring Batch seed jobs, `@Order`, `BatchGuard`, reload procedure | `.claude/skills/seed-data/SKILL.md` |
 
 Read the relevant rules file before working in its scope. For work spanning multiple
-areas, also read `architecture-conventions`. This project follows Domain-Driven Design
-(DDD): each domain has three layers; cross-domain communication is allowed only through
-`{Domain}Contract` or `global/messaging`; there is no Business layer.
+areas, also read `architecture-conventions`.
+
+This project follows Domain-Driven Design with a hexagonal (ports & adapters) structure.
+Each bounded context has up to four layers — `domain`, `application`, `infrastructure`,
+`presentation` — and dependencies only ever point inward
+(`presentation`/`infrastructure` → `application` → `domain`). Cross-context calls go
+through the target context's `application/port/in` use-case interface; the only thing
+contexts share directly is the value objects in `SDD.smash.global.domain.model`.
 
 ## Agent Routing
 
 | Role | File | Authority |
 | --- | --- | --- |
-| backend-developer | `.claude/agents/backend-developer.md` | Sole writer for its assigned scope. Implements new features directly in the target DDD structure |
-| ddd-refactorer | `.claude/agents/ddd-refactorer.md` | Sole writer for migrating existing layered code to the DDD hexagonal structure. Moves structure only, never changes behavior |
+| backend-developer | `.claude/agents/backend-developer.md` | Sole writer for its assigned scope. Implements new features in the DDD hexagonal structure |
+| code-reviewer | `.claude/agents/code-reviewer.md` | Read-only. Reviews changed files against the DDD architecture and project conventions; never edits code |
 
 ## General Rules
 
