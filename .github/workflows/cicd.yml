@@ -79,5 +79,5 @@ jobs:
           fi
 
 # 배포(deploy) job은 제거된 상태다. 기존 job은 AWS EC2에 SSH로 붙어 docker run 하는 방식이었고,
-# 운영 환경이 OCI(docker-compose.prod.yaml)로 바뀌면서 더 이상 유효하지 않다.
+# 운영 환경이 OCI의 단일 docker-compose.yaml 구성으로 바뀌면서 더 이상 유효하지 않다.
 # OCI 배포는 추후 별도로 작성한다. 현재 이 워크플로는 이미지 빌드/푸시까지만 수행한다.
