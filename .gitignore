@@ -55,3 +55,6 @@ out/
 
 ### VS Code ###
 .vscode/
+
+# 고용24 수집 산출물은 저작권정책상 재배포가 금지되므로 추적하지 않는다.
+/src/test/resources/fixtures/work24/
