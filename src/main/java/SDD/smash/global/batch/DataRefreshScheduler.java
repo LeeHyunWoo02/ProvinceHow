@@ -1,5 +1,6 @@
 package SDD.smash.global.batch;
 
+import SDD.smash.domain.dwelling.application.DwellingBaseMonthService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.JobParameters;
@@ -9,8 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,36 +29,38 @@ import java.util.Map;
  *   <tr><th>대상</th><th>on/off</th><th>주기</th><th>기본 주기</th></tr>
  *   <tr><td>인구</td><td>{@code POPULATION_BATCH_ENABLED}</td><td>{@code POPULATION_BATCH_CRON}</td><td>월 1회</td></tr>
  *   <tr><td>지역 인프라(LOCALDATA)</td><td>{@code LOCALDATA_BATCH_ENABLED}</td><td>{@code LOCALDATA_BATCH_CRON}</td><td>일 1회</td></tr>
- *   <tr><td>일자리 수(work24)</td><td>{@code WORK24_CRAWLER_ENABLED}</td><td>{@code WORK24_CRAWLER_CRON}</td><td>일 1회</td></tr>
+ *   <tr><td>일자리 수(워크넷 API)</td><td>{@code WORKNET_JOB_BATCH_ENABLED}</td><td>{@code WORKNET_JOB_BATCH_CRON}</td><td>일 1회</td></tr>
  *   <tr><td>전월세</td><td>{@code DWELLING_BATCH_ENABLED}</td><td>{@code DWELLING_BATCH_CRON}</td><td>월 1회</td></tr>
  * </table>
  *
  * <p><b>확장 지점</b> — Job 을 빈 이름이 아니라 {@link Job#getName()} 으로 찾는다.
- * 아직 구현되지 않은 배치(인구 API, LOCALDATA 수집, work24 크롤러)는 같은 이름의 {@code Job} 빈만
+ * 아직 구현되지 않은 배치(LOCALDATA 수집 등)는 같은 이름의 {@code Job} 빈만
  * 등록하면 이 스케줄러가 그대로 집어간다. Job 이 없으면 경고만 남기고 넘어간다 — 기동을 막지 않는다.
  */
 @Component
 @Slf4j
 public class DataRefreshScheduler {
 
-    private static final DateTimeFormatter BASE_MONTH_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
 
     private final Map<String, Job> jobsByName;
     private final BatchLaunchGuard batchLaunchGuard;
 
     @Value("${population.batch.enabled:false}") private boolean populationEnabled;
     @Value("${localdata.batch.enabled:false}")  private boolean localdataEnabled;
-    @Value("${work24.crawler.enabled:false}")   private boolean work24Enabled;
+    @Value("${worknet.job.batch.enabled:false}") private boolean worknetJobEnabled;
     @Value("${dwelling.batch.enabled:false}")   private boolean dwellingEnabled;
 
-    @Value("${dwelling.dealYmd:}") private String dealYmdOverride;
-    @Value("${dwelling.months:12}") private long dwellingMonths;
+    private final DwellingBaseMonthService dwellingBaseMonthService;
 
-    public DataRefreshScheduler(List<Job> jobs, BatchLaunchGuard batchLaunchGuard) {
+    public DataRefreshScheduler(List<Job> jobs, BatchLaunchGuard batchLaunchGuard,
+                                DwellingBaseMonthService dwellingBaseMonthService) {
         Map<String, Job> byName = new LinkedHashMap<>();
         jobs.forEach(job -> byName.put(job.getName(), job));
         this.jobsByName = byName;
         this.batchLaunchGuard = batchLaunchGuard;
+        this.dwellingBaseMonthService = dwellingBaseMonthService;
     }
 
     /** 인구 — 월 1회. */
@@ -76,9 +78,9 @@ public class DataRefreshScheduler {
     }
 
     /** 일자리 수 — 일 1회. */
-    @Scheduled(cron = "${work24.crawler.cron:0 40 5 * * *}")
+    @Scheduled(cron = "${worknet.job.batch.cron:0 0 3 * * *}")
     public void refreshJobCount() {
-        run("jobCountJob", work24Enabled, "WORK24_CRAWLER_ENABLED", baseDateParameters());
+        run("jobCountJob", worknetJobEnabled, "WORKNET_JOB_BATCH_ENABLED", baseDateParameters());
     }
 
     /** 전월세 — 월 1회. */
@@ -86,7 +88,7 @@ public class DataRefreshScheduler {
     public void refreshDwelling() {
         JobParameters parameters = new JobParametersBuilder()
                 .addString(SeedStepSpec.BASE_MONTH, baseMonth())
-                .addLong("months", dwellingMonths, false)
+                .addLong("months", (long) dwellingBaseMonthService.lookbackMonths(), false)
                 .toJobParameters();
         run("dwellingJob", dwellingEnabled, "DWELLING_BATCH_ENABLED", parameters);
     }
@@ -107,7 +109,7 @@ public class DataRefreshScheduler {
 
     private JobParameters baseDateParameters() {
         return new JobParametersBuilder()
-                .addString(SeedStepSpec.BASE_DATE, LocalDate.now().toString())
+                .addString(SeedStepSpec.BASE_DATE, LocalDate.now(SEOUL).toString())
                 .toJobParameters();
     }
 
@@ -117,10 +119,8 @@ public class DataRefreshScheduler {
                 .toJobParameters();
     }
 
+    /** 오버라이드 → 확정 지연 적용 → 확정 0건이면 직전 달 fallback. 자세한 규칙은 {@link DwellingBaseMonthService}. */
     private String baseMonth() {
-        if (dealYmdOverride != null && !dealYmdOverride.isBlank()) {
-            return dealYmdOverride.trim();
-        }
-        return YearMonth.now().format(BASE_MONTH_FORMAT);
+        return dwellingBaseMonthService.resolveBaseMonthText();
     }
 }

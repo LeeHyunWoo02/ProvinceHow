@@ -1,5 +1,6 @@
 package SDD.smash.global.batch;
 
+import SDD.smash.domain.dwelling.application.DwellingBaseMonthService;
 import SDD.smash.global.config.SeedProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.BatchStatus;
@@ -14,8 +15,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,7 +48,8 @@ import java.util.Map;
 @Slf4j
 public class SeedMasterJobLauncher {
 
-    private static final DateTimeFormatter BASE_MONTH_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     private static final String UNSPECIFIED_SEED_VERSION = "unspecified";
 
     private final Job seedMasterJob;
@@ -58,9 +59,9 @@ public class SeedMasterJobLauncher {
     private final SeedReadiness seedReadiness;
     private final SeedProperties seedProperties;
 
+    private final DwellingBaseMonthService dwellingBaseMonthService;
+
     private final boolean enabled;
-    private final String dealYmdOverride;
-    private final long dwellingMonths;
 
     public SeedMasterJobLauncher(@Qualifier(SeedMasterJobConfig.SEED_MASTER_JOB) Job seedMasterJob,
                                  SeedMasterJobListener seedMasterJobListener,
@@ -68,18 +69,16 @@ public class SeedMasterJobLauncher {
                                  BatchGuard batchGuard,
                                  SeedReadiness seedReadiness,
                                  SeedProperties seedProperties,
-                                 @Value("${seed.master.enabled:true}") boolean enabled,
-                                 @Value("${dwelling.dealYmd:}") String dealYmdOverride,
-                                 @Value("${dwelling.months:12}") long dwellingMonths) {
+                                 DwellingBaseMonthService dwellingBaseMonthService,
+                                 @Value("${seed.master.enabled:true}") boolean enabled) {
         this.seedMasterJob = seedMasterJob;
         this.seedMasterJobListener = seedMasterJobListener;
         this.batchLaunchGuard = batchLaunchGuard;
         this.batchGuard = batchGuard;
         this.seedReadiness = seedReadiness;
         this.seedProperties = seedProperties;
+        this.dwellingBaseMonthService = dwellingBaseMonthService;
         this.enabled = enabled;
-        this.dealYmdOverride = dealYmdOverride;
-        this.dwellingMonths = dwellingMonths;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -122,7 +121,7 @@ public class SeedMasterJobLauncher {
     private Map<String, String> identifyingParameters() {
         Map<String, String> parameters = new LinkedHashMap<>();
         parameters.put(SeedStepSpec.SEED_VERSION, seedVersion());
-        parameters.put(SeedStepSpec.BASE_DATE, LocalDate.now().toString());
+        parameters.put(SeedStepSpec.BASE_DATE, LocalDate.now(SEOUL).toString());
         parameters.put(SeedStepSpec.BASE_MONTH, baseMonth());
         return parameters;
     }
@@ -130,7 +129,7 @@ public class SeedMasterJobLauncher {
     private JobParameters jobParameters(Map<String, String> identifying) {
         JobParametersBuilder builder = new JobParametersBuilder();
         identifying.forEach(builder::addString);
-        builder.addLong("months", dwellingMonths, false);
+        builder.addLong("months", (long) dwellingBaseMonthService.lookbackMonths(), false);
         return builder.toJobParameters();
     }
 
@@ -145,15 +144,18 @@ public class SeedMasterJobLauncher {
     }
 
     /**
-     * 전월세·인구의 기준월. 오버라이드가 비어 있으면 이번 달이다.
+     * 전월세·인구의 기준월. {@code DWELLING_DEAL_YMD_OVERRIDE} 가 비어 있으면
+     * Asia/Seoul 현재월에서 확정 지연({@code dwelling.confirmedLagMonths}) 만큼 물러난 달을 쓰고,
+     * 그 달이 확정 0건이면 직전 달로 fallback 한다.
      *
-     * <p>실제 기준월 자동 계산(국토부 공개 시점 보정 등)은 별도 작업이다.
-     * 여기서는 <b>오버라이드가 비어 있어도 애플리케이션이 뜨는 것</b>까지만 보장한다.
+     * <p>fallback 판정은 국토부 API 를 1~4회 탐침한다. 탐침이 실패하거나
+     * {@code dwelling.baseMonthProbe.enabled=false} 면 지연만 적용한 값으로 떨어지므로
+     * 외부 API 가 죽어 있어도 기동을 막지 않는다.
+     *
+     * <p>인구도 같은 기준월을 쓴다. 인구 출처(KOSIS)의 확정 시점은 국토부와 다르므로,
+     * 인구 API 배치가 붙으면 기준월을 분리할지 재검토해야 한다.
      */
     private String baseMonth() {
-        if (dealYmdOverride != null && !dealYmdOverride.isBlank()) {
-            return dealYmdOverride.trim();
-        }
-        return YearMonth.now().format(BASE_MONTH_FORMAT);
+        return dwellingBaseMonthService.resolveBaseMonthText();
     }
 }

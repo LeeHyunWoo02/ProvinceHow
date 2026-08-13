@@ -1,6 +1,8 @@
 package SDD.smash.global.batch;
 
 import SDD.smash.IntegrationTestSupport;
+import SDD.smash.domain.address.domain.model.PopulationSnapshot;
+import SDD.smash.domain.address.domain.port.PopulationSnapshotProvider;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import SDD.smash.domain.dwelling.domain.port.RentRecordProvider;
 import org.junit.jupiter.api.DisplayName;
@@ -16,7 +18,10 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import SDD.smash.global.domain.model.SigunguCode;
+
 import javax.sql.DataSource;
+import java.time.YearMonth;
 import java.util.Comparator;
 import java.util.List;
 
@@ -32,7 +37,8 @@ import static org.mockito.BDDMockito.given;
  * 이었다. 개발자 PC(Windows/macOS)의 MySQL 은 {@code lower_case_table_names=1} 이라 통과하지만
  * 리눅스 컨테이너에서는 "table doesn't exist" 로 실패한다. 여기서 그 경로를 실제로 지난다.
  *
- * <p>국토부 API 는 {@link RentRecordProvider} 포트를 대역으로 바꿔 호출하지 않는다.
+ * <p>국토부 API({@link RentRecordProvider})와 KOSIS API({@link PopulationSnapshotProvider})는
+ * 포트를 대역으로 바꿔 호출하지 않는다.
  */
 @TestPropertySource(properties = {
         "seed.master.enabled=false",
@@ -40,7 +46,8 @@ import static org.mockito.BDDMockito.given;
         "sigungu.filePath=src/test/resources/seed/sigungu.csv",
         "jobCodeTop.filePath=src/test/resources/seed/level_top.csv",
         "jobCodeMiddle.filePath=src/test/resources/seed/level_middle.csv",
-        "population.filePath=src/test/resources/seed/population.csv"
+        // 인구는 CSV 가 아니라 KOSIS API 다. 게이트를 열기 위한 더미 키이고, 포트는 아래에서 대역으로 바꾼다.
+        "apis.kosis.api-key=test-key"
 })
 class SeedMasterExternalUpsertIntegrationTest extends IntegrationTestSupport {
 
@@ -58,9 +65,23 @@ class SeedMasterExternalUpsertIntegrationTest extends IntegrationTestSupport {
     @MockitoBean
     private RentRecordProvider rentRecordProvider;
 
+    @MockitoBean
+    private PopulationSnapshotProvider populationSnapshotProvider;
+
     @Test
     @DisplayName("인구·전월세 Upsert 가 소문자 테이블에 적재되고 기준월이 바뀌어도 중복 행이 생기지 않는다")
     void upsertsExternalDataWithoutDuplicatingRows() {
+        given(populationSnapshotProvider.isAvailable()).willReturn(true);
+        given(populationSnapshotProvider.fetchLatestNotAfter(any())).willAnswer(invocation -> {
+            YearMonth month = invocation.getArgument(0);
+            return List.of(
+                    PopulationSnapshot.of(SigunguCode.of("11110"), 141_000, month),
+                    PopulationSnapshot.of(SigunguCode.of("11140"), 120_000, month),
+                    PopulationSnapshot.of(SigunguCode.of("26110"), 44_000, month));
+        });
+        given(populationSnapshotProvider.fetch(any())).willAnswer(invocation ->
+                populationSnapshotProvider.fetchLatestNotAfter(invocation.getArgument(0)));
+
         given(rentRecordProvider.fetch(any(), any())).willReturn(List.of(
                 new RentRecord("테스트아파트", "1-1", 20_000, 0),
                 new RentRecord("테스트아파트", "1-2", 5_000, 70)));

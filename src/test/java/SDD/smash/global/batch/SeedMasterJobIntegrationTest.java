@@ -85,7 +85,7 @@ class SeedMasterJobIntegrationTest extends IntegrationTestSupport {
         Map<String, String> skipReasons = skipReasons(execution);
         assertThat(skipReasons).containsKeys(EXTERNAL_STEPS.toArray(new String[0]));
         assertThat(skipReasons.get("dwellingStep")).contains("apis.molit.service-key");
-        assertThat(skipReasons.get("populationStep")).contains("population.filePath");
+        assertThat(skipReasons.get("populationStep")).contains("apis.kosis.api-key");
     }
 
     @Test
