@@ -1,9 +1,9 @@
 package SDD.smash.domain.address.infrastructure.batch;
 
-import SDD.smash.domain.address.infrastructure.batch.dto.PopulationCsvRow;
+import SDD.smash.domain.address.application.PopulationCollectService;
+import SDD.smash.domain.address.application.dto.PopulationCollectionInfo;
+import SDD.smash.domain.address.domain.model.PopulationSnapshot;
 import SDD.smash.domain.address.infrastructure.batch.dto.PopulationUpsertRow;
-import SDD.smash.domain.address.infrastructure.persistence.SigunguJpaEntity;
-import SDD.smash.domain.address.infrastructure.persistence.SigunguJpaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
@@ -13,25 +13,21 @@ import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.support.IteratorItemReader;
 import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
-import org.springframework.batch.item.file.FlatFileItemReader;
-import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 
-import static SDD.smash.global.util.BatchTextUtil.digitsOnly;
-import static SDD.smash.global.util.BatchTextUtil.isBlank;
-import static SDD.smash.global.util.BatchTextUtil.normalize;
 
 /**
  * 인구 시드 배치. As-Is {@code PopulationBatch} 를 옮긴 것이다.
@@ -48,77 +44,59 @@ import static SDD.smash.global.util.BatchTextUtil.normalize;
 @RequiredArgsConstructor
 public class PopulationBatchConfig {
 
+    private static final DateTimeFormatter BASE_MONTH_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
+
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
-    private final SigunguJpaRepository sigunguJpaRepository;
+    private final PopulationCollectService populationCollectService;
     private final @Qualifier("dataDBSource") DataSource dataDataSource;
 
-    private Set<String> sigunguCodeCache = null;
 
-    private boolean isKnownSigunguCode(String code) {
-        if (sigunguCodeCache == null) {
-            sigunguCodeCache = sigunguJpaRepository.findAll()
-                    .stream()
-                    .map(SigunguJpaEntity::getSigunguCode)
-                    .collect(Collectors.toSet());
-        }
-        return sigunguCodeCache.contains(code);
-    }
-
-    @Value("${population.filePath}")
-    private String filePath;
 
     @Bean
-    public Job PopulationJob() {
+    public Job PopulationJob(Step populationStep) {
         return new JobBuilder("PopulationJob", jobRepository)
-                .start(populationStep())
+                .start(populationStep)
                 .build();
     }
 
     @Bean
-    public Step populationStep() {
+    public Step populationStep(ItemReader<PopulationSnapshot> populationApiReader) {
 
         return new StepBuilder("populationStep", jobRepository)
-                .<PopulationCsvRow, PopulationUpsertRow> chunk(100, platformTransactionManager)
-                .reader(populationCsvReader())
-                .processor(populationCsvProcessor())
+                .<PopulationSnapshot, PopulationUpsertRow> chunk(100, platformTransactionManager)
+                .reader(populationApiReader)
+                .processor(populationApiProcessor())
                 .writer(populationWriter())
                 .build();
     }
 
+    /**
+     * KOSIS 인구 API 를 한 번 호출해 그 달치 시군구 스냅샷을 읽는다.
+     *
+     * <p>KOSIS 에는 페이지네이션 파라미터가 없다. 대신 "기준월 1개 = 요청 1회" 로 쪼개
+     * 메모리에 올라오는 것은 항상 한 달치(시군구 약 250건)뿐이다.
+     *
+     * <p>인증키가 없거나 해당 월 자료가 없으면 <b>빈 목록</b>이 온다 — Step 은 0건으로 정상 종료하고
+     * 기존 인구 데이터는 그대로 보존된다. 빈 키로 API 를 호출하지 않는다.
+     */
     @Bean
     @StepScope
-    public FlatFileItemReader<PopulationCsvRow> populationCsvReader() {
+    public IteratorItemReader<PopulationSnapshot> populationApiReader(
+            @Value("#{jobParameters['baseMonth']}") String baseMonth) {
 
-        return new FlatFileItemReaderBuilder<PopulationCsvRow>()
-                .name("populationCsvReader")
-                .resource(new FileSystemResource(filePath))
-                .encoding("MS949")
-                .linesToSkip(1)
-                .strict(true)
-                .delimited()
-                .delimiter(",")
-                .quoteCharacter('\0')
-                .names("sigungu_code", "population")
-                .fieldSetMapper(fieldSet -> {
-                    String sigunguCode = normalize(fieldSet.readString(0));
-                    String pop = digitsOnly(fieldSet.readString(1));
+        YearMonth requested = (baseMonth == null || baseMonth.isBlank())
+                ? null
+                : YearMonth.parse(baseMonth, BASE_MONTH_FORMAT);
 
-                    return new PopulationCsvRow(sigunguCode, pop);
-                })
-                .build();
+        PopulationCollectionInfo info = populationCollectService.collect(requested);
+        return new IteratorItemReader<>(info.snapshots());
     }
 
+    /** 시군구 대조는 수집 단계에서 이미 끝났다. 여기서는 Upsert 파라미터로만 바꾼다. */
     @Bean
-    public ItemProcessor<PopulationCsvRow, PopulationUpsertRow> populationCsvProcessor() {
-        return row -> {
-            String sigunguCode = row.sigunguCode();
-            if (isBlank(sigunguCode) || !isKnownSigunguCode(sigunguCode)) return null;
-            return PopulationUpsertRow.builder()
-                    .sigunguCode(sigunguCode)
-                    .population(row.population())
-                    .build();
-        };
+    public ItemProcessor<PopulationSnapshot, PopulationUpsertRow> populationApiProcessor() {
+        return PopulationSnapshotBatchMapper::toUpsertRow;
     }
 
     @Bean
