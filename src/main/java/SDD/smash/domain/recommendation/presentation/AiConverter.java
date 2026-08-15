@@ -5,6 +5,7 @@ import SDD.smash.domain.recommendation.application.dto.RegionPick;
 import SDD.smash.domain.recommendation.application.dto.RegionRecommendation;
 import SDD.smash.domain.recommendation.presentation.dto.AiPickEntry;
 import SDD.smash.domain.recommendation.presentation.dto.DetailResponse;
+import SDD.smash.domain.recommendation.presentation.dto.JobVacancyEntry;
 import SDD.smash.domain.recommendation.presentation.dto.RecommendAggregateResponse;
 import org.springframework.lang.Nullable;
 
@@ -34,6 +35,8 @@ public class AiConverter {
                 .population(dto.getPopulation())
                 .totalJobInfo(dto.getTotalJobInfo())
                 .fitJobInfo(dto.getFitJobInfo())
+                .jobVacancies(dto.getJobVacancies() == null ? List.of()
+                        : dto.getJobVacancies().stream().map(JobVacancyEntry::from).toList())
                 .totalSupportNum(dto.getTotalSupportNum())
                 .supportList(dto.getSupportList())
                 .dwellingInfo(dto.getDwellingInfo())

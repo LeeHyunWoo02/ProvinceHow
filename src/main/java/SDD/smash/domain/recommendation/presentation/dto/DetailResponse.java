@@ -35,6 +35,8 @@ public class DetailResponse {
     private JobInfoSummary totalJobInfo;
     private JobInfoSummary fitJobInfo;
 
+    private List<JobVacancyEntry> jobVacancies;
+
     private Integer totalSupportNum;
     private SupportPolicyListSummary supportList;
 
