@@ -16,6 +16,7 @@ public enum ErrorCode {
 
     // job
     JOB_CODE_NOT_FOUND,
+    JOB_VACANCY_INVALID,
     //end
 
     // infra

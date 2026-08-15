@@ -30,6 +30,9 @@ public class RegionDetailInfo {
     private JobInfoSummary totalJobInfo;
     private JobInfoSummary fitJobInfo;
 
+    /** 추천 지역의 실제 채용공고 카드 목록(job 컨텍스트가 사람인에서 가져온 것을 재포장). */
+    private List<JobVacancyItem> jobVacancies;
+
     private Integer totalSupportNum;
     private SupportPolicyListSummary supportList;
 

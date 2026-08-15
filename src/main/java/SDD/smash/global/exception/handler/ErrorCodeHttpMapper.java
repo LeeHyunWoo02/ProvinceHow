@@ -18,6 +18,8 @@ final class ErrorCodeHttpMapper {
     static {
         STATUS.put(ErrorCode.ADDRESS_CODE_NOT_FOUND, HttpStatus.NOT_FOUND);
         STATUS.put(ErrorCode.JOB_CODE_NOT_FOUND, HttpStatus.NOT_FOUND);
+        // 외부(사람인) 응답의 데이터 무결성 문제 = 서버측 문제이므로 500. 실제로는 어댑터가 잡아 건너뛴다.
+        STATUS.put(ErrorCode.JOB_VACANCY_INVALID, HttpStatus.INTERNAL_SERVER_ERROR);
         STATUS.put(ErrorCode.INDUSTRY_CODE_NOT_FOUND, HttpStatus.NOT_FOUND);
         STATUS.put(ErrorCode.NOT_FOUND_YEARMONTH, HttpStatus.NOT_FOUND);
 
