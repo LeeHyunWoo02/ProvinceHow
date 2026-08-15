@@ -1,0 +1,82 @@
+{
+  "_comment": [
+    "사람인(Saramin) 채용정보 오픈 API 의 응답 구조와 코드 매핑을 모아 둔 파일이다.",
+    "코드에 상수로 박지 않은 이유: 응답 필드 경로와 사람인 자체 코드 체계를",
+    "이 파일에서만 관리하기 위해서다. 필드 경로가 바뀌거나 매핑을 채울 때 이 파일만 고친다.",
+    "",
+    "엔드포인트: GET https://oapi.saramin.co.kr/job-search (응답 JSON).",
+    "인증: access-key 쿼리 파라미터. 페이징: start(0-based), count(<=110).",
+    "",
+    "===== 호출 제한 경고 =====",
+    "사람인 오픈 API 는 1일 최대 500회 호출 제한이 있다.",
+    "request.maxStartPage 를 크게 두었지만, count=110 으로 당겨도 하루 500회면",
+    "최대 55,000건까지만 수집할 수 있다. 배치는 이 한도를 넘지 않게 운영해야 한다.",
+    "",
+    "===== access-key 만으로 되는 것 vs 매핑표 구축이 필요한 것 =====",
+    "  - access-key 만 있으면: API 호출/페이징/전체건수 파싱/공고 id 추출은 동작한다.",
+    "  - 매핑표(mapping.regionCodes / mapping.jobCodes)를 채워야 정상 집계된다:",
+    "    사람인 loc_cd(6자리 자체코드)는 행정표준 시군구 5자리(SigunguCode)와 체계가 다르고,",
+    "    사람인 job_cd/job_mid_cd(자체코드)는 KECO 중분류 3자리(JobCode)와 체계가 다르다.",
+    "    passthrough 를 쓸 수 없어 regionCodePassthrough/jobCodePassthrough 를 false 로 둔다.",
+    "    매핑표가 비어 있는 동안 모든 공고는 '미해결(unresolved)' 로 집계되어 버려진다(건수는 로그로 남는다).",
+    "",
+    "  매핑표를 채우는 절차:",
+    "    1) access-key 로 실제 응답 job[] 한 건을 떠서 position.location.code(loc_cd) 와",
+    "       position.job-code.code(job_cd) 의 실제 값 형태를 확인한다.",
+    "    2) 사람인 지역코드표(code-table2) 와 행정표준 시군구 5자리를 대조해 regionCodes 에 코드->코드로 채운다.",
+    "    3) 사람인 직종코드표(code-table5) 와 KECO 중분류 3자리를 대조해 jobCodes 에 코드->코드로 채운다.",
+    "    명칭 유사도로 자동 매핑하지 않는다. 코드 대 코드로만 옮긴다."
+  ],
+
+  "request": {
+    "_comment": [
+      "accessKeyParam/startParam/countParam 은 사람인 공식 파라미터명이다(확인됨).",
+      "start 는 0-based 페이지 번호, count 는 페이지당 결과 수(기본 10, 최대 110).",
+      "extraParams 에 loc_cd/loc_mcd/job_cd/job_mid_cd/ind_cd 등 고정 필터를 걸 수 있다.",
+      "extraParams 의 값은 사람인 자체 코드여야 한다(우리 코드가 아니다)."
+    ],
+    "accessKeyParam": "access-key",
+    "startParam": "start",
+    "countParam": "count",
+    "maxCount": 110,
+    "maxStartPage": 1000,
+    "extraParams": {}
+  },
+
+  "response": {
+    "_comment": [
+      "사람인 응답은 { jobs: { count, start, total, job: [...] } } 구조다(확인됨).",
+      "total 은 문자열로 전체 건수를 담는다.",
+      "job[] 각 원소에서 아래 경로로 값을 읽는다(경로는 점(.)으로 중첩을 표현한다).",
+      "  postingIdField : id",
+      "  regionCodePath : position.location.code (사람인 loc_cd, 6자리 자체코드)",
+      "  jobCodePath    : position.job-code.code (사람인 job_cd, 자체코드)",
+      "job-mid-code 로 집계하려면 jobCodePath 를 position.job-mid-code.code 로 바꾼다.",
+      "errorField/errorMessageField 가 응답에 있으면 오류로 보고 예외를 던진다(없으면 무시)."
+    ],
+    "rootField": "jobs",
+    "totalField": "total",
+    "listField": "job",
+    "postingIdField": "id",
+    "regionCodePath": "position.location.code",
+    "jobCodePath": "position.job-code.code",
+    "errorField": "error",
+    "errorMessageField": "message"
+  },
+
+  "mapping": {
+    "_comment": [
+      "사람인 자체코드는 우리 코드 체계와 다르므로 passthrough 를 쓸 수 없다. 반드시 false.",
+      "regionCodes: 사람인 loc_cd(6자리) -> 행정표준 시군구 5자리(SigunguCode) 명시 매핑.",
+      "jobCodes:    사람인 job_cd -> KECO 중분류 3자리(JobCode) 명시 매핑.",
+      "지금은 대조 데이터가 없어 비워 둔다 -> 모든 공고가 unresolved 로 버려진다(정상 동작, 집계만 0).",
+      "ignoredRegionCodes 에 넣은 코드는 '버리는 게 정상' 이라 매핑 실패로 세지 않는다.",
+      "매핑 후 우리 코드가 NNN000(시도 대표코드) 형태면 어느 시군구인지 알 수 없어 자동으로 버린다."
+    ],
+    "regionCodePassthrough": false,
+    "regionCodes": {},
+    "jobCodePassthrough": false,
+    "jobCodes": {},
+    "ignoredRegionCodes": []
+  }
+}
