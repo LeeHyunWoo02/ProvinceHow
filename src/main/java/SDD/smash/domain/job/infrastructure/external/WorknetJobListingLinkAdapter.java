@@ -4,6 +4,7 @@ import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.job.domain.port.JobListingLinkProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * 이 클래스 밖으로 나가지 않는다.
  */
 @Component
+@ConditionalOnProperty(name = "apis.job.provider", havingValue = "worknet")
 public class WorknetJobListingLinkAdapter implements JobListingLinkProvider {
 
     @Value("${worknet.base-url}")
