@@ -16,11 +16,11 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: ${{ secrets.DOCKERHUB_REPO }}
   USE_FLOATING_LATEST: "false"
-  PLATFORMS: "linux/amd64"                 # ← 기본 플랫폼 지정(필요 시 arm64 추가)
+  PLATFORMS: "linux/arm64"                 # ← 기본 플랫폼 지정(필요 시 arm64 추가)
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm   # OCI Ampere(무료티어)가 arm64 이므로 네이티브 ARM 러너에서 빌드
     outputs:
       prod_tag: ${{ steps.ver.outputs.prod_tag }}
       sha_tag:  ${{ steps.ver.outputs.sha_tag }}
