@@ -20,8 +20,8 @@ class SaraminCodeMapperTest {
     private static final String SPEC_PATH = "classpath:saramin/saramin-job-api.json";
 
     @Test
-    @DisplayName("배포되는 스펙 파일은 passthrough 가 꺼져 있고 매핑표가 비어 있다")
-    void shippedSpecHasPassthroughOffAndEmptyMappings() {
+    @DisplayName("배포 스펙: passthrough 꺼짐, 지역 매핑표 초안 264건 채워짐, 직종 매핑표는 비어 있음")
+    void shippedSpecHasRegionDraftAndEmptyJobCodes() {
         // given
         SaraminApiSpecLoader loader =
                 new SaraminApiSpecLoader(new ObjectMapper(), new DefaultResourceLoader(), SPEC_PATH);
@@ -36,8 +36,31 @@ class SaraminCodeMapperTest {
         assertThat(spec.response().regionCodePath()).isEqualTo("position.location.code");
         assertThat(spec.mapping().regionCodePassthrough()).isFalse();
         assertThat(spec.mapping().jobCodePassthrough()).isFalse();
-        assertThat(spec.mapping().regionCodes()).isEmpty();
+        // 지역 매핑표는 초안이 채워져 있다(우리 시군구 264개 1:1).
+        assertThat(spec.mapping().regionCodes())
+                .hasSize(264)
+                .containsEntry("101010", "11680")   // 서울 강남구
+                .containsEntry("104090", "27720")   // 대구 군위군
+                .containsEntry("118000", "36110");  // 세종전체 -> 세종
+        // 직종 매핑표는 이번 범위가 아니라 여전히 비어 있다.
         assertThat(spec.mapping().jobCodes()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("배포 스펙 매핑표로 실제 loc_cd 를 우리 시군구로 옮긴다(직종은 passthrough=false 라 미해결)")
+    void mapsRealLocCodeWithShippedSpec() {
+        // given - 실제 배포 스펙 로더를 그대로 쓴다
+        SaraminApiSpecLoader loader =
+                new SaraminApiSpecLoader(new ObjectMapper(), new DefaultResourceLoader(), SPEC_PATH);
+        SaraminCodeMapper mapper = new SaraminCodeMapper(loader);
+
+        // when - 사람인 강남구(101010) + 직종코드(매핑표 비어 unresolved)
+        SaraminCodeMapper.PageMapping result = mapper.map(List.of(
+                new SaraminJobPostingRaw("46203390", "101010", "84")));
+
+        // then - 지역은 11680 으로 옮겨지나 직종 미매핑이라 공고는 집계에서 빠지고 직종 미해결로 센다
+        assertThat(result.unresolvedRegionCount()).isZero();
+        assertThat(result.unresolvedJobCount()).isEqualTo(1);
     }
 
     @Test
