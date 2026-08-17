@@ -95,7 +95,7 @@ jobs:
           username: ${{ secrets.OCI_USERNAME }}
           key: ${{ secrets.OCI_SSH_KEY }}
           source: "docker-compose.deploy.yaml,data/static,docker/mysql/init"
-          target: "smash"
+          target: "/home/ubuntu/smash"
 
       - name: Deploy on OCI
         uses: appleboy/ssh-action@v1.0.3
@@ -110,13 +110,13 @@ jobs:
           envs: IMAGE,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
           script: |
             set -e
-            cd ~/smash
+            cd /home/ubuntu/smash
             if ! command -v docker >/dev/null 2>&1; then
               echo "::error::Docker가 설치돼 있지 않습니다. OCI 서버에 docker/docker compose를 먼저 설치하세요."
               exit 1
             fi
             if [ ! -f backend.env ]; then
-              echo "::error::~/smash/backend.env 가 없습니다. 앱 시크릿이 담긴 backend.env를 서버에 먼저 두세요."
+              echo "::error::/home/ubuntu/smash/backend.env 가 없습니다. 앱 시크릿이 담긴 backend.env를 서버에 먼저 두세요."
               exit 1
             fi
             mkdir -p data/generated
@@ -130,4 +130,4 @@ jobs:
 
 # 배포 흐름: main push -> build-and-push(이미지 빌드/Docker Hub 푸시) -> deploy(OCI SSH 접속,
 # 배포 compose로 이미지 pull & up -d). 서버 사전 준비(수동): docker/docker compose 설치,
-# ~/smash/backend.env(앱 시크릿). GitHub Secrets: OCI_HOST/OCI_USERNAME/OCI_SSH_KEY, DOCKERHUB_*.
+# /home/ubuntu/smash/backend.env(앱 시크릿). GitHub Secrets: OCI_HOST/OCI_USERNAME/OCI_SSH_KEY, DOCKERHUB_*.
