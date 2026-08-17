@@ -117,10 +117,12 @@ class SaraminJobVacancyAdapterTest {
     }
 
     private SaraminJobVacancyAdapter adapter(String accessKey, SaraminApiSpecFile spec) {
+        SaraminApiSpecLoader specLoader = new FixedSpecLoader(spec);
         return new SaraminJobVacancyAdapter(
                 new RestTemplate(),
                 new SaraminJobVacancyParser(new ObjectMapper()),
-                new FixedSpecLoader(spec),
+                specLoader,
+                new SaraminLocCodeResolver(specLoader),
                 server.url("/").toString().replaceAll("/$", ""),
                 "/job-search",
                 accessKey);

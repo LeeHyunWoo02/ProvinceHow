@@ -7,6 +7,7 @@ import SDD.smash.domain.recommendation.presentation.dto.AiPickEntry;
 import SDD.smash.domain.recommendation.presentation.dto.DetailResponse;
 import SDD.smash.domain.recommendation.presentation.dto.JobVacancyEntry;
 import SDD.smash.domain.recommendation.presentation.dto.RecommendAggregateResponse;
+import SDD.smash.domain.recommendation.presentation.dto.RegionJobProfileEntry;
 import org.springframework.lang.Nullable;
 
 import java.util.List;
@@ -37,6 +38,7 @@ public class AiConverter {
                 .fitJobInfo(dto.getFitJobInfo())
                 .jobVacancies(dto.getJobVacancies() == null ? List.of()
                         : dto.getJobVacancies().stream().map(JobVacancyEntry::from).toList())
+                .regionJobProfile(RegionJobProfileEntry.from(dto.getRegionJobProfile()))
                 .totalSupportNum(dto.getTotalSupportNum())
                 .supportList(dto.getSupportList())
                 .dwellingInfo(dto.getDwellingInfo())

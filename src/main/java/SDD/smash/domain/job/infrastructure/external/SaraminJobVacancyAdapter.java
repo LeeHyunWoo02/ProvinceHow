@@ -21,7 +21,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 사람인 채용정보 오픈 API 로 <b>개별 공고 카드 목록</b>을 가져오는 어댑터.
@@ -52,6 +51,7 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
     private final RestTemplate restTemplate;
     private final SaraminJobVacancyParser parser;
     private final SaraminApiSpecLoader specLoader;
+    private final SaraminLocCodeResolver locCodeResolver;
 
     private final String baseUrl;
     private final String path;
@@ -61,12 +61,14 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
             RestTemplate restTemplate,
             SaraminJobVacancyParser parser,
             SaraminApiSpecLoader specLoader,
+            SaraminLocCodeResolver locCodeResolver,
             @Value("${apis.saramin.base-url:https://oapi.saramin.co.kr}") String baseUrl,
             @Value("${apis.saramin.path:/job-search}") String path,
             @Value("${apis.saramin.access-key:}") String accessKey) {
         this.restTemplate = restTemplate;
         this.parser = parser;
         this.specLoader = specLoader;
+        this.locCodeResolver = locCodeResolver;
         this.baseUrl = baseUrl;
         this.path = path;
         this.accessKey = (accessKey == null) ? "" : accessKey.trim();
@@ -81,7 +83,7 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
         }
 
         SaraminApiSpecFile spec = specLoader.spec();
-        String locCd = toSaraminLocCode(region, spec.mapping().regionCodes());
+        String locCd = locCodeResolver.resolve(region);
         if (locCd == null) {
             log.warn("[saramin] 지역 역매핑이 없어(사람인 loc_cd 미상) 채용공고 목록을 조회하지 않는다. "
                             + "region={} - 빈 목록 반환. 매핑표(saramin-job-api.json mapping.regionCodes)를 채워야 동작한다.",
@@ -108,20 +110,6 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
                     region.value(), maskedUrl(uri), e);
             return List.of();
         }
-    }
-
-    /**
-     * 우리 시군구 코드를 사람인 loc_cd 로 뒤집는다. 스펙의 매핑표는 (사람인 loc_cd → 우리 코드)라
-     * 값이 우리 코드와 같은 항목의 키를 찾는다. 없으면 {@code null}.
-     */
-    private String toSaraminLocCode(SigunguCode region, Map<String, String> saraminToOurs) {
-        String ours = region.value();
-        for (Map.Entry<String, String> entry : saraminToOurs.entrySet()) {
-            if (ours.equals(entry.getValue())) {
-                return entry.getKey();
-            }
-        }
-        return null;
     }
 
     private JobVacancy toVacancy(SaraminJobVacancyRaw raw) {

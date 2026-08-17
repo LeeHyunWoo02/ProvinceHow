@@ -7,11 +7,13 @@ import SDD.smash.domain.dwelling.application.DwellingQueryService;
 import SDD.smash.domain.infra.application.InfraQueryService;
 import SDD.smash.domain.job.application.JobQueryService;
 import SDD.smash.domain.job.application.JobVacancyQueryService;
+import SDD.smash.domain.job.application.RegionJobProfileQueryService;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.recommendation.application.dto.DwellingInfoSummary;
 import SDD.smash.domain.recommendation.application.dto.IndustryDetailItem;
 import SDD.smash.domain.recommendation.application.dto.JobInfoSummary;
 import SDD.smash.domain.recommendation.application.dto.JobVacancyItem;
+import SDD.smash.domain.recommendation.application.dto.RegionJobProfileItem;
 import SDD.smash.domain.recommendation.application.dto.MajorInfraSummaryItem;
 import SDD.smash.domain.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.domain.recommendation.application.dto.SupportPolicyItem;
@@ -35,6 +37,7 @@ public class RegionDetailService {
     private final PopulationQueryService populationQueryService;
     private final JobQueryService jobQueryService;
     private final JobVacancyQueryService jobVacancyQueryService;
+    private final RegionJobProfileQueryService regionJobProfileQueryService;
     private final SupportQueryService supportQueryService;
     private final DwellingQueryService dwellingQueryService;
     private final InfraQueryService infraQueryService;
@@ -63,6 +66,9 @@ public class RegionDetailService {
                 .jobVacancies(jobVacancyQueryService.getVacancies(sigunguCode).stream()
                         .map(JobVacancyItem::from)
                         .toList())
+
+                .regionJobProfile(RegionJobProfileItem.from(
+                        regionJobProfileQueryService.getProfile(sigunguCode)))
 
                 .totalSupportNum(supportQueryService.getAllSupportCount(sigunguCode))
                 .supportList(new SupportPolicyListSummary(

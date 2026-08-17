@@ -171,6 +171,8 @@ public class DwellingScoreRedisAdapter implements DwellingScoreCache {
 | `support:score:{supportChoice 0~15}` | Hash | `SupportScoreCache` | 4d | 16개 열거 |
 | `support:policy:{sigunguCode}:{TAG_NAME}` | String(JSON) | `SupportPolicyRepository` | 4d | — (정본) |
 | `support:policy:{sigunguCode}:{TAG_NAME}:count` | String(Integer) | `SupportPolicyRepository` | 4d | — (정본) |
+| `job:vacancy:{sigunguCode}` | String(JSON list) | `JobVacancyCache` | 6h | SCAN (§6.2) |
+| `job:profile:{sigunguCode}` | String(JSON) | `RegionJobProfileCache` | 12h | SCAN (§6.2) |
 
 - **enum은 `name()`을 키에 쓴다.** 한글 라벨(`tag.getValue()`)을 키에 넣지 않는다.
 - 선택 항목은 **비트마스크 정수(0~15)** 라 유효 키가 16개로 유한하다 → 열거 삭제가 가능하다.
@@ -200,6 +202,7 @@ TTL은 **원본 데이터의 갱신 주기보다 짧거나 같게** 잡는다.
 | 일자리 점수(RDB 원본, 배치 1회) | 재배포 시 | 반나절 | 12시간 |
 | 인프라 점수(RDB 원본, 정적) | 재배포 시 | 하루 | 24시간 |
 | 주거 점수(RDB 원본, 월 단위 실거래) | 배치 재실행 시 | 한 달 | 30일 |
+| 채용공고 카드/프로필(외부 사람인 원본, on-demand) | 무효화 시점 없음 → TTL만 | 반나절 | 6h(vacancy) / 12h(profile) |
 
 **규칙**
 - **TTL 없는 키를 만들지 않는다.**
