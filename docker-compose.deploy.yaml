@@ -1,0 +1,58 @@
+# OCI 배포용 compose. 로컬 빌드(docker-compose.yaml)와 달리 Docker Hub에 푸시된
+# 이미지를 pull 해서 실행한다. 이미지 태그는 CI가 SMASH_IMAGE 환경변수로 주입한다.
+# 서버(~/smash)에 backend.env(앱 시크릿) 를 수동으로 미리 두어야 한다.
+name: smash
+
+services:
+  backend:
+    image: ${SMASH_IMAGE:?SMASH_IMAGE(배포할 이미지: repo:tag)가 필요합니다}
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./backend.env
+    volumes:
+      # 정적 기준 데이터(시도/시군구/직종코드)는 사람이 관리하는 원본이라 읽기 전용이다.
+      - ./data/static:/app/data/static:ro
+      # 수집 배치가 생성하는 CSV/메타데이터는 컨테이너가 써야 하므로 쓰기 가능해야 한다.
+      - ./data/generated:/app/data/generated
+    depends_on:
+      mysql:
+        condition: service_healthy
+      my-redis:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+09:00
+    env_file:
+      - ./backend.env
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+
+  my-redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql-data:
+  redis-data:
