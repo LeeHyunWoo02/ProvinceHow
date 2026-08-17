@@ -37,6 +37,8 @@ public class DetailResponse {
 
     private List<JobVacancyEntry> jobVacancies;
 
+    private RegionJobProfileEntry regionJobProfile;
+
     private Integer totalSupportNum;
     private SupportPolicyListSummary supportList;
 

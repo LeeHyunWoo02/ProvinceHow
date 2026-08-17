@@ -1,6 +1,7 @@
 package SDD.smash.global.config;
 
 import SDD.smash.domain.job.infrastructure.cache.JobVacancyListPayload;
+import SDD.smash.domain.job.infrastructure.cache.RegionJobProfilePayload;
 import SDD.smash.domain.support.infrastructure.cache.SupportPolicyListPayload;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
@@ -88,6 +89,28 @@ public class RedisConfig {
 
         var javaType = om.getTypeFactory().constructType(JobVacancyListPayload.class);
         var serializer = new Jackson2JsonRedisSerializer<JobVacancyListPayload>(javaType);
+
+        template.setValueSerializer(serializer);
+        template.setHashValueSerializer(serializer);
+        template.afterPropertiesSet();
+        return template;
+    }
+
+    /**
+     * job 컨텍스트 지역 채용 프로필 캐시({@code job:profile:*})의 값 전용 템플릿.
+     * support/vacancy 목록 템플릿과 같은 방식이다(redis-conventions §3.1).
+     */
+    @Bean
+    public RedisTemplate<String, RegionJobProfilePayload> regionJobProfileRedisTemplate(RedisConnectionFactory cf) {
+        RedisTemplate<String, RegionJobProfilePayload> template = new RedisTemplate<>();
+        template.setConnectionFactory(cf);
+        template.setKeySerializer(new StringRedisSerializer());
+
+        ObjectMapper om = new ObjectMapper();
+        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+
+        var javaType = om.getTypeFactory().constructType(RegionJobProfilePayload.class);
+        var serializer = new Jackson2JsonRedisSerializer<RegionJobProfilePayload>(javaType);
 
         template.setValueSerializer(serializer);
         template.setHashValueSerializer(serializer);
