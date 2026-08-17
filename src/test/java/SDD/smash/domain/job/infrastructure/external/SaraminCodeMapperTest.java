@@ -20,8 +20,8 @@ class SaraminCodeMapperTest {
     private static final String SPEC_PATH = "classpath:saramin/saramin-job-api.json";
 
     @Test
-    @DisplayName("배포 스펙: passthrough 꺼짐, 지역 매핑표 초안 264건 채워짐, 직종 매핑표는 비어 있음")
-    void shippedSpecHasRegionDraftAndEmptyJobCodes() {
+    @DisplayName("배포 스펙: passthrough 꺼짐, 지역 264건·직종 21건 초안 채워짐, jobCodePath 는 job-mid-code")
+    void shippedSpecHasRegionAndJobDrafts() {
         // given
         SaraminApiSpecLoader loader =
                 new SaraminApiSpecLoader(new ObjectMapper(), new DefaultResourceLoader(), SPEC_PATH);
@@ -34,33 +34,43 @@ class SaraminCodeMapperTest {
         assertThat(spec.request().maxCount()).isEqualTo(110);
         assertThat(spec.response().rootField()).isEqualTo("jobs");
         assertThat(spec.response().regionCodePath()).isEqualTo("position.location.code");
+        // 직종 crosswalk 가 대분류 수준이라 job-mid-code 경로를 쓴다.
+        assertThat(spec.response().jobCodePath()).isEqualTo("position.job-mid-code.code");
         assertThat(spec.mapping().regionCodePassthrough()).isFalse();
         assertThat(spec.mapping().jobCodePassthrough()).isFalse();
-        // 지역 매핑표는 초안이 채워져 있다(우리 시군구 264개 1:1).
+        // 지역 매핑표 초안(우리 시군구 264개 1:1).
         assertThat(spec.mapping().regionCodes())
                 .hasSize(264)
                 .containsEntry("101010", "11680")   // 서울 강남구
                 .containsEntry("104090", "27720")   // 대구 군위군
                 .containsEntry("118000", "36110");  // 세종전체 -> 세종
-        // 직종 매핑표는 이번 범위가 아니라 여전히 비어 있다.
-        assertThat(spec.mapping().jobCodes()).isEmpty();
+        // 직종 crosswalk 초안(사람인 대분류 mcode 21개 -> KECO 중분류).
+        assertThat(spec.mapping().jobCodes())
+                .hasSize(21)
+                .containsEntry("2", "024")    // IT개발·데이터 -> 소프트웨어
+                .containsEntry("16", "015")   // 기획·전략 -> 행정·경영·회계·광고·상품기획
+                .containsEntry("3", "018")    // 회계·세무·재무 -> 회계·경리 사무
+                .containsEntry("17", "01C");  // 금융·보험 -> 금융·보험 전문가
     }
 
     @Test
-    @DisplayName("배포 스펙 매핑표로 실제 loc_cd 를 우리 시군구로 옮긴다(직종은 passthrough=false 라 미해결)")
-    void mapsRealLocCodeWithShippedSpec() {
+    @DisplayName("배포 스펙 매핑표로 실제 loc_cd 와 job-mid-code(mcode)를 우리 코드로 옮긴다")
+    void mapsRealLocAndJobCodeWithShippedSpec() {
         // given - 실제 배포 스펙 로더를 그대로 쓴다
         SaraminApiSpecLoader loader =
                 new SaraminApiSpecLoader(new ObjectMapper(), new DefaultResourceLoader(), SPEC_PATH);
         SaraminCodeMapper mapper = new SaraminCodeMapper(loader);
 
-        // when - 사람인 강남구(101010) + 직종코드(매핑표 비어 unresolved)
+        // when - 사람인 강남구(101010) + IT개발·데이터 대분류(mcode 2)
         SaraminCodeMapper.PageMapping result = mapper.map(List.of(
-                new SaraminJobPostingRaw("46203390", "101010", "84")));
+                new SaraminJobPostingRaw("46203390", "101010", "2")));
 
-        // then - 지역은 11680 으로 옮겨지나 직종 미매핑이라 공고는 집계에서 빠지고 직종 미해결로 센다
+        // then - 지역 11680, 직종 024(소프트웨어)로 옮겨져 집계 대상이 된다
         assertThat(result.unresolvedRegionCount()).isZero();
-        assertThat(result.unresolvedJobCount()).isEqualTo(1);
+        assertThat(result.unresolvedJobCount()).isZero();
+        assertThat(result.postings()).hasSize(1);
+        assertThat(result.postings().get(0).regions()).containsExactly(SigunguCode.of("11680"));
+        assertThat(result.postings().get(0).jobCodes()).containsExactly(JobCode.of("024"));
     }
 
     @Test
