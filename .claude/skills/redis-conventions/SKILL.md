@@ -171,6 +171,14 @@ public class DwellingScoreRedisAdapter implements DwellingScoreCache {
 | `support:score:{supportChoice 0~15}` | Hash | `SupportScoreCache` | 4d | 16개 열거 |
 | `support:policy:{sigunguCode}:{TAG_NAME}` | String(JSON) | `SupportPolicyRepository` | 4d | — (정본) |
 | `support:policy:{sigunguCode}:{TAG_NAME}:count` | String(Integer) | `SupportPolicyRepository` | 4d | — (정본) |
+| `job:vacancy:{sigunguCode}` | String(JSON list) | `JobVacancyCache` | 6h(정상)/30m(네거티브) | SCAN (§6.2) |
+| `job:profile:{sigunguCode}` | String(JSON) | `RegionJobProfileCache` | 12h(정상)/30m(네거티브) | SCAN (§6.2) |
+
+> ⚠️ **네거티브 캐싱 예외**(job:vacancy / job:profile): §3-4 "빈 결과 비캐싱"에서 의도적으로 벗어난다.
+> 매핑표가 채워져 실제 사람인 호출(500회/일 제한)이 발생하므로, **실제 조회로 0건이 나온 지역**은
+> 짧은 TTL(negative-ttl, 설정값 기본 30m)로 캐싱해 재호출을 막는다. 단 access-key 미설정·역매핑
+> 부재·호출 실패 등 **조회를 시도조차 못한 경우는 캐싱하지 않는다**(키/매핑을 채우면 즉시 동작).
+> "키 존재=히트(빈 값이면 캐시된 0건), 키 부재=미스"로 해석한다.
 
 - **enum은 `name()`을 키에 쓴다.** 한글 라벨(`tag.getValue()`)을 키에 넣지 않는다.
 - 선택 항목은 **비트마스크 정수(0~15)** 라 유효 키가 16개로 유한하다 → 열거 삭제가 가능하다.
@@ -200,6 +208,8 @@ TTL은 **원본 데이터의 갱신 주기보다 짧거나 같게** 잡는다.
 | 일자리 점수(RDB 원본, 배치 1회) | 재배포 시 | 반나절 | 12시간 |
 | 인프라 점수(RDB 원본, 정적) | 재배포 시 | 하루 | 24시간 |
 | 주거 점수(RDB 원본, 월 단위 실거래) | 배치 재실행 시 | 한 달 | 30일 |
+| 채용공고 카드/프로필(외부 사람인 원본, on-demand) | 무효화 시점 없음 → TTL만 | 반나절 | 6h(vacancy) / 12h(profile) |
+| 채용공고/프로필 **네거티브(실제 0건)** | 재조회로 곧 채워질 수 있음 | 짧게(설정값) | 30m(vacancy·profile 공통 기본) |
 
 **규칙**
 - **TTL 없는 키를 만들지 않는다.**

@@ -176,13 +176,56 @@ class WorknetJobCountItemReaderTest {
                 new JobPostingPage(2, JobPostingPage.UNKNOWN_TOTAL, List.of(posting("B", "11110", "011")), 0, 0),
                 new JobPostingPage(3, JobPostingPage.UNKNOWN_TOTAL, List.of(posting("C", "11110", "011")), 0, 0)));
         WorknetJobCountItemReader reader = new WorknetJobCountItemReader(
-                provider, jobCountJpaRepository, 100, 2, true, false);
+                provider, jobCountJpaRepository, 100, 2, 100_000, true, false);
 
         // when
         readAll(reader);
 
         // then
         assertThat(provider.calls()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("호출 예산 상한 전에 수집이 끝나지 않으면 이번 run 결과를 반영하지 않는다(기존 데이터 보존)")
+    void abandonsRunWhenCallBudgetExhaustedBeforeCompletion() throws Exception {
+        // given - 계속 다음 페이지가 있다고 응답해 전수 수집이 예산 안에 끝나지 않는 상황
+        StubProvider provider = new StubProvider(List.of(
+                new JobPostingPage(1, JobPostingPage.UNKNOWN_TOTAL, List.of(posting("A", "11110", "011")), 0, 0),
+                new JobPostingPage(2, JobPostingPage.UNKNOWN_TOTAL, List.of(posting("B", "11110", "011")), 0, 0),
+                new JobPostingPage(3, JobPostingPage.UNKNOWN_TOTAL, List.of(posting("C", "11110", "011")), 0, 0)));
+        // maxPages 는 넉넉하지만 maxApiCalls=2 가 실제 상한. 0 리셋을 켜도 부분 수집이면 건드리면 안 된다.
+        WorknetJobCountItemReader reader = new WorknetJobCountItemReader(
+                provider, jobCountJpaRepository, 100, 1000, 2, true, true);
+
+        // when
+        List<JobCountCsvRow> rows = readAll(reader);
+
+        // then - 예산만큼만(2회) 부르고, 부분 스냅샷이라 아무 행도 내보내지 않으며 0 리셋도 하지 않는다
+        assertThat(provider.calls()).isEqualTo(2);
+        assertThat(rows).isEmpty();
+        then(jobCountJpaRepository).shouldHaveNoInteractions();
+    }
+
+    @Test
+    @DisplayName("예산 안에서 수집이 끝나면 정상 집계하고 0 리셋도 적용한다")
+    void appliesResultsWhenCollectionCompletesWithinBudget() throws Exception {
+        // given - 지난 회차의 11140/012 가 이번엔 안 왔고, 수집은 1페이지로 끝난다(예산 5 이내)
+        given(jobCountJpaRepository.findAllKeys()).willReturn(List.of(
+                new JobCountKeyRow("11110", "011"),
+                new JobCountKeyRow("11140", "012")));
+        StubProvider provider = new StubProvider(List.of(page(1, 1, posting("A", "11110", "011"))));
+        WorknetJobCountItemReader reader = new WorknetJobCountItemReader(
+                provider, jobCountJpaRepository, 100, 1000, 5, true, true);
+
+        // when
+        List<JobCountCsvRow> rows = readAll(reader);
+
+        // then - 예산에 걸리지 않았으므로 정상 반영 + 사라진 조합 0 리셋
+        assertThat(provider.calls()).isEqualTo(1);
+        assertThat(rows).extracting(JobCountCsvRow::sigunguCode, JobCountCsvRow::middleCode, JobCountCsvRow::count)
+                .containsExactlyInAnyOrder(
+                        tuple("11110", "011", 1),
+                        tuple("11140", "012", 0));
     }
 
     @Test
@@ -220,7 +263,7 @@ class WorknetJobCountItemReaderTest {
                                              int pageSize,
                                              boolean dedupe,
                                              boolean resetMissing) {
-        return new WorknetJobCountItemReader(provider, jobCountJpaRepository, pageSize, 1000, dedupe, resetMissing);
+        return new WorknetJobCountItemReader(provider, jobCountJpaRepository, pageSize, 1000, 100_000, dedupe, resetMissing);
     }
 
     private List<JobCountCsvRow> readAll(WorknetJobCountItemReader reader) throws Exception {

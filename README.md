@@ -104,6 +104,7 @@ docker compose up -d
 | [batch-data-pipeline.md](docs/batch-data-pipeline.md) | **전체 흐름, 실행 주기, 수동 실행·재실행·복구 절차** |
 | [external-api-spec.md](docs/external-api-spec.md) | KOSIS / LOCALDATA / 국토부 공식 스펙 검증 결과 |
 | [worknet-job-api.md](docs/worknet-job-api.md) | 워크넷 채용정보 API, 코드 매핑 정책 |
+| [saramin-jobcount-batch-strategy.md](docs/saramin-jobcount-batch-strategy.md) | 사람인 500회/일 제한 하 JobCount 배치 수집 전략, 호출 예산 가드레일 |
 | [localdata-infra.md](docs/localdata-infra.md) | 업종 마스터, 지역코드 매핑, ratio/score 계산식 |
 | [work24-crawling-assessment.md](docs/work24-crawling-assessment.md) | 고용24 공개검색 수집 불가 판정 근거 |
 

@@ -6,6 +6,7 @@
 | --- | --- |
 | [external-api-spec.md](external-api-spec.md) | KOSIS / LOCALDATA / 국토부 실거래가 공식 스펙 검증 결과 |
 | [worknet-job-api.md](worknet-job-api.md) | 워크넷 채용정보 API 스펙, 코드 매핑 정책 |
+| [saramin-jobcount-batch-strategy.md](saramin-jobcount-batch-strategy.md) | 사람인 500회/일 제한 하 JobCount 배치 수집 전략, 호출 예산 가드레일 |
 | [localdata-infra.md](localdata-infra.md) | 업종 마스터, 지역코드 매핑, ratio/score 계산식 |
 | [work24-crawling-assessment.md](work24-crawling-assessment.md) | 고용24 공개검색 수집 **불가 판정** 근거 |
 | [internal-batch-analysis.md](internal-batch-analysis.md) | 리팩토링 이전 구조 분석 (이력) |
