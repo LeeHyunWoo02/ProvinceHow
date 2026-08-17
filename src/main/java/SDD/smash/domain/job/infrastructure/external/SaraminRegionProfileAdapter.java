@@ -17,6 +17,7 @@ import org.springframework.web.util.UriUtils;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -84,20 +85,20 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
     }
 
     @Override
-    public List<JobPostingSample> sample(SigunguCode region, int sampleSize) {
+    public Optional<List<JobPostingSample>> sample(SigunguCode region, int sampleSize) {
         if (accessKey.isEmpty()) {
-            log.warn("[saramin] access-key 가 비어 있어 지역 채용 프로필 표본을 조회하지 않는다. region={} - 빈 표본",
+            log.warn("[saramin] access-key 가 비어 있어 지역 채용 프로필 표본을 조회하지 않는다. region={} - 미시도(캐싱 안 함)",
                     region.value());
-            return List.of();
+            return Optional.empty();
         }
 
         SaraminApiSpecFile spec = specLoader.spec();
         String locCd = locCodeResolver.resolve(region);
         if (locCd == null) {
             log.warn("[saramin] 지역 역매핑이 없어(사람인 loc_cd 미상) 프로필 표본을 조회하지 않는다. "
-                            + "region={} - 빈 표본. 매핑표(saramin-job-api.json mapping.regionCodes)를 채워야 동작한다.",
+                            + "region={} - 미시도. 매핑표(saramin-job-api.json mapping.regionCodes)를 채워야 동작한다.",
                     region.value());
-            return List.of();
+            return Optional.empty();
         }
 
         int count = Math.min(Math.max(1, sampleSize), spec.request().maxCount());
@@ -108,10 +109,12 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
             List<SaraminJobSampleRaw> raws = parser.parse(response.getBody(), spec.response());
             List<JobPostingSample> samples = raws.stream().map(this::toSample).toList();
             log.debug("[saramin] 프로필 표본 조회 region={}, locCd={}, 표본={}건", region.value(), locCd, samples.size());
-            return samples;
+            // 실제 조회 성공(0건이어도) → 표본을 담아 돌려준다(유스케이스가 네거티브 캐싱).
+            return Optional.of(samples);
         } catch (RuntimeException e) {
-            log.warn("[saramin] 프로필 표본 조회 실패 region={}, url={} - 빈 표본", region.value(), maskedUrl(uri), e);
-            return List.of();
+            // 호출 실패는 '미시도'로 취급 -> 네거티브 캐싱하지 않아 다음 요청에서 재시도한다.
+            log.warn("[saramin] 프로필 표본 조회 실패 region={}, url={} - 미시도(캐싱 안 함)", region.value(), maskedUrl(uri), e);
+            return Optional.empty();
         }
     }
 

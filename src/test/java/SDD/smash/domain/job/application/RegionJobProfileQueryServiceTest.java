@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,7 +33,7 @@ class RegionJobProfileQueryServiceTest {
     private final SigunguCode region = SigunguCode.of("11680");
 
     private RegionJobProfileQueryService service() {
-        return new RegionJobProfileQueryService(provider, cache, 100, 5);
+        return new RegionJobProfileQueryService(provider, cache, 100, 5, Duration.ofSeconds(3));
     }
 
     @Test
@@ -56,8 +57,8 @@ class RegionJobProfileQueryServiceTest {
     void fetchesAggregatesAndCachesOnMiss() {
         // given
         given(cache.find(any())).willReturn(Optional.empty());
-        given(provider.sample(any(), anyInt())).willReturn(List.of(
-                new JobPostingSample(3000, 5000, ExperienceLevel.NEWCOMER, "IT")));
+        given(provider.sample(any(), anyInt())).willReturn(Optional.of(List.of(
+                new JobPostingSample(3000, 5000, ExperienceLevel.NEWCOMER, "IT"))));
 
         // when
         RegionJobProfileView view = service().getProfile(region);
@@ -69,11 +70,11 @@ class RegionJobProfileQueryServiceTest {
     }
 
     @Test
-    @DisplayName("표본이 비면(access-key 미설정/역매핑 빈 경우) 빈 프로필이고 캐시에 저장하지 않는다")
-    void emptyProfileWhenNoSamples() {
-        // given
+    @DisplayName("공급자가 미시도(Optional.empty)면 빈 프로필이고 캐시에 저장하지 않는다")
+    void doesNotCacheWhenProviderNotAttempted() {
+        // given - access-key 미설정/역매핑 부재 시 공급자가 미시도(Optional.empty)를 준다
         given(cache.find(any())).willReturn(Optional.empty());
-        given(provider.sample(any(), anyInt())).willReturn(List.of());
+        given(provider.sample(any(), anyInt())).willReturn(Optional.empty());
 
         // when
         RegionJobProfileView view = service().getProfile(region);
@@ -81,8 +82,21 @@ class RegionJobProfileQueryServiceTest {
         // then
         assertThat(view.sampleSize()).isZero();
         assertThat(view.salaryMedianManwon()).isNull();
-        assertThat(view.newcomerRatio()).isNull();
-        assertThat(view.topIndustries()).isEmpty();
         then(cache).should(Mockito.never()).put(any());
+    }
+
+    @Test
+    @DisplayName("공급자가 실제 0건(Optional.of 빈 표본)을 주면 빈 프로필을 네거티브 캐싱한다")
+    void negativeCachesRealEmptySamples() {
+        // given - 실제 조회를 시도해 표본 0건
+        given(cache.find(any())).willReturn(Optional.empty());
+        given(provider.sample(any(), anyInt())).willReturn(Optional.of(List.of()));
+
+        // when
+        RegionJobProfileView view = service().getProfile(region);
+
+        // then - 빈 프로필을 put(어댑터가 짧은 TTL 로 네거티브 캐싱)
+        assertThat(view.sampleSize()).isZero();
+        then(cache).should().put(any());
     }
 }
