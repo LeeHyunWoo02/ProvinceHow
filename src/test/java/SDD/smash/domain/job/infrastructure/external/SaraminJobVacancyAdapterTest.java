@@ -17,6 +17,7 @@ import org.springframework.web.client.RestTemplate;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,22 +43,22 @@ class SaraminJobVacancyAdapterTest {
     }
 
     @Test
-    @DisplayName("access-key 가 비어 있으면 호출하지 않고 빈 목록을 돌려준다")
+    @DisplayName("access-key 가 비어 있으면 호출하지 않고 '미시도'(Optional.empty)를 돌려준다")
     void returnsEmptyWithoutAccessKey() {
         SaraminJobVacancyAdapter adapter = adapter("", specWithRegionMapping(Map.of("101000", "11680")));
 
-        List<JobVacancy> result = adapter.findVacancies(SigunguCode.of("11680"), 5);
+        Optional<List<JobVacancy>> result = adapter.findVacancies(SigunguCode.of("11680"), 5);
 
-        assertThat(result).isEmpty();
+        assertThat(result).isEmpty();   // 미시도 → 유스케이스가 캐싱하지 않는다
         assertThat(server.getRequestCount()).isZero();
     }
 
     @Test
-    @DisplayName("지역 역매핑이 비어 있으면(현재 상태) 호출하지 않고 빈 목록을 돌려준다")
+    @DisplayName("지역 역매핑이 비어 있으면 호출하지 않고 '미시도'(Optional.empty)를 돌려준다")
     void returnsEmptyWhenRegionNotReverseMapped() {
         SaraminJobVacancyAdapter adapter = adapter(ACCESS_KEY, SaraminApiSpecFile.defaults());
 
-        List<JobVacancy> result = adapter.findVacancies(SigunguCode.of("11680"), 5);
+        Optional<List<JobVacancy>> result = adapter.findVacancies(SigunguCode.of("11680"), 5);
 
         assertThat(result).isEmpty();
         assertThat(server.getRequestCount()).isZero();   // loc_cd 없이 전국을 부르지 않는다
@@ -90,7 +91,7 @@ class SaraminJobVacancyAdapterTest {
                         """));
 
         // when
-        List<JobVacancy> result = adapter.findVacancies(SigunguCode.of("11680"), 5);
+        List<JobVacancy> result = adapter.findVacancies(SigunguCode.of("11680"), 5).orElseThrow();
 
         // then
         assertThat(result).hasSize(1);

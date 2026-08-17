@@ -4,6 +4,7 @@ import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.job.domain.model.JobVacancy;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 개별 채용공고 목록 공급자. out-port 다. 집계용 {@link JobPostingProvider} 와 분리한다 —
@@ -17,7 +18,9 @@ public interface JobVacancyProvider {
     /**
      * @param region 조회할 시군구
      * @param size   가져올 최대 건수(공급자 상한을 넘으면 어댑터가 상한으로 맞춘다)
-     * @return 공고 목록. 설정이 없거나 지역을 공급자 코드로 옮길 수 없으면 <b>빈 목록</b>
+     * @return <b>실제 조회를 시도한 경우</b>의 결과(0건이면 빈 목록). 설정 미비(access-key 없음)·
+     *         지역 역매핑 부재·호출 실패로 <b>조회 자체를 하지 못하면</b> {@link Optional#empty()}.
+     *         이 구분으로 유스케이스가 "실제 0건"만 네거티브 캐싱하고 "미시도"는 캐싱하지 않는다.
      */
-    List<JobVacancy> findVacancies(SigunguCode region, int size);
+    Optional<List<JobVacancy>> findVacancies(SigunguCode region, int size);
 }

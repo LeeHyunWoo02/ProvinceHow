@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 사람인 채용정보 오픈 API 로 <b>개별 공고 카드 목록</b>을 가져오는 어댑터.
@@ -75,20 +76,20 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
     }
 
     @Override
-    public List<JobVacancy> findVacancies(SigunguCode region, int size) {
+    public Optional<List<JobVacancy>> findVacancies(SigunguCode region, int size) {
         if (accessKey.isEmpty()) {
-            log.warn("[saramin] access-key 가 비어 있어 채용공고 목록을 조회하지 않는다. region={} - 빈 목록 반환",
+            log.warn("[saramin] access-key 가 비어 있어 채용공고 목록을 조회하지 않는다. region={} - 미시도(캐싱 안 함)",
                     region.value());
-            return List.of();
+            return Optional.empty();
         }
 
         SaraminApiSpecFile spec = specLoader.spec();
         String locCd = locCodeResolver.resolve(region);
         if (locCd == null) {
             log.warn("[saramin] 지역 역매핑이 없어(사람인 loc_cd 미상) 채용공고 목록을 조회하지 않는다. "
-                            + "region={} - 빈 목록 반환. 매핑표(saramin-job-api.json mapping.regionCodes)를 채워야 동작한다.",
+                            + "region={} - 미시도. 매핑표(saramin-job-api.json mapping.regionCodes)를 채워야 동작한다.",
                     region.value());
-            return List.of();
+            return Optional.empty();
         }
 
         int count = Math.min(Math.max(1, size), spec.request().maxCount());
@@ -103,12 +104,13 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
                     .toList();
             log.debug("[saramin] 채용공고 목록 조회 region={}, locCd={}, raw={}건, 카드={}건",
                     region.value(), locCd, raws.size(), vacancies.size());
-            return vacancies;
+            // 실제 조회 성공(0건이어도) → 결과를 담아 돌려준다(유스케이스가 네거티브 캐싱).
+            return Optional.of(vacancies);
         } catch (RuntimeException e) {
-            // 표시용 부가 기능이라 실패해도 상세 조회 자체를 죽이지 않는다.
-            log.warn("[saramin] 채용공고 목록 조회 실패 region={}, url={} - 빈 목록 반환",
+            // 호출 실패는 '미시도'로 취급 -> 네거티브 캐싱하지 않아 다음 요청에서 재시도한다.
+            log.warn("[saramin] 채용공고 목록 조회 실패 region={}, url={} - 미시도(캐싱 안 함)",
                     region.value(), maskedUrl(uri), e);
-            return List.of();
+            return Optional.empty();
         }
     }
 

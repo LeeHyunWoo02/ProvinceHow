@@ -80,7 +80,7 @@ class SaraminRegionProfileAdapterTest {
                         """));
 
         // when
-        List<JobPostingSample> samples = adapter.sample(SigunguCode.of("11680"), 100);
+        List<JobPostingSample> samples = adapter.sample(SigunguCode.of("11680"), 100).orElseThrow();
 
         // then
         assertThat(samples).hasSize(2);
@@ -121,7 +121,7 @@ class SaraminRegionProfileAdapterTest {
                         """));
 
         // when
-        List<JobPostingSample> samples = adapter.sample(SigunguCode.of("11680"), 100);
+        List<JobPostingSample> samples = adapter.sample(SigunguCode.of("11680"), 100).orElseThrow();
 
         // then
         assertThat(samples).hasSize(4);
