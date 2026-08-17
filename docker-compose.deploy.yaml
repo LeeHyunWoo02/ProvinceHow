@@ -5,7 +5,7 @@ name: smash
 
 services:
   backend:
-    image: ${SMASH_IMAGE:?SMASH_IMAGE(배포할 이미지: repo:tag)가 필요합니다}
+    image: "${SMASH_IMAGE:?SMASH_IMAGE(배포 이미지 repo:tag)가 필요합니다}"
     restart: unless-stopped
     ports:
       - "8080:8080"
