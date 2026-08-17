@@ -50,8 +50,9 @@
       "job[] 각 원소에서 아래 경로로 값을 읽는다(경로는 점(.)으로 중첩을 표현한다).",
       "  postingIdField : id",
       "  regionCodePath : position.location.code (사람인 loc_cd, 6자리 자체코드)",
-      "  jobCodePath    : position.job-code.code (사람인 job_cd, 자체코드)",
-      "job-mid-code 로 집계하려면 jobCodePath 를 position.job-mid-code.code 로 바꾼다.",
+      "  jobCodePath    : position.job-mid-code.code (사람인 대분류 mcode, 21개)",
+      "직종 crosswalk 가 대분류(mcode) 수준이라 jobCodePath 를 job-code(세부)가 아니라",
+      "job-mid-code(대분류)로 둔다. 세부 job_cd 세분화는 추후.",
       "errorField/errorMessageField 가 응답에 있으면 오류로 보고 예외를 던진다(없으면 무시)."
     ],
     "rootField": "jobs",
@@ -59,7 +60,7 @@
     "listField": "job",
     "postingIdField": "id",
     "regionCodePath": "position.location.code",
-    "jobCodePath": "position.job-code.code",
+    "jobCodePath": "position.job-mid-code.code",
     "errorField": "error",
     "errorMessageField": "message"
   },
@@ -68,7 +69,7 @@
     "_comment": [
       "사람인 자체코드는 우리 코드 체계와 다르므로 passthrough 를 쓸 수 없다. 반드시 false.",
       "regionCodes: 사람인 loc_cd(6자리) -> 행정표준 시군구 5자리(SigunguCode) 명시 매핑.",
-      "jobCodes:    사람인 job_cd -> KECO 중분류 3자리(JobCode) 명시 매핑(지역만 채움, 직종은 추후).",
+      "jobCodes:    사람인 job-mid-code(대분류 mcode 21개) -> KECO 중분류 3자리(JobCode) 명시 매핑.",
       "ignoredRegionCodes 에 넣은 코드는 '버리는 게 정상' 이라 매핑 실패로 세지 않는다.",
       "매핑 후 우리 코드가 NNN000(시도 대표코드) 형태면 어느 시군구인지 알 수 없어 자동으로 버린다.",
       "",
@@ -81,7 +82,16 @@
       "  111050 군위군(경북, 우리엔 대구 27720 군위만 존재 -> 104090 로 매핑),",
       "  112230~112270 광주 자치구(광산/남/동/북/서구; canonical 은 103xxx 라 112 계열은 버림),",
       "  114100 청원군(청주 통합)/115110 연기군(세종 통합)-우리 마스터에 없음.",
-      "세종: 118000(세종전체) -> 36110(우리 세종 단일 시군구) 특례. 화성: 사람인엔 일반구 없이 102510 화성시뿐 -> 41590."
+      "세종: 118000(세종전체) -> 36110(우리 세종 단일 시군구) 특례. 화성: 사람인엔 일반구 없이 102510 화성시뿐 -> 41590.",
+      "",
+      "===== jobCodes 초안 (2026-08-17) =====",
+      "★ 초안 — 사람인 대분류(job-mid-code mcode) 21개 기준 best-effort 크로스워크. 사람 검토 전제.",
+      "저확신(low) 항목: 10 서비스/11 생산/22 건설·건축/6 의료/13 미디어·문화·스포츠/20 공공·복지 —",
+      "  사람인 카테고리 하나가 KECO 여러 중분류에 걸쳐 대표값만 지정했다. 정확 집계는 세부 job_cd 세분화 필요.",
+      "many-to-one 허용(예: 015 <- mcode 16/14/12) — 직종 매핑은 JobCount 집계 forward 전용이라 역매핑 불필요.",
+      "이 매핑은 legacy JobCount 집계에만 쓰인다(1번 채용카드/2번 지역프로필은 직종 매핑을 쓰지 않는다).",
+      "access-key 발급 후 실제 job-search 응답의 position.job-mid-code.code 값으로 최종 검증 필요.",
+      "타깃 KECO 중분류 코드는 전부 data/static/level_middle.csv 에 존재함을 확인했다(18개 distinct)."
     ],
     "regionCodePassthrough": false,
     "regionCodes": {
@@ -351,7 +361,29 @@
     "118000": "36110"
     },
     "jobCodePassthrough": false,
-    "jobCodes": {},
+    "jobCodes": {
+      "16": "015",
+      "14": "015",
+      "12": "015",
+      "3": "018",
+      "5": "017",
+      "4": "017",
+      "2": "024",
+      "15": "055",
+      "8": "073",
+      "21": "01A",
+      "18": "019",
+      "7": "07A",
+      "10": "063",
+      "11": "095",
+      "22": "081",
+      "6": "042",
+      "9": "021",
+      "19": "031",
+      "13": "057",
+      "17": "01C",
+      "20": "037"
+    },
     "ignoredRegionCodes": []
   }
 }
