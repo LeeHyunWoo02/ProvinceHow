@@ -261,7 +261,10 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
 
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromHttpUrl(baseUrl)
-                .pathSegment(apiPath)
+                // apis.molit.path 는 "/RTMSDataSvcAptRent/getRTMSDataSvcAptRent" 처럼 선행 슬래시가 있고
+                // 세그먼트가 2개다. pathSegment() 는 인자 하나를 슬래시 없는 단일 세그먼트로 보기 때문에
+                // '/' 를 만나면 IllegalArgumentException 을 던진다. 경로는 그대로 이어붙인다.
+                .path(apiPath)
                 .queryParam("LAWD_CD", code.value())
                 .queryParam("DEAL_YMD", yearMonth.format(DEAL_YMD_FORMAT))
                 .queryParam("pageNo", page)

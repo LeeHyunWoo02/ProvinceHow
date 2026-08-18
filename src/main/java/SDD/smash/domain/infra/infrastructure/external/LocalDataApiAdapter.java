@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -70,6 +71,13 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
 
     /** Swagger 가 명시한 한 페이지 상한. 이보다 큰 값을 요청하지 않는다. */
     static final int MAX_ROWS_PER_PAGE = 100;
+
+    /**
+     * 성공으로 인정하는 {@code resultCode}. 자릿수가 데이터셋마다 다르게 온다.
+     * 실 응답은 {@code resultCode=0, resultMsg=정상} 이고 Swagger 예시는 {@code 00}/{@code 000} 이다.
+     * 셋 중 하나가 아니면 실패로 본다(빈 값은 헤더가 없는 응답이라 판정하지 않는다).
+     */
+    private static final Set<String> SUCCESS_RESULT_CODES = Set.of("0", "00", "000");
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -269,7 +277,7 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
 
         JsonNode header = root.path("response").path("header");
         String resultCode = header.path("resultCode").asText("");
-        if (!resultCode.isEmpty() && !"00".equals(resultCode) && !"000".equals(resultCode)) {
+        if (!resultCode.isEmpty() && !SUCCESS_RESULT_CODES.contains(resultCode)) {
             throw new LocalDataApiException("[localdata] 실패 응답 resultCode=" + resultCode
                     + ", resultMsg=" + header.path("resultMsg").asText(""));
         }
