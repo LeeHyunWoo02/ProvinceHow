@@ -5,6 +5,7 @@ import SDD.smash.domain.job.domain.port.JobPostingProvider;
 import SDD.smash.domain.job.infrastructure.external.dto.WorknetApiSpecFile;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
@@ -38,6 +39,7 @@ import java.util.Map;
  */
 @Component
 @Slf4j
+@ConditionalOnProperty(name = "apis.job.provider", havingValue = "worknet")
 public class WorknetJobPostingApiAdapter implements JobPostingProvider {
 
     /** 워크넷 채용목록 조회 경로. 공식 엔드포인트다(2026-08-13 실측 200 응답 확인). */
