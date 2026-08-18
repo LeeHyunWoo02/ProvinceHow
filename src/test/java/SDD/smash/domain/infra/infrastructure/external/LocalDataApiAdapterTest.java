@@ -209,6 +209,79 @@ class LocalDataApiAdapterTest {
     }
 
     @Test
+    @DisplayName("실 응답의 resultCode=0 은 성공으로 처리한다")
+    void treatsSingleZeroResultCodeAsSuccess() {
+        // given - 운영에서 실제로 오는 형태다. resultMsg 는 "정상" 이다
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withSuccess("""
+                        {"response":{"header":{"resultCode":"0","resultMsg":"정상"},
+                         "body":{"totalCount":1,"items":{"item":[%s]}}}}
+                        """.formatted(item("3000000-101-2016-00350", "01", "3000000")),
+                        MediaType.APPLICATION_JSON));
+
+        // when
+        FacilityCollection collection = adapter("test-key", 100).collect(RESTAURANT, JONGNO);
+
+        // then
+        assertThat(collection.readCount()).isEqualTo(1);
+        assertThat(collection.operatingCount()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("resultCode 가 000 이어도 성공으로 처리한다")
+    void treatsTripleZeroResultCodeAsSuccess() {
+        // given
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withSuccess("""
+                        {"response":{"header":{"resultCode":"000","resultMsg":"OK"},
+                         "body":{"totalCount":1,"items":{"item":[%s]}}}}
+                        """.formatted(item("3000000-101-2016-00350", "01", "3000000")),
+                        MediaType.APPLICATION_JSON));
+
+        // when
+        FacilityCollection collection = adapter("test-key", 100).collect(RESTAURANT, JONGNO);
+
+        // then
+        assertThat(collection.readCount()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("0/00/000 이 아닌 resultCode 는 여전히 실패로 알린다")
+    void stillThrowsOnNonSuccessResultCode() {
+        // given - 트래픽 초과(22)
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withSuccess("""
+                        {"response":{"header":{"resultCode":"22",
+                          "resultMsg":"LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR"},
+                         "body":{"totalCount":0,"items":{"item":[]}}}}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when / then
+        assertThatThrownBy(() -> adapter("test-key", 100).collect(RESTAURANT, JONGNO))
+                .isInstanceOf(LocalDataApiException.class)
+                .hasMessageContaining("실패 응답")
+                .hasMessageContaining("resultCode=22");
+    }
+
+    @Test
+    @DisplayName("0 으로 시작해도 성공 코드가 아니면 실패로 알린다")
+    void stillThrowsOnResultCodeStartingWithZero() {
+        // given - "0" 접두 비교로 눙치지 않는다는 확인이다
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withSuccess("""
+                        {"response":{"header":{"resultCode":"04","resultMsg":"HTTP_ERROR"},
+                         "body":{"totalCount":0,"items":{"item":[]}}}}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when / then
+        assertThatThrownBy(() -> adapter("test-key", 100).collect(RESTAURANT, JONGNO))
+                .isInstanceOf(LocalDataApiException.class)
+                .hasMessageContaining("resultCode=04");
+    }
+
+    @Test
     @DisplayName("게이트웨이 오류 응답은 예외로 알린다 - 빈 결과로 삼키지 않는다")
     void throwsOnGatewayError() {
         server.expect(requestTo(url(1, 100)))

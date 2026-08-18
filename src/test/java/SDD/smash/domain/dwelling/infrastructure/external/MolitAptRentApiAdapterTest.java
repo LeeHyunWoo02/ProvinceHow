@@ -22,7 +22,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -36,6 +38,10 @@ class MolitAptRentApiAdapterTest {
     private static final SigunguCode GANGNAM = SigunguCode.of("11680");
     private static final YearMonth MAY_2026 = YearMonth.of(2026, 5);
 
+    /** 운영 설정(backend.env.example)의 MOLIT_BASE_URL / MOLIT_PATH 와 같은 모양이다. */
+    private static final String BASE_URL = "http://localhost/1613000";
+    private static final String API_PATH = "/RTMSDataSvcAptRent/getRTMSDataSvcAptRent";
+
     private RestTemplate restTemplate;
     private MockRestServiceServer server;
     private MolitAptRentApiAdapter adapter;
@@ -46,14 +52,54 @@ class MolitAptRentApiAdapterTest {
         server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
         adapter = new MolitAptRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper());
 
-        ReflectionTestUtils.setField(adapter, "baseUrl", "http://localhost/1613000/RTMSDataSvcAptRent");
-        ReflectionTestUtils.setField(adapter, "apiPath", "getRTMSDataSvcAptRent");
+        // 운영 설정값과 같은 모양이다. apis.molit.path 는 선행 슬래시가 있고 세그먼트가 2개다.
+        ReflectionTestUtils.setField(adapter, "baseUrl", BASE_URL);
+        ReflectionTestUtils.setField(adapter, "apiPath", API_PATH);
         ReflectionTestUtils.setField(adapter, "serviceKey", "super-secret-key");
         ReflectionTestUtils.setField(adapter, "pageSize", 1000);
         ReflectionTestUtils.setField(adapter, "maxPages", 50);
         ReflectionTestUtils.setField(adapter, "requestIntervalMs", 0L);
         ReflectionTestUtils.setField(adapter, "maxConcurrentRequests", 1);
         adapter.initRateLimiter();
+    }
+
+    // ------------------------------------------------------------------ URL 조립
+
+    @Test
+    @DisplayName("선행 슬래시가 있는 다중 세그먼트 경로를 baseUrl 뒤에 그대로 이어붙인다")
+    void buildsUrlFromPathWithLeadingSlashAndMultipleSegments() {
+        // given - pathSegment() 를 쓰면 '/' 때문에 IllegalArgumentException 이 나던 경로다
+        server.expect(once(), requestTo(startsWith(
+                        "http://localhost/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent?")))
+                .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
+
+        // when
+        List<RentRecord> records = adapter.fetch(GANGNAM, MAY_2026);
+
+        // then
+        assertThat(records).hasSize(1);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("경로 뒤에 조회 파라미터가 모두 붙는다")
+    void appendsEveryQueryParameterAfterPath() {
+        // given
+        server.expect(once(), requestTo(allOf(
+                        containsString("/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent?"),
+                        containsString("LAWD_CD=11680"),
+                        containsString("DEAL_YMD=202605"),
+                        containsString("pageNo=1"),
+                        containsString("numOfRows=1000"),
+                        containsString("_type=json"),
+                        containsString("serviceKey=super-secret-key"))))
+                .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
+
+        // when
+        adapter.fetch(GANGNAM, MAY_2026);
+
+        // then
+        server.verify();
     }
 
     // ------------------------------------------------------------------ 페이지네이션
