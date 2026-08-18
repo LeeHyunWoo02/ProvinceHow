@@ -56,7 +56,7 @@ class LocalDataApiAdapterTest {
 
     private LocalDataApiAdapter adapter(String serviceKey, int pageSize) {
         return new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, serviceKey, pageSize, 10, 0, 9000, 1, 0, 0);
+                BASE_URL, serviceKey, pageSize, 10, 0, 9000, 1, 0, 2, 0);
     }
 
     private static String body(int totalCount, String... items) {
@@ -314,7 +314,7 @@ class LocalDataApiAdapterTest {
         server.expect(requestTo(url(1, 100))).andRespond(withServerError());
 
         LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, "test-key", 100, 10, 0, 9000, 2, 0, 0);
+                BASE_URL, "test-key", 100, 10, 0, 9000, 2, 0, 2, 0);
 
         assertThatThrownBy(() -> adapter.collect(RESTAURANT, JONGNO))
                 .isInstanceOf(LocalDataApiException.class);
@@ -329,7 +329,7 @@ class LocalDataApiAdapterTest {
 
         // 예산 1회. 첫 수집은 통과하고 두 번째는 호출 전에 막힌다.
         LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 0);
+                BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0);
 
         adapter.collect(RESTAURANT, JONGNO);
         assertThat(adapter.callsUsed()).isEqualTo(1);
@@ -372,6 +372,42 @@ class LocalDataApiAdapterTest {
         assertThat(LocalDataApiAdapter.retryAfterMillis(headers)).contains(3000L);
         assertThat(LocalDataApiAdapter.retryAfterMillis(new org.springframework.http.HttpHeaders()))
                 .isEqualTo(Optional.empty());
+    }
+
+    // ------------------------------------------------------------------ 재시도 지연
+
+    @Test
+    @DisplayName("재시도 지연이 시도마다 배수만큼 늘어난다 - 1초 → 2초 → 4초")
+    void growsRetryDelayExponentiallyPerAttempt() {
+        // given / when / then - 실제로 sleep 하지 않는 순수 계산이라 테스트가 느려지지 않는다
+        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 1, 60_000)).isEqualTo(1000);
+        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 2, 60_000)).isEqualTo(2000);
+        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 3, 60_000)).isEqualTo(4000);
+    }
+
+    @Test
+    @DisplayName("지연은 max-retry-after-ms 상한을 넘지 않는다")
+    void capsRetryDelayAtConfiguredMaximum() {
+        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 20, 60_000)).isEqualTo(60_000);
+        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 7, 10_000)).isEqualTo(10_000);
+    }
+
+    @Test
+    @DisplayName("기본 지연이 0이거나 배수가 1 미만이면 지연이 늘어나지 않는다")
+    void keepsDelayFlatForZeroBaseOrInvalidMultiplier() {
+        assertThat(LocalDataApiAdapter.backoffDelayMs(0, 2, 3, 60_000)).isZero();
+        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 0.5, 3, 60_000)).isEqualTo(1000);
+    }
+
+    @Test
+    @DisplayName("어댑터 설정값으로 계산한 지연도 같은 규칙을 따른다")
+    void computesBackoffFromAdapterConfiguration() {
+        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
+                BASE_URL, "test-key", 100, 10, 0, 9000, 3, 1000, 2, 60_000);
+
+        assertThat(adapter.backoffDelayMs(1)).isEqualTo(1000);
+        assertThat(adapter.backoffDelayMs(2)).isEqualTo(2000);
+        assertThat(adapter.backoffDelayMs(3)).isEqualTo(4000);
     }
 
     @Test
