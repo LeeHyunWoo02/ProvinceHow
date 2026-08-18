@@ -16,11 +16,11 @@ env:
   REGISTRY: docker.io
   IMAGE_NAME: ${{ secrets.DOCKERHUB_REPO }}
   USE_FLOATING_LATEST: "false"
-  PLATFORMS: "linux/amd64"                 # ← 기본 플랫폼 지정(필요 시 arm64 추가)
+  PLATFORMS: "linux/arm64"                 # ← 기본 플랫폼 지정(필요 시 arm64 추가)
 
 jobs:
   build-and-push:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm   # OCI Ampere(무료티어)가 arm64 이므로 네이티브 ARM 러너에서 빌드
     outputs:
       prod_tag: ${{ steps.ver.outputs.prod_tag }}
       sha_tag:  ${{ steps.ver.outputs.sha_tag }}
@@ -78,6 +78,56 @@ jobs:
             echo " - ${{ env.IMAGE_NAME }}:prod-latest (floating, do NOT use for deploy)"
           fi
 
-# 배포(deploy) job은 제거된 상태다. 기존 job은 AWS EC2에 SSH로 붙어 docker run 하는 방식이었고,
-# 운영 환경이 OCI의 단일 docker-compose.yaml 구성으로 바뀌면서 더 이상 유효하지 않다.
-# OCI 배포는 추후 별도로 작성한다. 현재 이 워크플로는 이미지 빌드/푸시까지만 수행한다.
+  deploy:
+    name: Deploy to OCI
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # backend.env(앱 시크릿)는 서버에 수동으로 미리 둔다(전송하지 않음).
+      # 배포 compose + 정적 기준데이터 + mysql init 스크립트만 서버로 보낸다.
+      - name: Copy deploy files to OCI
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          source: "docker-compose.deploy.yaml,data/static,docker/mysql/init"
+          target: "/home/ubuntu/smash"
+
+      - name: Deploy on OCI
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          IMAGE: ${{ secrets.DOCKERHUB_REPO }}:${{ needs.build-and-push.outputs.prod_tag }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_KEY }}
+          envs: IMAGE,DOCKERHUB_USERNAME,DOCKERHUB_TOKEN
+          script: |
+            set -e
+            cd /home/ubuntu/smash
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "::error::Docker가 설치돼 있지 않습니다. OCI 서버에 docker/docker compose를 먼저 설치하세요."
+              exit 1
+            fi
+            if [ ! -f backend.env ]; then
+              echo "::error::/home/ubuntu/smash/backend.env 가 없습니다. 앱 시크릿이 담긴 backend.env를 서버에 먼저 두세요."
+              exit 1
+            fi
+            mkdir -p data/generated
+            echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+            export SMASH_IMAGE="$IMAGE"
+            docker compose -f docker-compose.deploy.yaml pull
+            docker compose -f docker-compose.deploy.yaml up -d --remove-orphans
+            docker image prune -f
+            docker logout || true
+            echo "배포 완료: $IMAGE"
+
+# 배포 흐름: main push -> build-and-push(이미지 빌드/Docker Hub 푸시) -> deploy(OCI SSH 접속,
+# 배포 compose로 이미지 pull & up -d). 서버 사전 준비(수동): docker/docker compose 설치,
+# /home/ubuntu/smash/backend.env(앱 시크릿). GitHub Secrets: OCI_HOST/OCI_USERNAME/OCI_SSH_KEY, DOCKERHUB_*.
