@@ -39,7 +39,17 @@ import java.util.Set;
  * {@code ratio} 는 시군구 내 전 업종 합계를, {@code score} 는 업종별 전국 분포를 알아야 계산된다.
  * 행 단위 스트리밍으로는 계산할 수 없다. 그리고 <b>부분 수집 스냅샷은 반영하면 안 된다</b> —
  * 일부 업종만 갱신되면 두 값이 서로 다른 기준으로 섞이기 때문이다.
- * 그래서 수집 도중 실패하면 예외를 던지고, 그 결과 Step 이 FAILED 로 끝나 기존 스냅샷이 보존된다.
+ * 그래서 수집을 끝내지 못하면 예외를 던지고, 그 결과 Step 이 FAILED 로 끝나 기존 스냅샷이 보존된다.
+ *
+ * <h2>실행 내 2차 패스</h2>
+ * 1차 순회에서 대상(지역 × 업종)이 실패해도 즉시 죽지 않고 <b>실패 목록에 모아 두고 계속</b> 진행한다.
+ * 순회가 끝나면 실패한 대상만 <b>한 번 더</b> 수집한다. 2차 패스에서도 남은 실패가 있으면 그때
+ * {@code InfraCollectionException} 을 던져 전체를 실패시킨다 — 부분 반영은 여전히 금지다.
+ * 3,664개 대상을 19분 수집한 뒤 한 대상의 읽기 타임아웃으로 전량을 버린 2026-08 장애가 계기다.
+ *
+ * <p>누계({@code apiCalls}/{@code readCount}/{@code filteredOut}/{@code duplicates}/재분배 건수)는
+ * 수집에 <b>성공한 대상에서만</b> 더해진다. 1차 실패분은 아무것도 반영되지 않으므로 2차 패스가
+ * 성공해도 중복 집계되지 않는다. {@code targets} 는 대상 수라서 1차에서 한 번만 센다.
  *
  * <h2>수집 경로</h2>
  * {@code infra.collect.source} = {@code API}(기본) / {@code BULK_CSV} / {@code LEGACY_CSV}.
@@ -160,49 +170,39 @@ public class InfraSnapshotAssembler {
         Map<LocalDataRegionCode, SigunguCode> index = mapping.asMap();
         Map<SigunguCode, RegionCodeMapping.DistrictSplit> splits = mapping.splitIndex();
         Collected collected = new Collected();
-        Map<Key, Integer> counts = new LinkedHashMap<>();
 
+        List<Target> targets = new ArrayList<>(mapping.entries().size() * industries.size());
         for (RegionCodeMapping.Entry region : mapping.entries()) {
             for (IndustryMasterEntry industry : industries) {
-                collected.targets++;
-                FacilityCollection collection = collect(provider, industry.code(), region.openOrgCode());
+                targets.add(new Target(industry.code(), region.openOrgCode()));
+            }
+        }
+        // targets 는 "대상 수"다. 2차 패스는 같은 대상을 다시 부르는 것이므로 여기서만 센다.
+        collected.targets = targets.size();
+        log.info("[infraJob] 수집 시작 source={}, regions={}, industries={}, targets={}",
+                source, mapping.entries().size(), industries.size(), targets.size());
 
-                collected.apiCalls += collection.apiCalls();
-                collected.readCount += collection.readCount();
-                collected.filteredOut += collection.filteredOutCount();
-                collected.duplicates += collection.duplicatesDropped();
+        // 1차 순회. 대상 하나가 실패해도 즉시 죽지 않고 모아 둔다 — 3,664개 대상을 19분 수집한 뒤
+        // 한 건 때문에 전량 폐기한 것이 2026-08 장애의 실제 손실이었다.
+        List<Failure> failures = runPass(provider, targets, collected, index, splits);
+        log.info("[infraJob] 1차 수집 완료 성공={}건 / 실패={}건", targets.size() - failures.size(), failures.size());
 
-                // 사업장이 들고 있는 개방자치단체코드를 우선한다. 요청이 시도 전체(_ALL)일 수 있어
-                // 요청 코드로 뭉뚱그리면 시군구가 뭉개진다.
-                for (var facility : collection.facilities()) {
-                    if (!facility.countsAsInfra()) {
-                        continue;
-                    }
-                    LocalDataRegionCode orgCode = facility.openOrgCode();
-                    SigunguCode sigunguCode = orgCode == null ? null : index.get(orgCode);
-                    if (sigunguCode == null) {
-                        collected.unmappedRegions.add(orgCode == null ? "(없음)" : orgCode.value());
-                        collected.unmappedFacilityCount++;
-                        continue;
-                    }
+        if (!failures.isEmpty()) {
+            // 누계(apiCalls/readCount/...)는 성공한 대상에서만 더해진다. 1차 실패분은 아무것도
+            // 반영되지 않았으므로 2차 패스가 성공해도 중복 집계가 생기지 않는다.
+            log.info("[infraJob] 1차 실패 {}건 → 2차 패스 시작. 첫 실패={}",
+                    failures.size(), failures.get(0).reason());
 
-                    // 일반구를 둔 시라면 여기서만 주소를 본다. 그 외 지역은 코드로 확정된다.
-                    RegionCodeMapping.DistrictSplit split = splits.get(sigunguCode);
-                    if (split != null) {
-                        SigunguCode district = split.resolveAny(facility.addressCandidates()).orElse(null);
-                        if (district == null) {
-                            // 상위 시로 떨어뜨리면 일반구와 이중 집계가 된다. 버리고 세어 둔다.
-                            collected.districtUnresolved++;
-                            collected.unresolvedCities.add(
-                                    split.cityName() == null ? sigunguCode.value() : split.cityName());
-                            continue;
-                        }
-                        collected.districtResolved++;
-                        sigunguCode = district;
-                    }
+            List<Failure> remaining = runPass(provider, toTargets(failures), collected, index, splits);
+            log.info("[infraJob] 2차 패스 결과 성공 {}건 / 실패 {}건",
+                    failures.size() - remaining.size(), remaining.size());
 
-                    counts.merge(new Key(sigunguCode, industry.code()), 1, Integer::sum);
-                }
+            if (!remaining.isEmpty()) {
+                // 여전히 결측이 있으면 백분위 모집단이 깨진다. 부분 반영은 금지다.
+                Failure first = remaining.get(0);
+                throw new InfraCollectionException(String.format(
+                        "[infraJob] 2차 패스에서도 수집 실패로 스냅샷을 만들 수 없다. 남은 실패=%d건, 첫 실패=%s",
+                        remaining.size(), first.reason()), first.cause());
             }
         }
 
@@ -219,8 +219,87 @@ public class InfraSnapshotAssembler {
             log.info("[infraJob] 일반구 재분배 완료 resolved={}, unresolved=0", collected.districtResolved);
         }
 
-        collected.counts = toCounts(counts);
+        collected.counts = toCounts(collected.merged);
         return collected;
+    }
+
+    /**
+     * 대상 목록을 한 번 훑는다. 실패한 대상은 <b>던지지 않고</b> 돌려준다.
+     *
+     * <p>누계와 개수 맵은 {@code collect} 가 성공한 대상에서만 갱신된다. 실패한 대상은
+     * {@code accumulate} 를 아예 통과하지 않으므로, 그 대상이 2차 패스에서 성공해도 값이
+     * 두 번 더해지지 않는다.
+     */
+    private List<Failure> runPass(InfraFacilityProvider provider, List<Target> targets, Collected collected,
+                                  Map<LocalDataRegionCode, SigunguCode> index,
+                                  Map<SigunguCode, RegionCodeMapping.DistrictSplit> splits) {
+
+        List<Failure> failures = new ArrayList<>();
+        for (Target target : targets) {
+            FacilityCollection collection;
+            try {
+                collection = collect(provider, target.industryCode(), target.regionCode());
+            } catch (InfraCollectionException e) {
+                // 건수가 많을 수 있어 대상 단위 상세는 debug 다. 집계는 호출부가 info 로 남긴다.
+                log.debug("[infraJob] 대상 수집 실패 industry={}, org={}, reason={}",
+                        target.industryCode().value(), target.regionCode().value(), e.getMessage());
+                failures.add(new Failure(target, e));
+                continue;
+            }
+            accumulate(collection, target, collected, index, splits);
+        }
+        return failures;
+    }
+
+    /** 성공한 수집 결과 하나를 누계와 개수 맵에 반영한다. 여기 들어온 대상은 다시 수집되지 않는다. */
+    private void accumulate(FacilityCollection collection, Target target, Collected collected,
+                            Map<LocalDataRegionCode, SigunguCode> index,
+                            Map<SigunguCode, RegionCodeMapping.DistrictSplit> splits) {
+
+        collected.apiCalls += collection.apiCalls();
+        collected.readCount += collection.readCount();
+        collected.filteredOut += collection.filteredOutCount();
+        collected.duplicates += collection.duplicatesDropped();
+
+        // 사업장이 들고 있는 개방자치단체코드를 우선한다. 요청이 시도 전체(_ALL)일 수 있어
+        // 요청 코드로 뭉뚱그리면 시군구가 뭉개진다.
+        for (var facility : collection.facilities()) {
+            if (!facility.countsAsInfra()) {
+                continue;
+            }
+            LocalDataRegionCode orgCode = facility.openOrgCode();
+            SigunguCode sigunguCode = orgCode == null ? null : index.get(orgCode);
+            if (sigunguCode == null) {
+                collected.unmappedRegions.add(orgCode == null ? "(없음)" : orgCode.value());
+                collected.unmappedFacilityCount++;
+                continue;
+            }
+
+            // 일반구를 둔 시라면 여기서만 주소를 본다. 그 외 지역은 코드로 확정된다.
+            RegionCodeMapping.DistrictSplit split = splits.get(sigunguCode);
+            if (split != null) {
+                SigunguCode district = split.resolveAny(facility.addressCandidates()).orElse(null);
+                if (district == null) {
+                    // 상위 시로 떨어뜨리면 일반구와 이중 집계가 된다. 버리고 세어 둔다.
+                    collected.districtUnresolved++;
+                    collected.unresolvedCities.add(
+                            split.cityName() == null ? sigunguCode.value() : split.cityName());
+                    continue;
+                }
+                collected.districtResolved++;
+                sigunguCode = district;
+            }
+
+            collected.merged.merge(new Key(sigunguCode, target.industryCode()), 1, Integer::sum);
+        }
+    }
+
+    private static List<Target> toTargets(List<Failure> failures) {
+        List<Target> targets = new ArrayList<>(failures.size());
+        for (Failure failure : failures) {
+            targets.add(failure.target());
+        }
+        return targets;
     }
 
     private FacilityCollection collect(InfraFacilityProvider provider,
@@ -261,7 +340,6 @@ public class InfraSnapshotAssembler {
             throw new InfraCollectionException("[infraJob] 레거시 CSV 를 읽지 못했다: " + legacyCsvPath, e);
         }
 
-        Map<Key, Integer> counts = new LinkedHashMap<>();
         for (int i = 1; i < lines.size(); i++) {
             String line = stripBom(lines.get(i));
             if (line == null || line.isBlank()) {
@@ -290,7 +368,7 @@ public class InfraSnapshotAssembler {
                 continue;
             }
             collected.readCount += num;
-            counts.merge(new Key(sigunguCode, industryCode), num, Integer::sum);
+            collected.merged.merge(new Key(sigunguCode, industryCode), num, Integer::sum);
         }
 
         if (!collected.unmappedIndustries.isEmpty()) {
@@ -302,7 +380,7 @@ public class InfraSnapshotAssembler {
                     collected.unmappedRegions.size(), collected.unmappedRegions);
         }
 
-        collected.counts = toCounts(counts);
+        collected.counts = toCounts(collected.merged);
         return collected;
     }
 
@@ -355,8 +433,21 @@ public class InfraSnapshotAssembler {
     private record Key(SigunguCode sigunguCode, IndustryCode industryCode) {
     }
 
+    /** 수집 대상 하나. 지역(개방자치단체코드) × 업종이다. */
+    private record Target(IndustryCode industryCode, LocalDataRegionCode regionCode) {
+    }
+
+    /** 1차 순회에서 실패한 대상과 그 사유. 2차 패스의 입력이다. */
+    private record Failure(Target target, InfraCollectionException cause) {
+        private String reason() {
+            return cause.getMessage();
+        }
+    }
+
     /** 수집 중간 상태. 지표를 한 곳에 모은다. */
     private static final class Collected {
+        /** 지역×업종 개수 누계. 성공한 대상만 여기에 더해진다. */
+        private final Map<Key, Integer> merged = new LinkedHashMap<>();
         private List<RegionIndustryCount> counts = List.of();
         private int targets;
         private int apiCalls;

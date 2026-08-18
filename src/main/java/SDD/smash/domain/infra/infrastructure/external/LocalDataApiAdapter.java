@@ -11,6 +11,7 @@ import SDD.smash.domain.infra.infrastructure.master.InfraMasterCatalog;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -50,6 +51,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  *       초과하면 수집을 실패로 끝낸다(부분 스냅샷을 반영하지 않기 위해서다).</li>
  *   <li>초당 호출 제한(에러코드 23)이 있으나 수치가 공개되지 않아 최소 호출 간격을 둔다.</li>
  * </ul>
+ *
+ * <h2>타임아웃과 재시도</h2>
+ * HTTP 클라이언트는 {@link LocalDataRestTemplateConfig} 의 <b>전용</b> {@code RestTemplate} 이다
+ * (공유 빈보다 읽기 타임아웃이 길다). 재시도 지연은 <b>지수 백오프</b>다 — 기본값 기준
+ * 1초 → 2초 → 4초이며 {@code apis.localdata.max-retry-after-ms} 를 상한으로 쓴다. 서버가
+ * {@code Retry-After} 를 명시하면 그 값을 우선한다(서버 추정이 우리 추정보다 정확하다).
  *
  * <h2>비밀값</h2>
  * URL 을 로그에 남길 때 {@code serviceKey} 를 마스킹하고, 응답 본문은 운영 로그에 찍지 않는다.
@@ -91,6 +98,7 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
     private final int dailyCallBudget;
     private final int maxAttempts;
     private final long retryDelayMs;
+    private final double retryBackoffMultiplier;
     private final long maxRetryAfterMs;
 
     /** 이 프로세스가 쓴 호출 수. 일일 예산 초과를 감지하기 위한 최소한의 계량기다. */
@@ -100,7 +108,7 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
     private long nextAllowedAtMillis;
 
     public LocalDataApiAdapter(
-            RestTemplate restTemplate,
+            @Qualifier(LocalDataRestTemplateConfig.LOCALDATA_REST_TEMPLATE) RestTemplate restTemplate,
             ObjectMapper objectMapper,
             InfraMasterCatalog masterCatalog,
             @Value("${apis.localdata.base-url:https://apis.data.go.kr}") String baseUrl,
@@ -111,6 +119,7 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             @Value("${apis.localdata.daily-call-budget:9000}") int dailyCallBudget,
             @Value("${apis.localdata.max-attempts:3}") int maxAttempts,
             @Value("${apis.localdata.retry-delay-ms:1000}") long retryDelayMs,
+            @Value("${apis.localdata.retry-backoff-multiplier:2}") double retryBackoffMultiplier,
             @Value("${apis.localdata.max-retry-after-ms:60000}") long maxRetryAfterMs) {
 
         this.restTemplate = restTemplate;
@@ -124,6 +133,8 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
         this.dailyCallBudget = Math.max(1, dailyCallBudget);
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMs = Math.max(0, retryDelayMs);
+        // 1 미만이면 지연이 줄어들어 백오프가 아니게 된다. 설정 실수를 여기서 흡수한다.
+        this.retryBackoffMultiplier = Math.max(1.0d, retryBackoffMultiplier);
         this.maxRetryAfterMs = Math.max(0, maxRetryAfterMs);
     }
 
@@ -204,16 +215,20 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
         URI uri = buildUri(slug, regionCode, page);
 
         RuntimeException last = null;
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+        for (int i = 1; i <= maxAttempts; i++) {
+            final int attempt = i;
             acquireSlot();
             try {
                 ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
                 return parse(response.getBody());
             } catch (HttpStatusCodeException e) {
                 last = translate(e, slug, regionCode, page);
-                long wait = retryAfterMillis(e.getResponseHeaders()).orElse(retryDelayMs);
+                // 서버가 대기시간을 명시하면 그 값이 우리 추정보다 정확하다. 없을 때만 백오프를 쓴다.
+                long wait = retryAfterMillis(e.getResponseHeaders())
+                        .map(value -> Math.min(value, maxRetryAfterMs))
+                        .orElseGet(() -> backoffDelayMs(attempt));
                 if (attempt < maxAttempts && isRetryable(e)) {
-                    sleep(Math.min(wait, maxRetryAfterMs));
+                    sleep(wait);
                     continue;
                 }
                 throw last;
@@ -226,7 +241,9 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
                         "[localdata] 호출 실패 slug=%s, org=%s, page=%d, url=%s",
                         slug, regionCode.value(), page, mask(uri.toString())), e);
                 if (attempt < maxAttempts) {
-                    sleep(retryDelayMs);
+                    // 읽기 타임아웃이 여기로 온다. 서버가 느려진 상태에서 같은 간격으로 다시 때리면
+                    // 세 번 모두 같은 결과를 본다(2026-08 infraStep 장애). 지연을 늘려 가며 기다린다.
+                    sleep(backoffDelayMs(attempt));
                     continue;
                 }
                 throw last;
@@ -339,6 +356,29 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             Thread.currentThread().interrupt();
             throw new LocalDataApiException("[localdata] 호출 대기 중 인터럽트", e);
         }
+    }
+
+    /** {@code attempt}(1부터)번째 시도가 실패한 뒤 기다릴 시간. 설정값을 묶어 계산에 넘긴다. */
+    long backoffDelayMs(int attempt) {
+        return backoffDelayMs(retryDelayMs, retryBackoffMultiplier, attempt, maxRetryAfterMs);
+    }
+
+    /**
+     * 지수 백오프 지연. {@code base * multiplier^(attempt-1)} 를 {@code maxDelayMs} 로 자른다.
+     *
+     * <p>실제로 {@code sleep} 하지 않는 순수 계산이라 테스트가 느려지지 않는다.
+     * 기본값(base 1000ms, 배수 2, 상한 60000ms)이면 1000 → 2000 → 4000 이다.
+     */
+    static long backoffDelayMs(long baseDelayMs, double multiplier, int attempt, long maxDelayMs) {
+        if (baseDelayMs <= 0) {
+            return 0;
+        }
+        int exponent = Math.max(0, attempt - 1);
+        double delay = baseDelayMs * Math.pow(Math.max(1.0d, multiplier), exponent);
+        if (Double.isNaN(delay) || delay >= maxDelayMs) {
+            return Math.max(0, maxDelayMs);
+        }
+        return Math.min(Math.max(0, maxDelayMs), (long) delay);
     }
 
     static Optional<Long> retryAfterMillis(HttpHeaders headers) {

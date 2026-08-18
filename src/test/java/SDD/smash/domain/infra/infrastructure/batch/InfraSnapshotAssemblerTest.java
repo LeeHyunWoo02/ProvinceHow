@@ -34,6 +34,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 class InfraSnapshotAssemblerTest {
@@ -152,6 +153,79 @@ class InfraSnapshotAssemblerTest {
         assertThatThrownBy(() -> assembler("API", "unused.csv").assemble())
                 .isInstanceOf(InfraCollectionException.class)
                 .hasMessageContaining("수집 실패");
+    }
+
+    @Test
+    @DisplayName("1차에서 실패한 대상이 2차 패스에서 성공하면 스냅샷이 정상 생성된다")
+    void retriesFailedTargetsOnceAndBuildsSnapshot() {
+        // given - 종로는 1차에 성공하고, 중구는 1차 실패 후 2차에 성공한다
+        given(apiAdapter.isReady()).willReturn(true);
+        given(apiAdapter.collect(RESTAURANT, JONGNO)).willReturn(FacilityCollection.of(List.of(
+                facility("A-1", BusinessStatus.OPERATING, JONGNO),
+                facility("A-2", BusinessStatus.OPERATING, JONGNO)), 1));
+        given(apiAdapter.collect(RESTAURANT, JUNG))
+                .willThrow(new LocalDataApiException("[localdata] 호출 실패 slug=..., page=1"))
+                .willReturn(FacilityCollection.of(List.of(
+                        facility("B-1", BusinessStatus.OPERATING, JUNG)), 1));
+
+        // when
+        InfraSnapshot snapshot = assembler("API", "unused.csv").assemble();
+
+        // then - 두 지역이 모두 스냅샷에 들어간다
+        Map<String, RegionIndustryStat> rows = byRegion(snapshot);
+        assertThat(rows.get("11110").count()).isEqualTo(2);
+        assertThat(rows.get("11140").count()).isEqualTo(1);
+        // 1차 실패분은 누계에 반영되지 않았으므로 성공분만 한 번씩 더해진다
+        assertThat(snapshot.targets()).isEqualTo(2);
+        assertThat(snapshot.apiCalls()).isEqualTo(2);
+        assertThat(snapshot.readCount()).isEqualTo(3);
+        verify(apiAdapter, times(1)).collect(RESTAURANT, JONGNO);
+        verify(apiAdapter, times(2)).collect(RESTAURANT, JUNG);
+    }
+
+    @Test
+    @DisplayName("2차 패스에서도 실패하면 스냅샷을 만들지 않는다 - 부분 반영이 없다")
+    void abortsSnapshotWhenSecondPassAlsoFails() {
+        // given - 중구는 두 번 다 실패한다
+        given(apiAdapter.isReady()).willReturn(true);
+        given(apiAdapter.collect(RESTAURANT, JONGNO)).willReturn(FacilityCollection.of(List.of(
+                facility("A-1", BusinessStatus.OPERATING, JONGNO)), 1));
+        given(apiAdapter.collect(RESTAURANT, JUNG))
+                .willThrow(new LocalDataApiException("[localdata] HTTP 429"));
+
+        // when / then - 성공한 종로 몫만으로 스냅샷을 만들지 않는다
+        assertThatThrownBy(() -> assembler("API", "unused.csv").assemble())
+                .isInstanceOf(InfraCollectionException.class)
+                .hasMessageContaining("수집 실패")
+                .hasMessageContaining("2차 패스");
+        verify(apiAdapter, times(2)).collect(RESTAURANT, JUNG);
+    }
+
+    @Test
+    @DisplayName("1차에서 모두 성공하면 2차 패스를 돌지 않고 누계가 중복 집계되지 않는다")
+    void skipsSecondPassWhenEveryTargetSucceedsAtFirstAttempt() {
+        // given
+        given(apiAdapter.isReady()).willReturn(true);
+        given(apiAdapter.collect(RESTAURANT, JONGNO)).willReturn(FacilityCollection.of(List.of(
+                facility("A-1", BusinessStatus.OPERATING, JONGNO),
+                facility("A-2", BusinessStatus.CLOSED, JONGNO),
+                facility("A-3", BusinessStatus.OPERATING, JONGNO)), 1));
+        given(apiAdapter.collect(RESTAURANT, JUNG)).willReturn(FacilityCollection.of(List.of(
+                facility("B-1", BusinessStatus.OPERATING, JUNG)), 1));
+
+        // when
+        InfraSnapshot snapshot = assembler("API", "unused.csv").assemble();
+
+        // then - 대상마다 정확히 한 번씩만 호출되고 누계는 기존과 같다
+        verify(apiAdapter, times(1)).collect(RESTAURANT, JONGNO);
+        verify(apiAdapter, times(1)).collect(RESTAURANT, JUNG);
+        Map<String, RegionIndustryStat> rows = byRegion(snapshot);
+        assertThat(rows.get("11110").count()).isEqualTo(2);
+        assertThat(rows.get("11140").count()).isEqualTo(1);
+        assertThat(snapshot.targets()).isEqualTo(2);
+        assertThat(snapshot.apiCalls()).isEqualTo(2);
+        assertThat(snapshot.readCount()).isEqualTo(4);
+        assertThat(snapshot.filteredOutCount()).isEqualTo(1);
     }
 
     @Test
