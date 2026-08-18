@@ -112,10 +112,35 @@ public class SeedMasterJobListener implements JobExecutionListener {
         return reasons;
     }
 
+    /**
+     * 해당 그룹에서 <b>정상 종료하지 못한</b> Step 이름들.
+     *
+     * <h3>왜 {@code BatchStatus.FAILED} 만 보면 안 되는가</h3>
+     * Spring Batch 는 <b>실패한 Step 을 지나쳐 흐름이 계속되면 그 StepExecution 의 상태를
+     * {@code FAILED} 에서 {@code ABANDONED} 로 올린다.</b> 재시작할 때 그 지점에서 이어받지 말라는
+     * 표시다(ExitStatus 는 {@code FAILED} 로 남는다).
+     * {@code SeedMasterJobConfig#seedMasterFlow} 에서 EXTERNAL Step 은
+     * {@code from(step).on("*").to(다음 관문)} 이라 실패해도 흐름이 이어지므로,
+     * <b>흐름상 마지막이 아닌 EXTERNAL Step 이 실패하면 항상 {@code ABANDONED} 가 된다.</b>
+     * 그래서 {@code FAILED} 만 세면 중간 Step 실패가 통째로 누락되고, Job 이 "완료" 로 보고된다
+     * (운영 실측: infraStep 이 ABANDONED 라 인프라 0건인데 exitStatus 가 COMPLETED 로 남았다).
+     *
+     * <h3>왜 "COMPLETED 가 아니면 실패" 인가</h3>
+     * <ul>
+     *   <li><b>건너뛴 Step 은 StepExecution 자체가 만들어지지 않는다.</b> {@link SeedStepGate} 는
+     *       {@code JobExecutionDecider} 라 SKIP 이면 Step 이 실행되지 않아
+     *       {@code BATCH_STEP_EXECUTION} 에 행이 남지 않는다. 즉 여기 순회 대상은
+     *       <b>실제로 실행된 Step 뿐</b>이라 "실행됐는데 COMPLETED 가 아니다 = 실패" 가 성립한다.</li>
+     *   <li>{@code FAILED || ABANDONED} 로 나열하는 방식보다 {@code STOPPED}/{@code UNKNOWN} 같은
+     *       비정상 종료 상태까지 자연히 덮는다. 상태가 늘어나도 이 메서드를 다시 고칠 필요가 없다.</li>
+     * </ul>
+     * ESSENTIAL Step 은 {@code on("FAILED").fail()} 로 Job 이 거기서 끝나므로 보통 {@code FAILED} 로
+     * 남는다. 판정이 넓어져도 기존 결과는 그대로다.
+     */
     private List<String> failedStepsOf(JobExecution jobExecution, SeedGroup group) {
         List<String> failed = new ArrayList<>();
         for (StepExecution stepExecution : jobExecution.getStepExecutions()) {
-            if (stepExecution.getStatus() == BatchStatus.FAILED
+            if (stepExecution.getStatus() != BatchStatus.COMPLETED
                     && groupByStepName.get(stepExecution.getStepName()) == group) {
                 failed.add(stepExecution.getStepName());
             }
