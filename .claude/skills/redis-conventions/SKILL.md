@@ -169,8 +169,8 @@ public class DwellingScoreRedisAdapter implements DwellingScoreCache {
 | `infra:score:{infraChoice 0~15}` | Hash | `InfraScoreCache` | 24h | 16개 열거 |
 | `dwelling:score:{MONTHLY\|JEONSE}:{구간화 예산}` | Hash | `DwellingScoreCache` | 30d | 유형×구간 열거 |
 | `support:score:{supportChoice 0~15}` | Hash | `SupportScoreCache` | 4d | 16개 열거 |
-| `support:policy:{sigunguCode}:{TAG_NAME}` | String(JSON) | `SupportPolicyRepository` | 4d | — (정본) |
-| `support:policy:{sigunguCode}:{TAG_NAME}:count` | String(Integer) | `SupportPolicyRepository` | 4d | — (정본) |
+| `support:policy:{sigunguCode}:{TAG_NAME}` | String(JSON, `collectedAt` 포함) | `SupportPolicyRepository` | **없음(정본)** | — (정본) |
+| `support:policy:{sigunguCode}:{TAG_NAME}:count` | String(Integer) | `SupportPolicyRepository` | **없음(정본)** | — (정본) |
 | `job:vacancy:{sigunguCode}` | String(JSON list) | `JobVacancyCache` | 6h(정상)/30m(네거티브) | SCAN (§6.2) |
 | `job:profile:{sigunguCode}` | String(JSON) | `RegionJobProfileCache` | 12h(정상)/30m(네거티브) | SCAN (§6.2) |
 
@@ -203,7 +203,7 @@ TTL은 **원본 데이터의 갱신 주기보다 짧거나 같게** 잡는다.
 
 | 데이터 성격 | 갱신 주기 | TTL 기준 | 현재 값 |
 |---|---|---|---|
-| 외부 API 원본(정책) | 스케줄러 3일 | 갱신 주기 + 1일(실패 유예) | 4일 |
+| **정본 저장소**(정책 원본) | 스케줄러 3일 | **TTL 없음** — 만료가 곧 데이터 손실이다 | 없음 |
 | 정책 기반 파생 점수 | 원본과 동일 | 원본 TTL + **명시적 무효화** | 4일 |
 | 일자리 점수(RDB 원본, 배치 1회) | 재배포 시 | 반나절 | 12시간 |
 | 인프라 점수(RDB 원본, 정적) | 재배포 시 | 하루 | 24시간 |
@@ -212,7 +212,11 @@ TTL은 **원본 데이터의 갱신 주기보다 짧거나 같게** 잡는다.
 | 채용공고/프로필 **네거티브(실제 0건)** | 재조회로 곧 채워질 수 있음 | 짧게(설정값) | 30m(vacancy·profile 공통 기본) |
 
 **규칙**
-- **TTL 없는 키를 만들지 않는다.**
+- **파생 캐시에는 TTL 없는 키를 만들지 않는다.**
+- **정본 저장소(`support:policy:*`)에는 반대로 TTL 을 걸지 않는다.** 만료가 곧 데이터 손실이라
+  수집이 며칠 실패하는 것만으로 정책이 사라진다(갱신 3일 + TTL 4일이면 유예가 하루뿐이었다).
+  정본은 **갱신이 성공했을 때만 덮어쓰고**, "언제 받은 데이터인가"는 만료가 아니라 값에 함께 담은
+  수집 시각(`collectedAt`)으로 판단한다. 이 예외는 `Repository` 포트에만 적용되며 `Cache` 포트는 그대로다.
 - TTL은 어댑터의 `private static final Duration` 상수로 둔다. 매직 넘버(초 단위 long) 금지.
 - **도메인 규칙이 바뀌면 TTL을 기다리지 말고 키 버전을 올린다**: `dwelling:score:v2:...`. 점수 공식을 수정한 배포에서 특히 중요하다(30일 TTL이 옛 결과를 계속 반환한다).
 - 값이 §4.1 표와 달라지면 표를 갱신한다.
