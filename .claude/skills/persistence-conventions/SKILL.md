@@ -18,8 +18,8 @@ DB는 **MySQL 컨테이너 1개에 스키마 2개**다. RDS가 아니다.
 
 | DataSource | 프로퍼티 | 스키마 | 용도 | 트랜잭션 매니저 |
 |---|---|---|---|---|
-| `dataDBSource` (`@Primary` DataSource) | `spring.datasource-data.*` | `smash_data` | 업무 데이터 — 모든 JPA 엔티티 | `dataTransactionManager` (`JpaTransactionManager`) |
-| `batchDataSource` (`@BatchDataSource`) | `spring.datasource-meta.*` | `smash_meta` | Spring Batch 메타 테이블 | `batchTransactionManager` (**`@Primary`**) |
+| `dataDBSource` (`@Primary` DataSource) | `spring.datasource-data.*` | `smash_data` | 업무 데이터 — 모든 JPA 엔티티 | `dataTransactionManager` (`JpaTransactionManager`, **`@Primary`**) |
+| `batchDataSource` (`@BatchDataSource`) | `spring.datasource-meta.*` | `smash_meta` | Spring Batch 메타 테이블 | `batchTransactionManager` (`DataSourceTransactionManager`, `@Primary` **아님**) |
 
 - 드라이버는 **`com.mysql.cj.jdbc.Driver`** (AWS JDBC Wrapper 아님). JDBC URL 호스트는 compose 서비스명 **`mysql`**.
 - 업무 테이블은 `hbm2ddl.auto=update`가 자동 생성한다.
@@ -314,16 +314,24 @@ public class SigunguCodeConverter implements AttributeConverter<SigunguCode, Str
 
 ## 6. 트랜잭션 경계
 
-### 6.1 핵심 함정
+### 6.1 핵심 함정 — 이름을 쓰지 않으면 `@Primary`에 결과가 걸린다
 
-`@Primary` `PlatformTransactionManager`는 **`batchTransactionManager`(meta DB용 `DataSourceTransactionManager`)** 다.
+**현재 `@Primary` `PlatformTransactionManager`는 `dataTransactionManager`(`JpaTransactionManager`)다**
+(`DataDBConfig`). `batchTransactionManager`(meta DB용 `DataSourceTransactionManager`)에는 `@Primary`가 없다.
 
 ```java
-@Transactional(readOnly = true)                                                 // ❌ meta DB 트랜잭션
-@Transactional(transactionManager = "dataTransactionManager", readOnly = true)  // ✅ JPA 트랜잭션
+@Transactional(readOnly = true)                                                 // ⚠️ @Primary 에 의존한다
+@Transactional(transactionManager = "dataTransactionManager", readOnly = true)  // ✅ 항상 JPA 트랜잭션
 ```
 
-무수식 `@Transactional`은 JPA 영속성 컨텍스트가 참여하지 않아 원자성도, `readOnly` 최적화도 얻지 못한다.
+무수식 `@Transactional`은 **지금은 우연히 맞지만** 어느 매니저에 걸리는지가 `@Primary` 위치라는
+설정 하나에 달려 있다. `@Primary`가 옮겨가는 순간 그 코드는 **조용히** 다른 DataSource의 트랜잭션이
+되고, JPA 영속성 컨텍스트가 참여하지 않아 원자성도 `readOnly` 최적화도 잃는다. 컴파일도 통과하고
+테스트도 대개 통과하므로 발견이 늦다. 그래서 **이름을 항상 명시한다.**
+
+같은 이유로 **배치 Step의 청크 트랜잭션 매니저도 타입 주입에 맡기지 않는다.** 업무 데이터를 쓰는
+Step은 `@Qualifier("dataTransactionManager")`로 못 박는다 — 청크 안의 여러 쓰기가 한 트랜잭션에
+묶인다는 전제가 매니저가 바뀌면 그대로 무너진다(`InfraBatchConfig.infraCollectStep`이 그 예다).
 
 ### 6.2 어디에 붙이는가
 
