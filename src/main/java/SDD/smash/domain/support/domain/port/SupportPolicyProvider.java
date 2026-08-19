@@ -1,20 +1,22 @@
 package SDD.smash.domain.support.domain.port;
 
 import SDD.smash.global.domain.model.SigunguCode;
-import SDD.smash.domain.support.domain.model.SupportPolicy;
+import SDD.smash.domain.support.domain.model.SupportPolicyCollection;
 import SDD.smash.domain.support.domain.model.SupportTag;
 
-import java.util.List;
-
 /**
- * 외부 청년정책 공급 out-port. As-Is {@code YouthCenterClient} 자리다.
+ * 외부 청년정책 공급 out-port.
  *
- * <p>어느 기관의 어떤 프로토콜인지는 어댑터가 안다. 도메인은
- * "시군구와 태그로 지원정책 목록을 받는다"만 안다. 조회 실패 시 빈 목록을 돌려준다
- * (어댑터가 흡수한다 — dwelling 의 {@code RentRecordProvider} 와 달리 여기는 재시도할
- * 배치가 없어 예외를 다시 던져도 얻을 이득이 없다. As-Is 도 실패 시 빈 응답으로 처리했다).
+ * <p>어느 기관의 어떤 프로토콜인지는 어댑터가 안다. 도메인은 "시군구와 태그로 지원정책을
+ * 수집한다"만 안다.
+ *
+ * <p><b>실패를 빈 목록으로 돌려주지 않는다.</b> 예전에는 실패를 어댑터가 빈 목록으로 흡수했는데,
+ * 그 빈 목록이 정본 저장소에 그대로 저장되어 일시적인 500 한 번이 멀쩡한 정책을 지웠다.
+ * 지금은 {@link SupportPolicyCollection} 이 "수집했는가"를 함께 들고 오고, 수집하지 못한
+ * 조합은 호출자가 저장을 건너뛰어 기존 데이터를 보존한다. 재시도·호출 간격은 어댑터 안에서
+ * 끝내므로 포트에는 HTTP 어휘가 없다.
  */
 public interface SupportPolicyProvider {
 
-    List<SupportPolicy> fetch(SigunguCode code, SupportTag tag);
+    SupportPolicyCollection fetch(SigunguCode code, SupportTag tag);
 }
