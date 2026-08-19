@@ -514,11 +514,17 @@ DB는 **Docker 컨테이너 MySQL 1개에 스키마 2개**다(RDS 아님) — �
 
 | DataSource | 스키마 | 용도 | 트랜잭션 매니저 |
 |---|---|---|---|
-| `dataDBSource` (`@Primary` DataSource) | `smash_data` | 업무 데이터 — 모든 JPA 엔티티 | `dataTransactionManager` |
-| `batchDataSource` (`@BatchDataSource`) | `smash_meta` | Spring Batch 메타 | `batchTransactionManager` (**`@Primary` PlatformTransactionManager**) |
+| `dataDBSource` (`@Primary` DataSource) | `smash_data` | 업무 데이터 — 모든 JPA 엔티티 | `dataTransactionManager` (**`@Primary` PlatformTransactionManager**, `JpaTransactionManager`) |
+| `batchDataSource` (`@BatchDataSource`) | `smash_meta` | Spring Batch 메타 | `batchTransactionManager` (`DataSourceTransactionManager`, `@Primary` **아님**) |
 
-> ⚠️ `@Primary` **트랜잭션 매니저는 배치용**이다. application 계층에서 무수식 `@Transactional`을 쓰면 JPA 트랜잭션이 열리지 않는다.
+> ⚠️ **트랜잭션 매니저 이름을 항상 명시한다.** `@Primary`가 지금은 `dataTransactionManager`(JPA)라
+> 무수식 `@Transactional`도 우연히 JPA 트랜잭션이 열리지만, **그 우연에 기대지 않는다.**
+> `@Primary`가 어디 붙어 있는지는 `DataDBConfig`/`MetaDBConfig`를 고치면 바뀌는 값이고,
+> 바뀌는 순간 무수식 `@Transactional`은 조용히 다른 DB의 트랜잭션이 된다(원자성도 `readOnly`도 잃는다).
 > **반드시 `@Transactional(transactionManager = "dataTransactionManager", readOnly = true)`** → persistence-conventions §6
+>
+> 같은 이유로 **배치 Step의 청크 트랜잭션 매니저도 타입 주입이 아니라 `@Qualifier`로 못 박는다**
+> (`InfraBatchConfig`가 그 예다). Step이 업무 데이터를 쓰는데 매니저가 바뀌면 원자성이 깨진다.
 
 `DataDBConfig`의 `@EnableJpaRepositories(basePackages = ...)`는 **`SDD.smash.domain.<context>.infrastructure.persistence` 를 하나씩 열거**한다. 도메인 패키지에 Spring Data 인터페이스가 생기는 실수를 부팅 시점에 잡기 위해 범위를 좁혀 둔 것이다.
 
