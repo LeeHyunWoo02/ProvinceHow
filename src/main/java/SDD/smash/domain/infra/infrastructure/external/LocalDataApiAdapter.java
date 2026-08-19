@@ -24,9 +24,10 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 공식 인허가 데이터 API 어댑터. {@code InfraFacilityProvider} 포트의 <b>기본</b> 구현이다.
@@ -47,8 +48,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <ul>
  *   <li>{@code numOfRows} 상한은 <b>100</b>이다(Swagger 명시).</li>
  *   <li>개발계정 트래픽이 <b>10,000회/일</b>이다. 일반음식점 전국만 2,129,830건이라 21,299회가
- *       필요하다 — <b>전국 수집이 사실상 불가능</b>하다. 그래서 일일 호출 예산을 프로퍼티로 두고
- *       초과하면 수집을 실패로 끝낸다(부분 스냅샷을 반영하지 않기 위해서다).</li>
+ *       필요하다 — <b>하루에 전국을 다 받을 수 없다</b>. 그래서 일일 호출 예산을 프로퍼티로 두고
+ *       소진되면 {@link LocalDataCallBudgetExceededException} 으로 <b>오늘은 여기까지</b>를 알린다.
+ *       수집 Step 은 이것을 실패가 아니라 정상 종료로 받아 staging 에 진척을 남긴다.</li>
  *   <li>초당 호출 제한(에러코드 23)이 있으나 수치가 공개되지 않아 최소 호출 간격을 둔다.</li>
  * </ul>
  *
@@ -76,6 +78,9 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
     private static final String SERVICE_KEY_MASK = PARAM_SERVICE_KEY + "=****";
     private static final String[] ENCODED_KEY_MARKERS = {"%2B", "%2F", "%3D"};
 
+    /** 예산 리셋 기준 시간대. 공공데이터포털의 일일 트래픽이 한국 시간 자정에 리셋된다. */
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+
     /** Swagger 가 명시한 한 페이지 상한. 이보다 큰 값을 요청하지 않는다. */
     static final int MAX_ROWS_PER_PAGE = 100;
 
@@ -101,8 +106,15 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
     private final double retryBackoffMultiplier;
     private final long maxRetryAfterMs;
 
-    /** 이 프로세스가 쓴 호출 수. 일일 예산 초과를 감지하기 위한 최소한의 계량기다. */
-    private final AtomicInteger callsUsed = new AtomicInteger();
+    /**
+     * 호출 예산 계량기. <b>날짜(Asia/Seoul)가 바뀌면 리셋된다.</b>
+     *
+     * <p>서버는 며칠씩 떠 있고 수집은 하루치씩 이어달린다. 프로세스 시작 이후 누계로 세면
+     * 첫날 예산을 다 쓴 순간 다음 날 이후의 수집이 영영 막힌다.
+     */
+    private final Object budgetLock = new Object();
+    private LocalDate budgetDate;
+    private int callsUsedToday;
 
     private final Object intervalLock = new Object();
     private long nextAllowedAtMillis;
@@ -204,9 +216,30 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
         return collection;
     }
 
-    /** 이 프로세스가 지금까지 쓴 외부 호출 수. 배치 로그에 남긴다. */
+    /**
+     * 오늘 남은 호출 예산이 있는가.
+     *
+     * <p>{@code false} 는 실패가 아니라 "오늘은 여기까지"다. 수집 Step 은 이 신호를 보고
+     * 스트림을 끝내 <b>COMPLETED</b> 로 마치고, 남은 대상은 다음 실행이 이어받는다.
+     */
+    @Override
+    public boolean hasRemainingCapacity() {
+        synchronized (budgetLock) {
+            // 날짜가 바뀌면 아직 리셋 전이라도 예산이 살아 있는 것으로 본다(리셋은 다음 호출에서).
+            return !today().equals(budgetDate) || callsUsedToday < dailyCallBudget;
+        }
+    }
+
+    /** 오늘 쓴 외부 호출 수. 배치 로그에 남긴다. */
     public int callsUsed() {
-        return callsUsed.get();
+        synchronized (budgetLock) {
+            return today().equals(budgetDate) ? callsUsedToday : 0;
+        }
+    }
+
+    /** 하루 호출 예산. 로그에 남긴다. */
+    public int dailyCallBudget() {
+        return dailyCallBudget;
     }
 
     // ------------------------------------------------------------------ HTTP
@@ -327,12 +360,11 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
 
     /** 최소 호출 간격과 일일 예산을 함께 지킨다. */
     private void acquireSlot() {
-        int used = callsUsed.incrementAndGet();
-        if (used > dailyCallBudget) {
-            throw new LocalDataApiException(String.format(
-                    "[localdata] 일일 호출 예산 초과 used=%d, budget=%d — 전국 수집은 API 로 불가능하다."
-                            + " 벌크 CSV 경로(infra.collect.source=BULK_CSV)를 쓰거나 대상 업종을 줄여라.",
-                    used, dailyCallBudget));
+        if (!reserveCall(today())) {
+            throw new LocalDataCallBudgetExceededException(String.format(
+                    "[localdata] 일일 호출 예산 소진 used=%d, budget=%d — 오늘 몫은 여기까지다."
+                            + " 남은 대상은 다음 실행이 이어받는다(staging 체크포인트).",
+                    callsUsed(), dailyCallBudget));
         }
         if (requestIntervalMs <= 0) {
             return;
@@ -344,6 +376,29 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             nextAllowedAtMillis = Math.max(now, nextAllowedAtMillis) + requestIntervalMs;
         }
         sleep(waitMs);
+    }
+
+    /**
+     * 오늘 예산에서 한 칸을 확보한다. 날짜가 바뀌었으면 먼저 리셋한다.
+     *
+     * @return 확보하지 못했으면(=예산 소진) {@code false}
+     */
+    boolean reserveCall(LocalDate today) {
+        synchronized (budgetLock) {
+            if (!today.equals(budgetDate)) {
+                budgetDate = today;
+                callsUsedToday = 0;
+            }
+            if (callsUsedToday >= dailyCallBudget) {
+                return false;
+            }
+            callsUsedToday++;
+            return true;
+        }
+    }
+
+    private static LocalDate today() {
+        return LocalDate.now(SEOUL);
     }
 
     private static void sleep(long millis) {

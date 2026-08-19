@@ -33,6 +33,10 @@ import static SDD.smash.global.batch.seed.SeedStepSpec.SEED_VERSION;
 /**
  * 기동 시 도는 <b>단일</b> 시드 Job. 9개의 {@code ApplicationReadyEvent} 리스너와 {@code @Order} 를 대체한다.
  *
+ * <p>인프라만 Step 이 둘이다({@code infraCollectStep} → {@code infraStep}). LOCALDATA 는 하루
+ * 호출 예산으로 전국을 다 받을 수 없어 <b>수집</b>과 <b>반영</b>이 분리돼 있고, 수집이 미완성이면
+ * 반영 Step 이 스스로 건너뛴다. 관문 구조는 그대로라 Step 이 하나 늘었을 뿐이다.
+ *
  * <h2>왜 {@code global/batch} 인가</h2>
  * FK 선후관계는 특정 컨텍스트의 관심사가 아니라 <b>애플리케이션 부트스트랩</b>의 관심사다.
  * 이 조립을 어느 한 컨텍스트(예: address)에 두면 그 컨텍스트의 {@code infrastructure} 가
@@ -48,7 +52,7 @@ import static SDD.smash.global.batch.seed.SeedStepSpec.SEED_VERSION;
  * <pre>
  * [필수] SidoStep → SigunguStep → jcTopStep → jcMiddleStep
  *          ↳ 하나라도 FAILED 면 Job 을 FAILED 로 끝낸다(뒤 Step 은 돌지 않는다)
- * [외부] populationStep → industryStep → infraStep → jobCountStep → dwellingStep
+ * [외부] populationStep → industryStep → infraCollectStep → infraStep → jobCountStep → dwellingStep
  *          ↳ 각 Step 앞에 {@link SeedStepGate} 가 서서 조건을 못 채우면 건너뛰고 사유를 남긴다
  *          ↳ 실패해도 다음 Step 으로 넘어가고, Job 은 COMPLETED_WITH_EXTERNAL_FAILURES 로 끝난다
  * </pre>
@@ -119,6 +123,11 @@ public class SeedMasterJobConfig {
         specs.add(new SeedStepSpec("industryStep", SeedGroup.EXTERNAL, industryEnabled, BASE_DATE,
                 configs("infra.industry-master.location", industryMasterLocation), List.of(), null));
 
+        // 인프라는 2-Step 이다. 수집(체크포인트 적립) → 집계·반영 순서를 지킨다.
+        // 수집이 하루 예산에 걸려 미완성으로 끝나도 정상 종료이며, 반영 Step 이 스스로 건너뛴다.
+        specs.add(new SeedStepSpec("infraCollectStep", SeedGroup.EXTERNAL, infraEnabled, BASE_DATE,
+                configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, INDUSTRY), null));
+
         specs.add(new SeedStepSpec("infraStep", SeedGroup.EXTERNAL, infraEnabled, BASE_DATE,
                 configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, INDUSTRY), null));
 
@@ -151,6 +160,7 @@ public class SeedMasterJobConfig {
                              @Qualifier("jcMiddleStep") Step jcMiddleStep,
                              @Qualifier("populationStep") Step populationStep,
                              @Qualifier("industryStep") Step industryStep,
+                             @Qualifier("infraCollectStep") Step infraCollectStep,
                              @Qualifier("infraStep") Step infraStep,
                              @Qualifier("jobCountStep") Step jobCountStep,
                              @Qualifier("dwellingStep") Step dwellingStep) {
@@ -162,6 +172,7 @@ public class SeedMasterJobConfig {
         stepsByName.put("jcMiddleStep", jcMiddleStep);
         stepsByName.put("populationStep", populationStep);
         stepsByName.put("industryStep", industryStep);
+        stepsByName.put("infraCollectStep", infraCollectStep);
         stepsByName.put("infraStep", infraStep);
         stepsByName.put("jobCountStep", jobCountStep);
         stepsByName.put("dwellingStep", dwellingStep);
@@ -176,7 +187,7 @@ public class SeedMasterJobConfig {
     }
 
     /**
-     * 관문 → Step 을 9번 잇는다.
+     * 관문 → Step 을 spec 수만큼 잇는다.
      * <ul>
      *   <li>{@code 관문 --RUN--> Step}, {@code 관문 --SKIP--> 다음 관문}</li>
      *   <li>필수 Step 은 {@code --FAILED--> fail()} 로 Job 을 끝낸다</li>

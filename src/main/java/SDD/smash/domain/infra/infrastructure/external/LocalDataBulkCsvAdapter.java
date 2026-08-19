@@ -98,6 +98,12 @@ public class LocalDataBulkCsvAdapter implements InfraFacilityProvider {
                 : "벌크 CSV 는 Referer 헤더가 필수다(apis.localdata.bulk-referer).";
     }
 
+    /** 자치단체·업종당 요청 1회로 전량을 받는 경로라 호출 예산 개념이 없다. */
+    @Override
+    public boolean hasRemainingCapacity() {
+        return true;
+    }
+
     @Override
     public FacilityCollection collect(IndustryCode industryCode, LocalDataRegionCode regionCode) {
         if (!isReady()) {

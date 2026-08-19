@@ -38,6 +38,25 @@ class RegionCodeMappingLoaderTest {
     }
 
     @Test
+    @DisplayName("개방자치단체코드가 중복돼도 항목을 버리지 않고 그대로 싣는다 - 제외는 대상 계획이 한다")
+    void keepsDuplicateEntriesAndLeavesExclusionToThePlan() {
+        RegionCodeMapping mapping = RegionCodeMappingLoader.load(yaml("""
+                regions:
+                  - openOrgCode: "3000000"
+                    sigunguCode: "11110"
+                    name: 서울종로구
+                  - openOrgCode: "3000000"
+                    sigunguCode: "11110"
+                    name: 서울종로구(중복)
+                """));
+
+        // 로더는 경고만 남긴다. asMap 은 putIfAbsent 라 먼저 온 것이 이긴다
+        assertThat(mapping.size()).isEqualTo(2);
+        assertThat(mapping.asMap()).hasSize(1);
+        assertThat(mapping.toSigungu(LocalDataRegionCode.of("3000000"))).contains(SigunguCode.of("11110"));
+    }
+
+    @Test
     @DisplayName("매핑에 없는 코드는 비어 있는 결과를 준다 - 추정하지 않는다")
     void returnsEmptyForUnmappedCode() {
         RegionCodeMapping mapping = RegionCodeMappingLoader.load(yaml("""
