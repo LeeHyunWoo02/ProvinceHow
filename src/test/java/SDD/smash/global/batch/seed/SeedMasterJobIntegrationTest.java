@@ -48,8 +48,10 @@ class SeedMasterJobIntegrationTest extends IntegrationTestSupport {
 
     private static final List<String> ESSENTIAL_STEPS =
             List.of("SidoStep", "SigunguStep", "jcTopStep", "jcMiddleStep");
+    // 인프라는 수집(infraCollectStep) → 반영(infraStep) 2-Step 이라 관문도 둘이다.
     private static final List<String> EXTERNAL_STEPS =
-            List.of("populationStep", "industryStep", "infraStep", "jobCountStep", "dwellingStep");
+            List.of("populationStep", "industryStep", "infraCollectStep", "infraStep",
+                    "jobCountStep", "dwellingStep");
 
     @Autowired
     @Qualifier(SeedMasterJobConfig.SEED_MASTER_JOB)

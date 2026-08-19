@@ -12,6 +12,7 @@
 | 항목 | 값 |
 | --- | --- |
 | 배치 | `industryJob`(업종 마스터) → `infraJob`(인프라 통계) |
+| `infraJob` 구성 | **2-Step** — `infraCollectStep`(수집·적립) → `infraStep`(집계·반영). `API` 경로 전용이다(§9) |
 | 트리거 | `DataRefreshScheduler.refreshLocaldata()` — `LOCALDATA_BATCH_ENABLED` / `LOCALDATA_BATCH_CRON` |
 | JobParameter | `baseDate` (yyyy-MM-dd) |
 | 기본 수집 경로 | 공식 data.go.kr 업종별 API |
@@ -315,8 +316,9 @@ offset 페이지네이션이라 수집 중 데이터가 갱신되면 같은 사�
   기본값으로 삼으면 어느 날 조용히 멈춘다.
 - **벌크 CSV 를 명시적 옵션으로 지원한다.** 시드 구축처럼 "한 번에 전국을 채워야 하는" 작업은
   이것 말고 방법이 없다. 자치단체 228 × 업종 16 = 3,648 요청이면 전국이 완결된다.
-- API 경로에는 **일일 호출 예산**(`apis.localdata.daily-call-budget`, 기본 9,000)을 두어
-  예산을 넘으면 수집을 실패로 끝낸다. 부분 스냅샷을 만드는 것보다 아무것도 안 하는 편이 낫기 때문이다(§9).
+- API 경로에는 **일일 호출 예산**(`apis.localdata.daily-call-budget`, 기본 9,000)이 있다.
+  예산이 소진되면 **실패가 아니라 그날 수집을 정상 종료**하고, 지금까지 받은 몫은 staging 에
+  남겨 다음 실행이 이어받는다. 부분 수집분이 서비스 테이블로 나가는 경로는 여전히 없다(§9).
 
 **운영 권장**: 최초 시드와 대규모 재적재는 `BULK_CSV`, 이후 증분·검증은 `API`.
 
@@ -415,18 +417,50 @@ score(g, i) = 50                                        (N = 1)
 
 ## 9. 스냅샷 교체 정책
 
-**부분 반영을 하지 않는다.**
+**부분 반영을 하지 않는다.** 이 원칙은 그대로이고, 달라진 것은 "완성될 때까지 어디에 모아 두는가"다.
+
+### 9.1 API 경로 — 2-Step + staging 체크포인트
+
+전국 대상 3,664개(229지역 × 16업종)에 대상당 평균 5.4회를 호출하면 약 19,800회가 든다.
+일일 예산은 9,000회라 **하루에 끝나지 않는다.** 그래서 수집과 반영을 나누고, 며칠에 걸쳐 모은다.
 
 ```
-[수집] 업종 × 자치단체 전부 순회 → 하나라도 실패하면 InfraCollectionException
-   ↓ (전부 성공했을 때만)
-[계산] InfraStatPolicy 로 ratio/score 산출 — 스냅샷 전체가 있어야 계산된다
+infraCollectStep  아직 안 받은 대상만 호출 → staging 에 대상 단위로 적립(청크 크기 1 = 대상 1개)
+                  예산이 소진되면 COMPLETED 로 정상 종료한다. 다음 실행이 이어받는다
    ↓
-[적재] chunk 단위 upsert
+infraStep         기대 대상이 전부 채워진 회차에서만 ratio/score 를 내고 infra 에 upsert
+                  미완성이면 진척 로그만 남기고 건너뛴다(기존 스냅샷 유지)
+                  반영에 성공하면 그 회차 staging 을 지운다
 ```
 
-- 조립은 `infraStep` 의 **Reader 안에서 통째로** 일어난다. Reader 가 예외를 던지면 청크가 한 번도
-  돌지 않으므로 `infra` 테이블에 **한 행도 쓰이지 않고 기존 정상 스냅샷이 그대로 남는다.**
+| 테이블 | 내용 |
+| --- | --- |
+| `infra_collection_target` | 회차별 "이 (기관, 업종) 대상은 수집을 마쳤다" 진행 행 |
+| `infra_staging_count` | 회차별 (시군구, 업종) 개수. 여러 대상이 기여하므로 **합산 upsert** |
+
+- 두 테이블 쓰기는 **한 청크 트랜잭션**에 묶인다. 카운트만 커밋되고 진행 행이 없으면 다음 실행이
+  같은 대상을 다시 받아 **이중 합산**이 된다.
+- **`run_key` = 회차 시작일(yyyy-MM-dd)** 이다. `baseDate` 를 쓰지 않는 이유는 날짜가 바뀌는
+  순간 이어달리기가 끊기기 때문이다. staging 에 회차가 남아 있으면 **가장 오래된 것**을 이어받고,
+  없으면 오늘 날짜로 새 회차를 연다. 반영에 성공하면 지워지므로 **정상 상태에서 회차는 최대 하나**다.
+- 회차가 둘 이상 보이면 정리 실패나 수동 개입의 흔적이다. 배치는 가장 오래된 것만 쓰고 나머지는
+  `log.warn` 으로 드러낸다 — 무엇을 지울지는 사람이 판단한다.
+- 회차가 `infra.collect.stall-threshold-days`(기본 7일)를 넘도록 완성되지 않으면 `log.error` 로
+  stall 을 알린다. 영구 실패 대상(존재하지 않는 (기관, 업종) 조합, 매핑 오타)이 하나만 있어도
+  회차는 영영 완성되지 않는데 Job 은 매일 COMPLETED 를 내기 때문이다. **배치가 죽지는 않는다.**
+- `infraCollectStep` 이 FAILED 로 끝나도 `infraStep` 은 돈다(`.on("*")`). 반영은 "이 회차가
+  완성됐는가"만 보므로, 오늘 수집이 죽었다는 이유로 **어제 완성해 둔 회차의 반영을 막지 않는다.**
+
+### 9.2 BULK_CSV / LEGACY_CSV 경로 — 한 번에 전량
+
+체크포인트를 쓰지 않는다. `infraCollectStep` 은 빈 스트림으로 즉시 끝나고, 조립은 `infraStep` 의
+**Reader 안에서 통째로** 일어난다. Reader 가 예외를 던지면 청크가 한 번도 돌지 않으므로 `infra`
+테이블에 **한 행도 쓰이지 않고 기존 정상 스냅샷이 그대로 남는다.**
+
+### 9.3 두 경로의 공통 불변식
+
+- `InfraStatPolicy` 에는 **완전한 counts** 만 들어간다. 부분 수집분이 서비스 테이블로 나가는
+  경로가 없다.
 - 왜 부분 반영이 위험한가: `ratio` 는 시군구 합계를, `score` 는 업종별 전국 분포를 기준으로 한다.
   일부 업종만 갱신되면 **두 값이 서로 다른 기준으로 섞인다.**
 - 수집 경로가 준비되지 않았으면(인증키 없음 등) 예외 대신 **빈 Reader** 를 돌려 Step 을 건너뛴다.
@@ -467,13 +501,14 @@ LOCALDATA_BATCH_CRON=0 0 4 * * *
 | `apis.localdata.page-size` | `100` | **상한 100 으로 잘린다** |
 | `apis.localdata.max-pages` | `500` | 대상당 페이지 상한(안전핀) |
 | `apis.localdata.request-interval-ms` | `120` | 최소 호출 간격 |
-| `apis.localdata.daily-call-budget` | `9000` | 프로세스 누적 호출 상한. 넘으면 수집 실패 |
+| `apis.localdata.daily-call-budget` | `9000` | 하루 호출 상한. 소진되면 **실패가 아니라 그날 수집 종료** |
 | `apis.localdata.max-attempts` | `3` | 429/5xx 재시도 횟수 |
 | `apis.localdata.retry-delay-ms` | `1000` | `Retry-After` 가 없을 때의 대기 |
 | `apis.localdata.max-retry-after-ms` | `60000` | `Retry-After` 상한 |
 | `apis.localdata.bulk-base-url` | `https://file.localdata.go.kr/file/download` | 벌크 CSV |
 | `apis.localdata.bulk-referer` | `https://www.data.go.kr/` | **없으면 302** |
-| `infra.collect.source` | `API` | `API` / `BULK_CSV` / `LEGACY_CSV` |
+| `infra.collect.source` | `API` | `API` / `BULK_CSV` / `LEGACY_CSV`. **`API` 만 2-Step + staging** |
+| `infra.collect.stall-threshold-days` | `7` | 회차가 이 일수를 넘도록 미완성이면 `log.error`(관측 전용) |
 | `infra.ratio.basis` | `PERCENT` | `PERCENT` / `FRACTION` |
 | `infra.industry-master.location` | `classpath:infra/industry-master.yml` | 업종 마스터 |
 | `infra.region-mapping.location` | `classpath:infra/localdata-region-mapping.yml` | 지역코드 매핑 |
@@ -489,9 +524,55 @@ LOCALDATA_BATCH_CRON=0 0 4 * * *
 
 ### 10.3 구조화 로그
 
+#### 수집 Step (`infraCollectStep`)
+
+```
+[infraJob] 수집 시작 baseDate=2026-08-13, runKey=2026-08-11, 진척=1674/3664, 이번에 시도할 대상=1990
+[infraJob] 호출 예산 소진으로 수집을 멈춘다(실패 아님). collected=1652/1990, reason=일일 호출 예산 소진
+[infraJob] step=infraCollectStep, baseDate=2026-08-13,
+  planned=1990, collected=1652, empty=41, unresolved=0, retried=3, budgetExhausted=true,
+  apiCalls=8998, read=402113, filteredOut=198220, duplicates=12,
+  unmappedFacilities=0, unmappedRegions=0, districtResolved=50120, districtUnresolved=61,
+  staged=1652, elapsed=18304120ms, status=COMPLETED
+```
+
+**읽는 법**
+
+| 줄 | 의미 |
+| --- | --- |
+| `runKey=2026-08-11` | 이 회차는 8/11 에 시작했다. 8/13 실행이 그것을 이어받았다 |
+| `진척=1674/3664` | 회차 전체 대상 3,664개 중 1,674개가 이미 끝났다. **이 값이 매일 오르면 정상** |
+| `budgetExhausted=true` | 오늘 몫을 다 썼다. **실패가 아니다.** status 는 COMPLETED 다 |
+| `unresolved=N` (N>0) | 2차 패스에서도 실패한 대상. 회차가 그만큼 안 채워진다 |
+| `회차가 N일째 완성되지 않았다` (ERROR) | stall. 진척이 멈춘 것이므로 `unresolved` 표본을 보고 원인을 찾는다 |
+
+> **"왜 실패로 안 죽지"는 장애가 아니다.** 예산 소진과 대상 단위 실패는 설계상 COMPLETED 로
+> 끝난다. 관측해야 할 것은 status 가 아니라 **진척이 오르는가**와 **stall ERROR 가 있는가**다.
+
+#### 반영 Step (`infraStep`)
+
+미완성 회차에서는 반영을 건너뛰고 진척만 남긴다.
+
+```
+[infraJob] 수집 진행 중 1674/3664 (runKey=2026-08-11) - 반영을 건너뛴다. 기존 스냅샷을 유지한다.
+```
+
+회차가 완성된 날에만 아래가 나온다(`source=API(staging)` 로 경로가 드러난다).
+
+```
+[infraJob] 회차 완성 - 반영 시작 baseDate=2026-08-15, runKey=2026-08-11, targets=3664, countRows=41230, rows=41230
+[infraJob] step=infraStep, baseDate=2026-08-15,
+  source=API(staging), ratioBasis=PERCENT, runKey=2026-08-11, targets=3664,
+  countRows=41230, rows=41230, aggregateElapsed=812ms,
+  saved=41230, filteredByProcessor=0, elapsed=9120ms, status=COMPLETED
+[infraJob] staging 정리 runKey=2026-08-11, targets=3664, counts=41230
+```
+
+`BULK_CSV` / `LEGACY_CSV` 경로는 한 번에 전량을 조립하므로 형식이 다르다.
+
 ```
 [infraJob] step=infraStep, baseDate=2026-08-13,
-  source=API, ratioBasis=PERCENT, targets=3648, apiCalls=8721, read=412330,
+  source=BULK_CSV, ratioBasis=PERCENT, targets=3648, apiCalls=8721, read=412330,
   filteredOut=201004, duplicates=17, unmappedRegions=2, unmappedIndustries=0,
   districtResolved=51230, districtUnresolved=87,
   rows=3648, collectElapsed=1830412ms,

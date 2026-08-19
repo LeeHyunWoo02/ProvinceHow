@@ -26,6 +26,15 @@ public interface InfraFacilityProvider {
     /** 이 공급자가 쓸 준비가 됐는가(예: 인증키 보유). 준비되지 않았으면 배치를 건너뛴다. */
     boolean isReady();
 
+    /**
+     * 이번 실행에서 <b>더 수집할 여력</b>이 있는가.
+     *
+     * <p>{@code false} 는 실패가 아니라 <b>여기까지</b>라는 뜻이다. 호출 예산처럼 하루 단위로
+     * 회복되는 자원이 바닥났을 때 수집을 멈추고 지금까지 모은 것을 남기기 위한 신호다.
+     * 예산 개념이 없는 공급자(벌크 CSV)는 항상 {@code true} 다.
+     */
+    boolean hasRemainingCapacity();
+
     /** 준비되지 않은 이유. 로그에 남길 수 있게 <b>비밀값을 포함하지 않는</b> 문구여야 한다. */
     String readinessDescription();
 }

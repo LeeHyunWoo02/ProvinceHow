@@ -11,8 +11,10 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 개방자치단체코드 ↔ 시군구코드 매핑 YAML 파서. Spring 없이 도는 순수 로직이다. */
 @Slf4j
@@ -47,13 +49,24 @@ public final class RegionCodeMappingLoader {
         }
 
         List<RegionCodeMapping.Entry> entries = new ArrayList<>(list.size());
+        Set<LocalDataRegionCode> seen = new LinkedHashSet<>(list.size());
+        List<String> duplicated = new ArrayList<>();
         for (Object element : list) {
             if (element instanceof Map<?, ?> row) {
                 RegionCodeMapping.Entry entry = toEntry(row);
                 if (entry != null) {
+                    if (!seen.add(entry.openOrgCode())) {
+                        duplicated.add(entry.openOrgCode().value());
+                    }
                     entries.add(entry);
                 }
             }
+        }
+        if (!duplicated.isEmpty()) {
+            // 중복은 수집 대상을 두 배로 만들고 staging 카운트를 이중 합산시킨다.
+            // 파일을 여기서 고칠 수는 없으므로 드러내기만 한다 — 실제 제외는 대상 목록을
+            // 만드는 InfraCollectPlan.allTargets 가 한다.
+            log.warn("[infra] 지역 매핑에 개방자치단체코드가 중복된다 codes={} - 파일을 확인하라.", duplicated);
         }
         return new RegionCodeMapping(entries, toDistrictSplits(root.get(KEY_DISTRICT_SPLITS)));
     }

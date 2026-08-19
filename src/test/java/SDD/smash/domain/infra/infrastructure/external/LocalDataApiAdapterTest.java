@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -322,8 +323,8 @@ class LocalDataApiAdapterTest {
     }
 
     @Test
-    @DisplayName("일일 호출 예산을 넘으면 수집을 실패로 끝내 부분 스냅샷을 만들지 않는다")
-    void stopsWhenDailyCallBudgetExceeded() {
+    @DisplayName("일일 호출 예산을 넘으면 예산 소진 전용 예외로 알려 수집 Step 이 정상 종료할 수 있게 한다")
+    void signalsBudgetExhaustionWithDedicatedException() {
         server.expect(requestTo(url(1, 100)))
                 .andRespond(withSuccess(body(0), MediaType.APPLICATION_JSON));
 
@@ -333,11 +334,31 @@ class LocalDataApiAdapterTest {
 
         adapter.collect(RESTAURANT, JONGNO);
         assertThat(adapter.callsUsed()).isEqualTo(1);
+        assertThat(adapter.hasRemainingCapacity()).isFalse();
 
         assertThatThrownBy(() -> adapter.collect(RESTAURANT, JONGNO))
-                .isInstanceOf(LocalDataApiException.class)
-                .hasMessageContaining("일일 호출 예산 초과");
+                .isInstanceOf(LocalDataCallBudgetExceededException.class)
+                .hasMessageContaining("일일 호출 예산 소진");
         server.verify();
+    }
+
+    @Test
+    @DisplayName("호출 예산은 날짜가 바뀌면 리셋돼 다음 날 수집이 이어진다")
+    void resetsCallBudgetWhenDayChanges() {
+        // given — 예산 1회짜리 어댑터가 오늘 예산을 다 썼다
+        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
+                BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0);
+        LocalDate day1 = LocalDate.of(2026, 8, 19);
+
+        assertThat(adapter.reserveCall(day1)).isTrue();
+        assertThat(adapter.reserveCall(day1)).isFalse();
+
+        // when — 날짜가 바뀐다
+        LocalDate day2 = day1.plusDays(1);
+
+        // then — 프로세스가 계속 떠 있어도 다음 날 예산이 살아난다
+        assertThat(adapter.reserveCall(day2)).isTrue();
+        assertThat(adapter.reserveCall(day2)).isFalse();
     }
 
     @Test

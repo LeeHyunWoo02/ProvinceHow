@@ -261,37 +261,17 @@ public class InfraSnapshotAssembler {
         collected.filteredOut += collection.filteredOutCount();
         collected.duplicates += collection.duplicatesDropped();
 
-        // 사업장이 들고 있는 개방자치단체코드를 우선한다. 요청이 시도 전체(_ALL)일 수 있어
-        // 요청 코드로 뭉뚱그리면 시군구가 뭉개진다.
-        for (var facility : collection.facilities()) {
-            if (!facility.countsAsInfra()) {
-                continue;
-            }
-            LocalDataRegionCode orgCode = facility.openOrgCode();
-            SigunguCode sigunguCode = orgCode == null ? null : index.get(orgCode);
-            if (sigunguCode == null) {
-                collected.unmappedRegions.add(orgCode == null ? "(없음)" : orgCode.value());
-                collected.unmappedFacilityCount++;
-                continue;
-            }
+        // 시군구 접기 규칙(매핑·일반구 재분배)은 체크포인트 경로와 한 곳을 공유한다.
+        InfraFacilityTally.Result tally = InfraFacilityTally.tally(collection, index, splits);
 
-            // 일반구를 둔 시라면 여기서만 주소를 본다. 그 외 지역은 코드로 확정된다.
-            RegionCodeMapping.DistrictSplit split = splits.get(sigunguCode);
-            if (split != null) {
-                SigunguCode district = split.resolveAny(facility.addressCandidates()).orElse(null);
-                if (district == null) {
-                    // 상위 시로 떨어뜨리면 일반구와 이중 집계가 된다. 버리고 세어 둔다.
-                    collected.districtUnresolved++;
-                    collected.unresolvedCities.add(
-                            split.cityName() == null ? sigunguCode.value() : split.cityName());
-                    continue;
-                }
-                collected.districtResolved++;
-                sigunguCode = district;
-            }
+        collected.unmappedRegions.addAll(tally.unmappedRegions());
+        collected.unmappedFacilityCount += tally.unmappedFacilityCount();
+        collected.districtResolved += tally.districtResolved();
+        collected.districtUnresolved += tally.districtUnresolved();
+        collected.unresolvedCities.addAll(tally.unresolvedCities());
 
-            collected.merged.merge(new Key(sigunguCode, target.industryCode()), 1, Integer::sum);
-        }
+        tally.counts().forEach((sigunguCode, count) ->
+                collected.merged.merge(new Key(sigunguCode, target.industryCode()), count, Integer::sum));
     }
 
     private static List<Target> toTargets(List<Failure> failures) {
@@ -313,7 +293,11 @@ public class InfraSnapshotAssembler {
         }
     }
 
-    private InfraFacilityProvider provider() {
+    /**
+     * 설정이 고른 공급자. 체크포인트 수집 경로({@code infraCollectStep})도 <b>같은 선택</b>을 써야
+     * 두 경로가 갈라지지 않으므로 같은 패키지에 열어 둔다.
+     */
+    InfraFacilityProvider provider() {
         return source == InfraCollectSource.BULK_CSV ? bulkCsvAdapter : apiAdapter;
     }
 
