@@ -7,8 +7,10 @@ services:
   backend:
     image: "${SMASH_IMAGE:?SMASH_IMAGE(배포 이미지 repo:tag)가 필요합니다}"
     restart: unless-stopped
+    # 외부 트래픽은 caddy(443)만 받는다. 8080 은 루프백에만 바인딩해서
+    # 평문 HTTP 로 직접 접근하지 못하게 막되, SSH 터널을 통한 디버깅은 남겨둔다.
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     env_file:
       - ./backend.env
     volumes:
@@ -21,6 +23,22 @@ services:
         condition: service_healthy
       my-redis:
         condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"    # ACME HTTP-01 챌린지와 https 리다이렉트에 필요하다. 닫으면 인증서 발급이 실패한다.
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # 발급받은 인증서와 ACME 계정 키. 이 볼륨이 없으면 재배포마다 재발급을 시도하다
+      # Let's Encrypt 발급 한도(주당 5회/도메인)에 걸린다.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
 
   mysql:
     image: mysql:8.0
@@ -56,3 +74,5 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  caddy-data:
+  caddy-config:
