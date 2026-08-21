@@ -52,6 +52,45 @@ services:
       timeout: 5s
       retries: 10
 
+  # 관측성 스택. 로컬에는 Caddy 가 없으므로 포트를 직접 열어 브라우저로 본다.
+  # http://localhost:3001 (Grafana, admin/admin) / http://localhost:9090 (Prometheus)
+  prometheus:
+    image: "prom/prometheus:v3.14.0"
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=3d
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - backend
+
+  grafana:
+    image: "grafana/grafana:13.1.4"
+    restart: unless-stopped
+    ports:
+      # 3000 은 로컬 프론트 개발 서버(FRONT_URL)가 쓰므로 3001 로 내보낸다.
+      - "3001:3000"
+    environment:
+      # 로컬 전용 기본 계정. 서버에서는 backend.env 의 GF_SECURITY_ADMIN_* 를 쓴다.
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   mysql-data:
   redis-data:
+  prometheus-data:
+  grafana-data:
