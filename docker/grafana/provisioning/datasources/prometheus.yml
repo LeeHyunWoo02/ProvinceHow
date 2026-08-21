@@ -1,0 +1,18 @@
+# Grafana 데이터소스 프로비저닝. UI 에서 손으로 추가하지 않고 파일로 고정한다
+# (컨테이너를 다시 만들어도 동일하게 복원되도록).
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    # 대시보드 JSON 이 이 uid 를 참조한다. 바꾸면 대시보드의 패널이 전부 깨진다.
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      # prometheus.yml 의 scrape_interval 과 맞춘다. Grafana 가 쿼리 step 을 이보다
+      # 짧게 잡으면 빈 구간이 생긴다.
+      timeInterval: 30s
+      httpMethod: POST
+    editable: false

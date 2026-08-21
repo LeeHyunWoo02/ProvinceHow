@@ -3,7 +3,9 @@ package SDD.smash.domain.job.infrastructure.external;
 import SDD.smash.domain.job.domain.model.JobVacancy;
 import SDD.smash.domain.job.infrastructure.external.dto.SaraminApiSpecFile;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -126,7 +128,8 @@ class SaraminJobVacancyAdapterTest {
                 new SaraminLocCodeResolver(specLoader),
                 server.url("/").toString().replaceAll("/$", ""),
                 "/job-search",
-                accessKey);
+                accessKey,
+                new ExternalApiMetrics(new SimpleMeterRegistry()));
     }
 
     /** 파일을 읽지 않고 주어진 스펙만 돌려주는 로더. */
