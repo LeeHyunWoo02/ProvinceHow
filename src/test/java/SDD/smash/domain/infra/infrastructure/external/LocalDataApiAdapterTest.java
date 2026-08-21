@@ -7,7 +7,11 @@ import SDD.smash.domain.infra.infrastructure.master.IndustryMaster;
 import SDD.smash.domain.infra.infrastructure.master.IndustryMasterEntry;
 import SDD.smash.domain.infra.infrastructure.master.InfraMasterCatalog;
 import SDD.smash.domain.infra.domain.model.Major;
+import SDD.smash.global.metrics.CallBudgetMetrics;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,6 +39,9 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
  */
 class LocalDataApiAdapterTest {
 
+    /** 계측은 대역이 아니라 실물을 쓴다. 어댑터를 여러 번 만들어도 레지스트리는 공유한다. */
+    private static final MeterRegistry METER_REGISTRY = new SimpleMeterRegistry();
+
     private static final String BASE_URL = "http://localhost";
     private static final IndustryCode RESTAURANT = IndustryCode.of("RESTAURANT");
     private static final LocalDataRegionCode JONGNO = LocalDataRegionCode.of("3000000");
@@ -57,7 +64,8 @@ class LocalDataApiAdapterTest {
 
     private LocalDataApiAdapter adapter(String serviceKey, int pageSize) {
         return new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, serviceKey, pageSize, 10, 0, 9000, 1, 0, 2, 0);
+                BASE_URL, serviceKey, pageSize, 10, 0, 9000, 1, 0, 2, 0,
+                new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
     }
 
     private static String body(int totalCount, String... items) {
@@ -315,7 +323,8 @@ class LocalDataApiAdapterTest {
         server.expect(requestTo(url(1, 100))).andRespond(withServerError());
 
         LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, "test-key", 100, 10, 0, 9000, 2, 0, 2, 0);
+                BASE_URL, "test-key", 100, 10, 0, 9000, 2, 0, 2, 0,
+                new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
 
         assertThatThrownBy(() -> adapter.collect(RESTAURANT, JONGNO))
                 .isInstanceOf(LocalDataApiException.class);
@@ -330,7 +339,8 @@ class LocalDataApiAdapterTest {
 
         // 예산 1회. 첫 수집은 통과하고 두 번째는 호출 전에 막힌다.
         LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0);
+                BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0,
+                new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
 
         adapter.collect(RESTAURANT, JONGNO);
         assertThat(adapter.callsUsed()).isEqualTo(1);
@@ -347,7 +357,8 @@ class LocalDataApiAdapterTest {
     void resetsCallBudgetWhenDayChanges() {
         // given — 예산 1회짜리 어댑터가 오늘 예산을 다 썼다
         LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0);
+                BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0,
+                new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
         LocalDate day1 = LocalDate.of(2026, 8, 19);
 
         assertThat(adapter.reserveCall(day1)).isTrue();
@@ -424,7 +435,8 @@ class LocalDataApiAdapterTest {
     @DisplayName("어댑터 설정값으로 계산한 지연도 같은 규칙을 따른다")
     void computesBackoffFromAdapterConfiguration() {
         LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
-                BASE_URL, "test-key", 100, 10, 0, 9000, 3, 1000, 2, 60_000);
+                BASE_URL, "test-key", 100, 10, 0, 9000, 3, 1000, 2, 60_000,
+                new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
 
         assertThat(adapter.backoffDelayMs(1)).isEqualTo(1000);
         assertThat(adapter.backoffDelayMs(2)).isEqualTo(2000);

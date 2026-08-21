@@ -4,6 +4,7 @@ import SDD.smash.global.domain.model.Score;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.support.domain.model.SupportScoreKey;
 import SDD.smash.domain.support.domain.port.SupportScoreCache;
+import SDD.smash.global.metrics.CacheMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -41,17 +42,26 @@ public class SupportScoreRedisAdapter implements SupportScoreCache {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
+    /** 히트/미스/에러 계측. 캐시 동작 자체에는 관여하지 않는다. */
+    private final CacheMetrics cacheMetrics;
+
+    /** 메트릭의 cache 태그 값. Redis 키 네임스페이스와 같게 둬서 지표와 키를 바로 대조한다. */
+    private static final String CACHE_NAME = "support:score";
+
     @Override
     public Optional<Map<SigunguCode, Score>> find(SupportScoreKey key) {
         String redisKey = redisKey(key);
         try {
             Map<Object, Object> cached = redisTemplate.opsForHash().entries(redisKey);
             if (cached == null || cached.isEmpty()) {
+                cacheMetrics.miss(CACHE_NAME);
                 return Optional.empty();
             }
+            cacheMetrics.hit(CACHE_NAME);
             return Optional.of(toDomain(cached));
         } catch (RuntimeException e) {
             log.warn("[cache] 지원정책 점수 조회 실패 key={} - 미스로 처리", redisKey, e);
+            cacheMetrics.error(CACHE_NAME);
             return Optional.empty();
         }
     }

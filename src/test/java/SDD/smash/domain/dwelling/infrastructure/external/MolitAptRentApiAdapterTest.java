@@ -6,7 +6,9 @@ import SDD.smash.domain.dwelling.domain.model.RentCollection;
 import SDD.smash.domain.dwelling.domain.model.RentDataStatus;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,7 +52,8 @@ class MolitAptRentApiAdapterTest {
     void setUp() {
         restTemplate = new RestTemplate();
         server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
-        adapter = new MolitAptRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper());
+        adapter = new MolitAptRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper(),
+                new ExternalApiMetrics(new SimpleMeterRegistry()));
 
         // 운영 설정값과 같은 모양이다. apis.molit.path 는 선행 슬래시가 있고 세그먼트가 2개다.
         ReflectionTestUtils.setField(adapter, "baseUrl", BASE_URL);

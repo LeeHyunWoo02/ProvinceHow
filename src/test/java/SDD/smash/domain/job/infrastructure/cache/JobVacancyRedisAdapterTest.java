@@ -3,6 +3,9 @@ package SDD.smash.domain.job.infrastructure.cache;
 import SDD.smash.domain.job.domain.model.JobPostingId;
 import SDD.smash.domain.job.domain.model.JobVacancy;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.CacheMetrics;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +32,10 @@ class JobVacancyRedisAdapterTest {
     private static final Duration NEGATIVE_TTL = Duration.ofMinutes(30);
     private static final Duration POSITIVE_TTL = Duration.ofHours(6);
 
+    /** 계측은 대역이 아니라 실물을 쓴다. 카운터 값을 그대로 단정할 수 있다. */
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final CacheMetrics cacheMetrics = new CacheMetrics(meterRegistry);
+
     @Mock RedisTemplate<String, JobVacancyListPayload> template;
     @Mock ValueOperations<String, JobVacancyListPayload> valueOps;
 
@@ -38,7 +45,7 @@ class JobVacancyRedisAdapterTest {
     void setUp() {
         // opsForValue() 는 호출마다 새 객체를 반환하므로 반드시 스텁을 건다.
         lenient().when(template.opsForValue()).thenReturn(valueOps);
-        adapter = new JobVacancyRedisAdapter(template, NEGATIVE_TTL);
+        adapter = new JobVacancyRedisAdapter(template, NEGATIVE_TTL, cacheMetrics);
     }
 
     private JobVacancy vacancy() {

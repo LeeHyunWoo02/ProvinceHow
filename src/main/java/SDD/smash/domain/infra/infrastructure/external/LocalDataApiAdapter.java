@@ -5,6 +5,8 @@ import SDD.smash.domain.infra.domain.model.FacilityCollection;
 import SDD.smash.domain.infra.domain.model.IndustryCode;
 import SDD.smash.domain.infra.domain.model.InfraFacility;
 import SDD.smash.domain.infra.domain.model.LocalDataRegionCode;
+import SDD.smash.global.metrics.CallBudgetMetrics;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import SDD.smash.domain.infra.domain.port.InfraFacilityProvider;
 import SDD.smash.domain.infra.infrastructure.master.IndustryMasterEntry;
 import SDD.smash.domain.infra.infrastructure.master.InfraMasterCatalog;
@@ -106,6 +108,12 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
     private final double retryBackoffMultiplier;
     private final long maxRetryAfterMs;
 
+    /** 호출 성공/실패 계측. 시도(=HTTP 호출) 1회마다 1건 센다 - 예산 소모 단위와 같다. */
+    private final ExternalApiMetrics externalApiMetrics;
+
+    /** 메트릭의 api 태그 값. */
+    private static final String API_NAME = "localdata";
+
     /**
      * 호출 예산 계량기. <b>날짜(Asia/Seoul)가 바뀌면 리셋된다.</b>
      *
@@ -132,7 +140,9 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             @Value("${apis.localdata.max-attempts:3}") int maxAttempts,
             @Value("${apis.localdata.retry-delay-ms:1000}") long retryDelayMs,
             @Value("${apis.localdata.retry-backoff-multiplier:2}") double retryBackoffMultiplier,
-            @Value("${apis.localdata.max-retry-after-ms:60000}") long maxRetryAfterMs) {
+            @Value("${apis.localdata.max-retry-after-ms:60000}") long maxRetryAfterMs,
+            ExternalApiMetrics externalApiMetrics,
+            CallBudgetMetrics callBudgetMetrics) {
 
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
@@ -148,6 +158,11 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
         // 1 미만이면 지연이 줄어들어 백오프가 아니게 된다. 설정 실수를 여기서 흡수한다.
         this.retryBackoffMultiplier = Math.max(1.0d, retryBackoffMultiplier);
         this.maxRetryAfterMs = Math.max(0, maxRetryAfterMs);
+        this.externalApiMetrics = externalApiMetrics;
+
+        // 게이지는 값을 들고 있지 않고 스크랩 때마다 이 메서드들을 호출한다.
+        // callsUsed() 는 날짜가 바뀌면 0 을 돌려주므로 그래프에서 일일 리셋이 그대로 보인다.
+        callBudgetMetrics.register(API_NAME, this::callsUsed, () -> this.dailyCallBudget);
     }
 
     // ------------------------------------------------------------------ 포트 구현
@@ -253,8 +268,11 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             acquireSlot();
             try {
                 ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
-                return parse(response.getBody());
+                JsonNode parsed = parse(response.getBody());
+                externalApiMetrics.success(API_NAME);
+                return parsed;
             } catch (HttpStatusCodeException e) {
+                externalApiMetrics.failure(API_NAME);
                 last = translate(e, slug, regionCode, page);
                 // 서버가 대기시간을 명시하면 그 값이 우리 추정보다 정확하다. 없을 때만 백오프를 쓴다.
                 long wait = retryAfterMillis(e.getResponseHeaders())
@@ -268,8 +286,10 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             } catch (LocalDataApiException e) {
                 // 응답 자체가 오류인 경우(게이트웨이 오류, 실패 resultCode, 파싱 실패)는
                 // 다시 호출해도 결과가 같다. 사유를 감싸지 말고 그대로 올린다.
+                externalApiMetrics.failure(API_NAME);
                 throw e;
             } catch (RuntimeException e) {
+                externalApiMetrics.failure(API_NAME);
                 last = new LocalDataApiException(String.format(
                         "[localdata] 호출 실패 slug=%s, org=%s, page=%d, url=%s",
                         slug, regionCode.value(), page, mask(uri.toString())), e);

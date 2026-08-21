@@ -23,7 +23,7 @@ SDD.smash.global.<area>[.<sublayer>]                ← 컨텍스트에 속하�
 |---|---|
 | 컨텍스트 (`domain.` 아래) | `address`, `job`, `dwelling`, `infra`, `support`, `recommendation` |
 | 계층 | `domain`(`.model` / `.service` / `.port`), `application`(`.port.out` / `.dto`), `infrastructure`(`.persistence[.projection]` / `.cache` / `.external[.dto]` / `.batch[.dto,.runner]` / `.scheduler`), `presentation`(`.dto`) |
-| `global` 영역 | `domain.model`(공유 커널 값 객체), `exception`(`.handler`), `config`, `security`, `batch`, `util` |
+| `global` 영역 | `domain.model`(공유 커널 값 객체), `exception`(`.handler`), `config`, `security`, `batch`, `metrics`, `util` |
 
 예)
 ```
@@ -76,6 +76,7 @@ SDD.smash.global.exception.handler.GlobalExceptionHandler
 | `presentation.dto` | 요청 / 응답 | `...Request` / `...Response` | `CodeResponse`, `DetailResponse` |
 | `global.config` | Spring 설정 / 프로퍼티 | `...Config` / `...Properties` | `RedisConfig`, `YouthCenterProperties` |
 | `global.security` | 서블릿 필터 / 지원 서비스 | `...Filter` / `...Service` | `ApiRateLimitFilter`, `ApiRateLimitService` |
+| `global.metrics` | 계측기(Micrometer) | `...Metrics` | `CacheMetrics`, `ExternalApiMetrics`, `CallBudgetMetrics` |
 | `global.util` | 무상태 기술 유틸 | `...Util` | `BatchTextUtil`, `MapperUtil` |
 
 ### 2.1 접미사가 알려주는 것

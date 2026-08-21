@@ -3,6 +3,10 @@ package SDD.smash.domain.job.infrastructure.cache;
 import SDD.smash.domain.job.domain.model.IndustryShare;
 import SDD.smash.domain.job.domain.model.RegionJobProfile;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.CacheMetrics;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,6 +33,10 @@ class RegionJobProfileRedisAdapterTest {
     private static final Duration NEGATIVE_TTL = Duration.ofMinutes(30);
     private static final Duration POSITIVE_TTL = Duration.ofHours(12);
 
+    /** 계측은 대역이 아니라 실물을 쓴다. 카운터 값을 그대로 단정할 수 있다. */
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+    private final CacheMetrics cacheMetrics = new CacheMetrics(meterRegistry);
+
     @Mock RedisTemplate<String, RegionJobProfilePayload> template;
     @Mock ValueOperations<String, RegionJobProfilePayload> valueOps;
 
@@ -38,7 +46,7 @@ class RegionJobProfileRedisAdapterTest {
     @BeforeEach
     void setUp() {
         lenient().when(template.opsForValue()).thenReturn(valueOps);
-        adapter = new RegionJobProfileRedisAdapter(template, NEGATIVE_TTL);
+        adapter = new RegionJobProfileRedisAdapter(template, NEGATIVE_TTL, cacheMetrics);
     }
 
     @Test
@@ -101,5 +109,32 @@ class RegionJobProfileRedisAdapterTest {
         given(valueOps.get(any())).willThrow(new RuntimeException("redis down"));
 
         assertThat(adapter.find(region)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("조회 결과가 히트/미스/에러로 계측된다")
+    void recordsLookupOutcomeAsMetrics() {
+        // 미스
+        given(valueOps.get("job:profile:11680")).willReturn(null);
+        adapter.find(region);
+
+        // 히트
+        given(valueOps.get("job:profile:11680")).willReturn(new RegionJobProfilePayload(
+                4000, 0.5, List.of(), 10, 8));
+        adapter.find(region);
+
+        // 에러 - 호출부는 미스로 흡수하지만 계측은 따로 남아야 한다
+        given(valueOps.get("job:profile:11680")).willThrow(new RuntimeException("redis down"));
+        adapter.find(region);
+
+        assertThat(lookups("hit")).isEqualTo(1.0d);
+        assertThat(lookups("miss")).isEqualTo(1.0d);
+        assertThat(lookups("error")).isEqualTo(1.0d);
+    }
+
+    private double lookups(String result) {
+        Counter counter = meterRegistry.find("smash.cache.lookups")
+                .tag("cache", "job:profile").tag("result", result).counter();
+        return counter == null ? 0.0d : counter.count();
     }
 }
