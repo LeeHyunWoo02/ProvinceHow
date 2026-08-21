@@ -18,3 +18,18 @@ api.jibang.info {
 		format console
 	}
 }
+
+# Grafana 대시보드. api.jibang.info 와 같은 서버·같은 Caddy 가 인증서를 발급한다.
+# 발급 조건이 동일하다: grafana.jibang.info 의 A 레코드가 이 서버 공인 IP 를 가리켜야 한다.
+# A 레코드가 없으면 Caddy 가 이 사이트의 인증서 발급을 반복 실패한다(api 쪽은 영향 없음).
+grafana.jibang.info {
+	# grafana 컨테이너도 포트를 publish 하지 않는다. 외부 진입점은 여기 하나뿐이다.
+	reverse_proxy grafana:3000
+
+	encode gzip
+
+	log {
+		output stdout
+		format console
+	}
+}

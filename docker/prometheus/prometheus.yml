@@ -1,0 +1,28 @@
+# smash 백엔드 메트릭 수집 설정.
+#
+# 이 서버는 OCI Ampere A1 1 OCPU / 6GB 다. Prometheus 기본값(15s 스크랩)은 이 환경에서
+# 과하므로 30s 로 늘렸다. 보존 기간/용량 상한은 compose 의 커맨드 플래그에 있다.
+#
+# backend 컨테이너는 8080(서비스)과 8081(관리)을 열지만 compose 는 둘 중 8080 만
+# 127.0.0.1 로 publish 한다. 따라서 이 스크랩은 compose 내부 네트워크에서만 성립하고
+# /actuator 는 인터넷에서 도달할 경로가 없다.
+global:
+  scrape_interval: 30s
+  scrape_timeout: 10s
+  evaluation_interval: 30s
+  external_labels:
+    env: prod
+
+scrape_configs:
+  - job_name: smash-backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["backend:8081"]
+        labels:
+          service: smash-backend
+
+  # Prometheus 자기 자신. "수집기가 살아 있는가"를 대시보드에서 판별하는 데 쓴다.
+  - job_name: prometheus
+    scrape_interval: 60s
+    static_configs:
+      - targets: ["localhost:9090"]
