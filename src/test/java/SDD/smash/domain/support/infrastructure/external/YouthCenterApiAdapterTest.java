@@ -4,6 +4,8 @@ import SDD.smash.domain.support.domain.model.SupportPolicyCollection;
 import SDD.smash.domain.support.domain.model.SupportTag;
 import SDD.smash.global.config.YouthCenterProperties;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.ExternalApiMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -81,7 +83,8 @@ class YouthCenterApiAdapterTest {
 
     private YouthCenterApiAdapter adapter(int maxAttempts, long requestIntervalMs) {
         return new YouthCenterApiAdapter(webClient, properties,
-                5_000L, maxAttempts, 0L, 2.0d, 30_000L, requestIntervalMs);
+                5_000L, maxAttempts, 0L, 2.0d, 30_000L, requestIntervalMs,
+                new ExternalApiMetrics(new SimpleMeterRegistry()));
     }
 
     private void enqueue(HttpStatus status, String body) {

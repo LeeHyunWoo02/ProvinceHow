@@ -2,7 +2,9 @@ package SDD.smash.domain.address.infrastructure.external;
 
 import SDD.smash.domain.address.domain.model.PopulationSnapshot;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -293,7 +295,8 @@ class KosisPopulationApiAdapterTest {
                 jsonVd,
                 maxAttempts,
                 backoffMillis,
-                fallbackMonths);
+                fallbackMonths,
+                new ExternalApiMetrics(new SimpleMeterRegistry()));
     }
 
     private static String fixture(String name) {

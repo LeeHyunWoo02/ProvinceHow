@@ -4,6 +4,7 @@ import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.job.domain.model.JobPostingId;
 import SDD.smash.domain.job.domain.model.JobVacancy;
 import SDD.smash.domain.job.domain.port.JobVacancyCache;
+import SDD.smash.global.metrics.CacheMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.Cursor;
@@ -37,6 +38,9 @@ public class JobVacancyRedisAdapter implements JobVacancyCache {
 
     private static final String KEY_PREFIX = "job:vacancy:";
 
+    /** 메트릭의 cache 태그 값. Redis 키 네임스페이스와 같게 둬서 지표와 키를 바로 대조한다. */
+    private static final String CACHE_NAME = "job:vacancy";
+
     /** 정상(비어있지 않은) 결과 TTL. 원본이 외부 공급자(사람인)라 무효화 시점이 없어 반나절로 둔다. */
     private static final Duration POSITIVE_TTL = Duration.ofHours(6);
 
@@ -45,14 +49,19 @@ public class JobVacancyRedisAdapter implements JobVacancyCache {
 
     private final RedisTemplate<String, JobVacancyListPayload> jobVacancyListRedisTemplate;
 
+    /** 히트/미스/에러 계측. 캐시 동작 자체에는 관여하지 않는다. */
+    private final CacheMetrics cacheMetrics;
+
     /** 빈 결과(0건) 캐싱 TTL. 짧게 잡아 데이터가 생기면 곧 재조회되게 한다. 설정값. */
     private final Duration negativeTtl;
 
     public JobVacancyRedisAdapter(
             RedisTemplate<String, JobVacancyListPayload> jobVacancyListRedisTemplate,
-            @Value("${apis.saramin.vacancy.negative-ttl:PT30M}") Duration negativeTtl) {
+            @Value("${apis.saramin.vacancy.negative-ttl:PT30M}") Duration negativeTtl,
+            CacheMetrics cacheMetrics) {
         this.jobVacancyListRedisTemplate = jobVacancyListRedisTemplate;
         this.negativeTtl = negativeTtl;
+        this.cacheMetrics = cacheMetrics;
     }
 
     @Override
@@ -61,9 +70,12 @@ public class JobVacancyRedisAdapter implements JobVacancyCache {
         try {
             JobVacancyListPayload payload = jobVacancyListRedisTemplate.opsForValue().get(redisKey);
             if (payload == null) {
+                cacheMetrics.miss(CACHE_NAME);
                 return Optional.empty();   // 키 부재 = 미스
             }
             // 키 존재 = 히트. 빈 목록이면 "캐시된 0건"(네거티브 히트)이므로 Optional.of(빈 목록).
+            // 네거티브 히트도 히트로 센다 - 사람인 호출을 막아준 것이 캐시의 성과다.
+            cacheMetrics.hit(CACHE_NAME);
             List<JobVacancyPayload> vacancies = payload.getVacancies();
             if (vacancies == null || vacancies.isEmpty()) {
                 return Optional.of(List.of());
@@ -71,6 +83,7 @@ public class JobVacancyRedisAdapter implements JobVacancyCache {
             return Optional.of(vacancies.stream().map(this::toDomain).toList());
         } catch (RuntimeException e) {
             log.warn("[cache] 채용공고 목록 조회 실패 key={} - 미스로 처리", redisKey, e);
+            cacheMetrics.error(CACHE_NAME);
             return Optional.empty();
         }
     }

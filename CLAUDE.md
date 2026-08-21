@@ -18,7 +18,7 @@ SDD.smash.domain.<context>.<layer>   Bounded contexts: address, job, dwelling, i
                                      Layers: domain / application / infrastructure / presentation
 SDD.smash.global.<area>              Shared foundation, not a context:
                                      domain.model (shared-kernel value objects),
-                                     exception[.handler], config, security, batch, util
+                                     exception[.handler], config, security, batch, metrics, util
 ```
 
 Note that `domain` appears twice in a package such as `SDD.smash.domain.dwelling.domain.model`.
