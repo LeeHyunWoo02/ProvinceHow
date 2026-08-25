@@ -10,6 +10,8 @@ HELP.md
 /data/generated/*
 !/data/generated/.gitkeep
 
+/docs/images/**
+
 /scripts/*
 # 수집 스크립트는 팀이 공유해야 하므로 추적한다.
 !/scripts/work24/
