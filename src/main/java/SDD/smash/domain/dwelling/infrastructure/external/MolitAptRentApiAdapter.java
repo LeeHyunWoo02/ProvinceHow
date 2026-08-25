@@ -4,6 +4,7 @@ import SDD.smash.domain.dwelling.domain.model.AggregationPeriod;
 import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
 import SDD.smash.domain.dwelling.domain.model.RentCollection;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import SDD.smash.domain.dwelling.domain.port.RentRecordProvider;
 import SDD.smash.global.domain.model.SigunguCode;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -89,11 +90,19 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
     private final Object intervalLock = new Object();
     private long nextAllowedAtMillis;
 
+    /** 호출 성공/실패 계측. 페이지 호출 1회마다 1건 센다. */
+    private final ExternalApiMetrics externalApiMetrics;
+
+    /** 메트릭의 api 태그 값. */
+    private static final String API_NAME = "molit";
+
     public MolitAptRentApiAdapter(RestTemplate restTemplate,
-                                  ObjectMapper objectMapper, XmlMapper xmlMapper) {
+                                  ObjectMapper objectMapper, XmlMapper xmlMapper,
+                                  ExternalApiMetrics externalApiMetrics) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.xmlMapper = xmlMapper;
+        this.externalApiMetrics = externalApiMetrics;
     }
 
     @PostConstruct
@@ -246,8 +255,11 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
         try {
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
             JsonNode root = parseJsonWithXmlFallback(response.getHeaders().getContentType(), response.getBody());
-            return MolitApiResponse.of(root);
+            MolitApiResponse parsed = MolitApiResponse.of(root);
+            externalApiMetrics.success(API_NAME);
+            return parsed;
         } catch (RuntimeException e) {
+            externalApiMetrics.failure(API_NAME);
             log.error("[MOLIT] 호출 실패 sigungu={}, ym={}, page={}, url={}",
                     code.value(), yearMonth, page, mask(url), e);
             throw e;

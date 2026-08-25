@@ -53,6 +53,18 @@ public class SecurityConfig {
             http
                     .authorizeHttpRequests((auth) -> auth
                             .requestMatchers("/api/**").permitAll()
+                            // 액추에이터(health/prometheus)를 허용한다. 관리 포트를 따로 뒀어도
+                            // 이 필터체인은 관리 포트에도 적용되므로, 허용하지 않으면 Prometheus
+                            // 스크랩이 403 으로 막힌다(ActuatorPrometheusIntegrationTest 가 검증).
+                            //
+                            // EndpointRequest.toAnyEndpoint() 는 쓸 수 없다. 관리 포트를 분리하면
+                            // PathMappedEndpoints 빈이 자식(관리) 컨텍스트에만 생겨서, 이 체인이
+                            // 사는 메인 컨텍스트에서는 매처가 항상 "무시"로 빠져 403 이 된다.
+                            //
+                            // 경로를 하나씩 적는다 - 나중에 exposure.include 에 env/beans 를 추가해도
+                            // 자동으로 열리지 않게 하려는 의도다. 외부 차단은 compose 가 관리 포트를
+                            // publish 하지 않는 것으로 한다.
+                            .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/prometheus").permitAll()
                             .anyRequest().authenticated() //기본 거부 정책 적용
                     );
         }

@@ -3,6 +3,7 @@ package SDD.smash.domain.job.infrastructure.external;
 import SDD.smash.domain.job.domain.model.JobPostingPage;
 import SDD.smash.domain.job.domain.port.JobPostingProvider;
 import SDD.smash.domain.job.infrastructure.external.dto.SaraminApiSpecFile;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -61,6 +62,12 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
     private final int maxAttempts;
     private final long retryDelayMillis;
 
+    /** 호출 성공/실패 계측. 사람인은 일일 한도가 있어 호출 수 자체가 관측 대상이다. */
+    private final ExternalApiMetrics externalApiMetrics;
+
+    /** 메트릭의 api 태그 값. 어댑터가 아니라 수집원 단위다(일일 한도가 수집원 단위이므로). */
+    private static final String API_NAME = "saramin";
+
     public SaraminJobPostingApiAdapter(
             RestTemplate restTemplate,
             SaraminJobPostingParser parser,
@@ -70,7 +77,9 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
             @Value("${apis.saramin.path:" + DEFAULT_PATH + "}") String path,
             @Value("${apis.saramin.access-key:}") String accessKey,
             @Value("${apis.saramin.max-attempts:3}") int maxAttempts,
-            @Value("${apis.saramin.retry-delay-ms:1000}") long retryDelayMillis) {
+            @Value("${apis.saramin.retry-delay-ms:1000}") long retryDelayMillis,
+            ExternalApiMetrics externalApiMetrics) {
+        this.externalApiMetrics = externalApiMetrics;
         this.restTemplate = restTemplate;
         this.parser = parser;
         this.codeMapper = codeMapper;
@@ -142,8 +151,10 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
+                externalApiMetrics.success(API_NAME);
                 return response.getBody();
             } catch (RuntimeException e) {
+                externalApiMetrics.failure(API_NAME);
                 last = e;
                 log.warn("[saramin] 호출 실패 page={}, attempt={}/{}, url={}, reason={}",
                         pageNumber, attempt, maxAttempts, maskedUrl(uri), e.getMessage());

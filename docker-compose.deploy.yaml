@@ -71,8 +71,64 @@ services:
       timeout: 5s
       retries: 10
 
+  # ---------------------------------------------------------------------------
+  # 관측성. 서버가 1 OCPU / 6GB 라 두 컨테이너 모두 메모리·CPU 상한을 못 박는다.
+  # 상한이 없으면 Prometheus 의 TSDB 컴팩션이 백엔드의 CPU 를 그대로 빼앗아 간다.
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: "prom/prometheus:v3.14.0"
+    restart: unless-stopped
+    # 포트를 publish 하지 않는다. Grafana 가 compose 내부 네트워크로만 접근한다.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 보존 기간과 디스크 상한. 둘 중 먼저 걸리는 쪽이 오래된 블록을 지운다.
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=512MB
+      # 원격 쓰기/알림매니저를 안 쓰므로 불필요한 기능을 끈다.
+      - --web.enable-lifecycle
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    mem_limit: 512m
+    cpus: 0.5
+    depends_on:
+      - backend
+
+  grafana:
+    image: "grafana/grafana:13.1.4"
+    restart: unless-stopped
+    # 외부 노출은 Caddy(grafana.jibang.info)만 담당한다. 포트를 직접 열지 않는다.
+    env_file:
+      # 관리자 계정(GF_SECURITY_ADMIN_USER / GF_SECURITY_ADMIN_PASSWORD)은 시크릿이라
+      # backend.env 에서 온다. 없으면 Grafana 기본값(admin/admin)으로 뜨므로 반드시 채운다.
+      - ./backend.env
+    environment:
+      # 리버스 프록시 뒤에 있으므로 root_url 을 알려줘야 로그인 리다이렉트가 깨지지 않는다.
+      GF_SERVER_ROOT_URL: "https://grafana.jibang.info"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # 익명 열람을 켜려면 아래 두 줄을 true / Viewer 로 바꾼다(포트폴리오 공개용).
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Viewer"
+      # 1 OCPU 서버라 외부 통신·플러그인 설치를 모두 끈다.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      # 데이터소스·대시보드는 레포의 파일이 정본이다(프로비저닝). 읽기 전용으로 붙인다.
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      # 사용자·세션·주석 등 Grafana 자체 SQLite DB.
+      - grafana-data:/var/lib/grafana
+    mem_limit: 384m
+    cpus: 0.5
+    depends_on:
+      - prometheus
+
 volumes:
   mysql-data:
   redis-data:
   caddy-data:
   caddy-config:
+  prometheus-data:
+  grafana-data:

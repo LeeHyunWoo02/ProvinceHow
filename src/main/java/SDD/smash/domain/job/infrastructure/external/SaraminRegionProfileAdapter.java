@@ -1,6 +1,7 @@
 package SDD.smash.domain.job.infrastructure.external;
 
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import SDD.smash.domain.job.domain.model.ExperienceLevel;
 import SDD.smash.domain.job.domain.model.JobPostingSample;
 import SDD.smash.domain.job.domain.port.RegionJobProfileProvider;
@@ -67,6 +68,12 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
     private final String path;
     private final String accessKey;
 
+    /** 호출 성공/실패 계측. 사람인은 일일 한도가 있어 호출 수 자체가 관측 대상이다. */
+    private final ExternalApiMetrics externalApiMetrics;
+
+    /** 메트릭의 api 태그 값. 어댑터가 아니라 수집원 단위다(일일 한도가 수집원 단위이므로). */
+    private static final String API_NAME = "saramin";
+
     public SaraminRegionProfileAdapter(
             RestTemplate restTemplate,
             SaraminJobSampleParser parser,
@@ -74,7 +81,9 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
             SaraminLocCodeResolver locCodeResolver,
             @Value("${apis.saramin.base-url:https://oapi.saramin.co.kr}") String baseUrl,
             @Value("${apis.saramin.path:/job-search}") String path,
-            @Value("${apis.saramin.access-key:}") String accessKey) {
+            @Value("${apis.saramin.access-key:}") String accessKey,
+            ExternalApiMetrics externalApiMetrics) {
+        this.externalApiMetrics = externalApiMetrics;
         this.restTemplate = restTemplate;
         this.parser = parser;
         this.specLoader = specLoader;
@@ -109,11 +118,13 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
             List<SaraminJobSampleRaw> raws = parser.parse(response.getBody(), spec.response());
             List<JobPostingSample> samples = raws.stream().map(this::toSample).toList();
             log.debug("[saramin] 프로필 표본 조회 region={}, locCd={}, 표본={}건", region.value(), locCd, samples.size());
+            externalApiMetrics.success(API_NAME);
             // 실제 조회 성공(0건이어도) → 표본을 담아 돌려준다(유스케이스가 네거티브 캐싱).
             return Optional.of(samples);
         } catch (RuntimeException e) {
             // 호출 실패는 '미시도'로 취급 -> 네거티브 캐싱하지 않아 다음 요청에서 재시도한다.
             log.warn("[saramin] 프로필 표본 조회 실패 region={}, url={} - 미시도(캐싱 안 함)", region.value(), maskedUrl(uri), e);
+            externalApiMetrics.failure(API_NAME);
             return Optional.empty();
         }
     }

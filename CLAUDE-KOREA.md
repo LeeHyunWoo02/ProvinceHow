@@ -17,7 +17,7 @@ SDD.smash.domain.<context>.<layer>   바운디드 컨텍스트: address, job, dw
                                      계층: domain / application / infrastructure / presentation
 SDD.smash.global.<area>              컨텍스트가 아닌 공통 기반:
                                      domain.model(공유 커널 값 객체),
-                                     exception[.handler], config, security, batch, util
+                                     exception[.handler], config, security, batch, metrics, util
 ```
 
 `SDD.smash.domain.dwelling.domain.model` 처럼 `domain`이 두 번 나오는 점에 주의한다.

@@ -1,7 +1,9 @@
 package SDD.smash.domain.job.infrastructure.external;
 
 import SDD.smash.domain.job.domain.model.JobPostingPage;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -176,6 +178,7 @@ class SaraminJobPostingApiAdapterTest {
                 "/job-search",
                 accessKey,
                 maxAttempts,
-                0L);
+                0L,
+                new ExternalApiMetrics(new SimpleMeterRegistry()));
     }
 }
