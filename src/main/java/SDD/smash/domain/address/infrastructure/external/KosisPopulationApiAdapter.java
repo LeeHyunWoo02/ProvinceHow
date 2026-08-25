@@ -1,6 +1,7 @@
 package SDD.smash.domain.address.infrastructure.external;
 
 import SDD.smash.domain.address.domain.model.PopulationSnapshot;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import SDD.smash.domain.address.domain.port.PopulationSnapshotProvider;
 import SDD.smash.domain.address.infrastructure.external.dto.KosisPopulationRow;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -81,6 +82,12 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
     private final long retryBackoffMillis;
     private final int fallbackMonths;
 
+    /** 호출 성공/실패 계측. 재시도 1회 = HTTP 호출 1회 단위로 센다. */
+    private final ExternalApiMetrics externalApiMetrics;
+
+    /** 메트릭의 api 태그 값. */
+    private static final String API_NAME = "kosis";
+
     public KosisPopulationApiAdapter(
             RestTemplate restTemplate,
             ObjectMapper objectMapper,
@@ -93,7 +100,9 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
             @Value("${apis.kosis.json-vd:}") String jsonVd,
             @Value("${apis.kosis.retry-max-attempts:3}") int maxAttempts,
             @Value("${apis.kosis.retry-backoff-millis:1000}") long retryBackoffMillis,
-            @Value("${apis.kosis.fallback-months:3}") int fallbackMonths) {
+            @Value("${apis.kosis.fallback-months:3}") int fallbackMonths,
+            ExternalApiMetrics externalApiMetrics) {
+        this.externalApiMetrics = externalApiMetrics;
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl;
@@ -193,9 +202,16 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
                 String body = restTemplate.getForObject(uri, String.class);
-                return toSnapshots(body, period);
+                List<PopulationSnapshot> snapshots = toSnapshots(body, period);
+                externalApiMetrics.success(API_NAME);
+                return snapshots;
+            } catch (KosisApiException e) {
+                // 응답 파싱/판정 실패. 다시 불러도 같은 결과라 재시도하지 않고 그대로 올린다.
+                externalApiMetrics.failure(API_NAME);
+                throw e;
             } catch (org.springframework.web.client.HttpStatusCodeException e) {
                 if (!isRetryable(e.getStatusCode())) {
+                    externalApiMetrics.failure(API_NAME);
                     throw new KosisApiException(
                             "KOSIS 응답 상태 오류 status=" + e.getStatusCode().value() + ", period=" + period, e);
                 }
@@ -207,6 +223,7 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
                 last = new KosisApiException("KOSIS 호출 실패 period=" + period, e);
             }
 
+            externalApiMetrics.failure(API_NAME);
             log.warn("[KOSIS] 호출 실패 period={}, attempt={}/{}, url={}",
                     period, attempt, maxAttempts, maskApiKey(uri.toString()));
             if (attempt < maxAttempts) {

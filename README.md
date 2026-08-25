@@ -107,6 +107,7 @@ docker compose up -d
 | [saramin-jobcount-batch-strategy.md](docs/saramin-jobcount-batch-strategy.md) | 사람인 500회/일 제한 하 JobCount 배치 수집 전략, 호출 예산 가드레일 |
 | [localdata-infra.md](docs/localdata-infra.md) | 업종 마스터, 지역코드 매핑, ratio/score 계산식 |
 | [work24-crawling-assessment.md](docs/work24-crawling-assessment.md) | 고용24 공개검색 수집 불가 판정 근거 |
+| [observability.md](docs/observability.md) | Actuator·Prometheus·Grafana 구성, 포트/접근 통제, 배포 후 확인 절차 |
 
 ---
 

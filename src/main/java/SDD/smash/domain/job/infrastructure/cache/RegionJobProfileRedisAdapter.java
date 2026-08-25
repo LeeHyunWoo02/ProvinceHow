@@ -4,6 +4,7 @@ import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.job.domain.model.IndustryShare;
 import SDD.smash.domain.job.domain.model.RegionJobProfile;
 import SDD.smash.domain.job.domain.port.RegionJobProfileCache;
+import SDD.smash.global.metrics.CacheMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.Cursor;
@@ -35,6 +36,9 @@ public class RegionJobProfileRedisAdapter implements RegionJobProfileCache {
 
     private static final String KEY_PREFIX = "job:profile:";
 
+    /** 메트릭의 cache 태그 값. Redis 키 네임스페이스와 같게 둬서 지표와 키를 바로 대조한다. */
+    private static final String CACHE_NAME = "job:profile";
+
     /** 정상(표본이 있는) 프로필 TTL. 프로필은 변화가 느리므로 반나절이면 충분하다. */
     private static final Duration POSITIVE_TTL = Duration.ofHours(12);
 
@@ -43,14 +47,19 @@ public class RegionJobProfileRedisAdapter implements RegionJobProfileCache {
 
     private final RedisTemplate<String, RegionJobProfilePayload> regionJobProfileRedisTemplate;
 
+    /** 히트/미스/에러 계측. 캐시 동작 자체에는 관여하지 않는다. */
+    private final CacheMetrics cacheMetrics;
+
     /** 빈 프로필(표본 0건) 캐싱 TTL. 짧게 잡아 데이터가 생기면 곧 재조회되게 한다. 설정값. */
     private final Duration negativeTtl;
 
     public RegionJobProfileRedisAdapter(
             RedisTemplate<String, RegionJobProfilePayload> regionJobProfileRedisTemplate,
-            @Value("${apis.saramin.profile.negative-ttl:PT30M}") Duration negativeTtl) {
+            @Value("${apis.saramin.profile.negative-ttl:PT30M}") Duration negativeTtl,
+            CacheMetrics cacheMetrics) {
         this.regionJobProfileRedisTemplate = regionJobProfileRedisTemplate;
         this.negativeTtl = negativeTtl;
+        this.cacheMetrics = cacheMetrics;
     }
 
     @Override
@@ -59,11 +68,14 @@ public class RegionJobProfileRedisAdapter implements RegionJobProfileCache {
         try {
             RegionJobProfilePayload payload = regionJobProfileRedisTemplate.opsForValue().get(redisKey);
             if (payload == null) {
+                cacheMetrics.miss(CACHE_NAME);
                 return Optional.empty();   // 키 부재 = 미스. 키 존재는 빈 프로필이어도 히트.
             }
+            cacheMetrics.hit(CACHE_NAME);
             return Optional.of(toDomain(region, payload));
         } catch (RuntimeException e) {
             log.warn("[cache] 지역 채용 프로필 조회 실패 key={} - 미스로 처리", redisKey, e);
+            cacheMetrics.error(CACHE_NAME);
             return Optional.empty();
         }
     }

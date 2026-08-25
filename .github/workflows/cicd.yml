@@ -87,14 +87,17 @@ jobs:
         uses: actions/checkout@v4
 
       # backend.env(앱 시크릿)는 서버에 수동으로 미리 둔다(전송하지 않음).
-      # 배포 compose + 정적 기준데이터 + mysql init 스크립트 + Caddyfile 만 서버로 보낸다.
+      # 배포 compose + 정적 기준데이터 + mysql init 스크립트 + Caddyfile + 관측성 설정만 보낸다.
+      #
+      # 이 목록은 화이트리스트다. compose 가 bind mount 하는 파일을 여기 빠뜨리면
+      # docker 가 그 경로에 빈 디렉터리를 만들고 해당 컨테이너가 기동에 실패한다.
       - name: Copy deploy files to OCI
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.OCI_HOST }}
           username: ${{ secrets.OCI_USERNAME }}
           key: ${{ secrets.OCI_SSH_KEY }}
-          source: "docker-compose.deploy.yaml,data/static,docker/mysql/init,docker/caddy/Caddyfile"
+          source: "docker-compose.deploy.yaml,data/static,docker/mysql/init,docker/caddy/Caddyfile,docker/prometheus/prometheus.yml,docker/grafana/provisioning,docker/grafana/dashboards"
           target: "/home/ubuntu/smash"
 
       - name: Deploy on OCI

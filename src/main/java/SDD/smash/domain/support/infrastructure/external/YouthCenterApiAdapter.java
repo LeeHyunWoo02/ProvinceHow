@@ -2,6 +2,7 @@ package SDD.smash.domain.support.infrastructure.external;
 
 import SDD.smash.global.config.YouthCenterProperties;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.ExternalApiMetrics;
 import SDD.smash.domain.support.domain.model.SupportPolicy;
 import SDD.smash.domain.support.domain.model.SupportPolicyCollection;
 import SDD.smash.domain.support.domain.model.SupportTag;
@@ -65,6 +66,12 @@ public class YouthCenterApiAdapter implements SupportPolicyProvider {
     private final WebClient webClient;
     private final YouthCenterProperties properties;
 
+    /** 호출 성공/실패 계측. 수집 실패는 기존 데이터를 보존하며 조용히 지나가므로 지표가 필요하다. */
+    private final ExternalApiMetrics externalApiMetrics;
+
+    /** 메트릭의 api 태그 값. 수집원 단위다. */
+    private static final String API_NAME = "youthcenter";
+
     private final Duration requestTimeout;
     private final int maxAttempts;
     private final long retryDelayMs;
@@ -83,10 +90,12 @@ public class YouthCenterApiAdapter implements SupportPolicyProvider {
             @Value("${apis.youthcenter.retry-delay-ms:1000}") long retryDelayMs,
             @Value("${apis.youthcenter.retry-backoff-multiplier:2}") double retryBackoffMultiplier,
             @Value("${apis.youthcenter.max-retry-after-ms:30000}") long maxRetryAfterMs,
-            @Value("${apis.youthcenter.request-interval-ms:1000}") long requestIntervalMs) {
+            @Value("${apis.youthcenter.request-interval-ms:1000}") long requestIntervalMs,
+            ExternalApiMetrics externalApiMetrics) {
 
         this.webClient = webClient;
         this.properties = properties;
+        this.externalApiMetrics = externalApiMetrics;
         this.requestTimeout = Duration.ofMillis(Math.max(1_000L, requestTimeoutMs));
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMs = Math.max(0, retryDelayMs);
@@ -104,6 +113,7 @@ public class YouthCenterApiAdapter implements SupportPolicyProvider {
             // 빈 키로 1,056회를 때려봐야 403 만 받는다. 호출 자체를 하지 않고 수집 실패로 알린다.
             log.warn("[YouthCenter] API 키가 비어 있다(apis.youthcenter.api-key / YOUTH_API_KEY)."
                     + " 호출하지 않는다 sigungu={}, tag={}", code.value(), tag);
+            externalApiMetrics.skipped(API_NAME);
             return SupportPolicyCollection.notCollected();
         }
 
@@ -158,6 +168,17 @@ public class YouthCenterApiAdapter implements SupportPolicyProvider {
      * 문자열 연결로는 인코딩되지 않은 URL 이 나가 400 의 원인이 된다.
      */
     private YouthCenterApiResponse request(SigunguCode code, SupportTag tag) {
+        try {
+            YouthCenterApiResponse response = doRequest(code, tag);
+            externalApiMetrics.success(API_NAME);
+            return response;
+        } catch (RuntimeException e) {
+            externalApiMetrics.failure(API_NAME);
+            throw e;
+        }
+    }
+
+    private YouthCenterApiResponse doRequest(SigunguCode code, SupportTag tag) {
         return webClient.get()
                 .uri(uriBuilder -> uriBuilder
                         .path(path())
