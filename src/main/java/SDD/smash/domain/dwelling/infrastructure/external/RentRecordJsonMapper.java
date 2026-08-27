@@ -1,5 +1,6 @@
 package SDD.smash.domain.dwelling.infrastructure.external;
 
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -19,12 +20,20 @@ final class RentRecordJsonMapper {
     private RentRecordJsonMapper() {
     }
 
-    static RentRecord toRecord(JsonNode node) {
-        String aptNm = text(node, "aptNm", "아파트");
-        String jibun = text(node, "jibun", "지번");
+    /**
+     * 건물명·지번은 유형마다 다르다(docs/external-api-spec.md 4.4). 단독다가구는 두 필드가 아예 없어 null 이 되며,
+     * 전월세 판정은 {@code deposit}/{@code monthlyRent} 만 쓰므로 집계에는 영향이 없다.
+     */
+    static RentRecord toRecord(HousingType housingType, JsonNode node) {
+        String buildingName = switch (housingType) {
+            case APARTMENT -> text(node, "aptNm", "아파트");
+            case MULTIPLEX_HOUSE -> text(node, "mhouseNm", "연립다세대");
+            case DETACHED_HOUSE -> null;
+        };
+        String jibun = (housingType == HousingType.DETACHED_HOUSE) ? null : text(node, "jibun", "지번");
         Integer deposit = num(node, "deposit", "보증금액");
         Integer monthly = num(node, "monthlyRent", "월세금액");
 
-        return new RentRecord(aptNm, jibun, nullZero(deposit), nullZero(monthly));
+        return new RentRecord(buildingName, jibun, nullZero(deposit), nullZero(monthly));
     }
 }
