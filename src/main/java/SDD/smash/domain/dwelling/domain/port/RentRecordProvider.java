@@ -20,11 +20,13 @@ import java.util.List;
  *
  * <p>조회 메서드가 셋인 이유는 <b>실패를 어떻게 알릴지가 호출자마다 다르기 때문</b>이다.
  * <ul>
- *   <li>{@link #fetch} — 엄격. 실패하면 예외를 던진다. 재시도 정책이 걸린 배치 Step 이 쓴다</li>
+ *   <li>{@link #fetch} — 엄격. 실패하면 예외를 던진다. 재시도가 필요한 호출자가 직접 감싼다</li>
  *   <li>{@link #fetchMonth} — 관대. 실패를 {@link MonthlyRentResult} 상태로 돌려준다.
- *       "이 달에 자료가 있는가"를 확인하는 탐침용이다</li>
+ *       "이 달에 자료가 있는가"를 확인하는 탐침용이자, {@link #collect} 가 쓰는 경로다.
+ *       재시도가 필요하면 이 메서드를 재정의하는 구현체가 스스로 한다(청크 재시도가 아니다) —
+ *       {@code MolitRentApiAdapter} 참고</li>
  *   <li>{@link #collect} — 구간 단위. 실패한 달을 모아서 돌려주므로 <b>부분 실패를 성공으로
- *       덮지 않는다</b></li>
+ *       덮지 않는다</b>. 배치가 실제로 쓰는 경로다</li>
  * </ul>
  */
 public interface RentRecordProvider {
