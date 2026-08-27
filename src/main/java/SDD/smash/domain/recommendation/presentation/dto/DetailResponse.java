@@ -44,6 +44,9 @@ public class DetailResponse {
 
     private DwellingInfoSummary dwellingInfo;
 
+    /** 주택유형별 시세. 통합 시세(dwellingInfo)와 함께 내려간다. 유형이 없으면 빈 배열. */
+    private List<DwellingTypeEntry> dwellingByType;
+
     private List<IndustryDetailItem> infraDetails;
     private List<MajorInfraSummaryItem> infraMajors;
 

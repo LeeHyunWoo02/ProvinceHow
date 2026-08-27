@@ -10,6 +10,7 @@ import SDD.smash.domain.job.application.JobVacancyQueryService;
 import SDD.smash.domain.job.application.RegionJobProfileQueryService;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.recommendation.application.dto.DwellingInfoSummary;
+import SDD.smash.domain.recommendation.application.dto.DwellingTypeItem;
 import SDD.smash.domain.recommendation.application.dto.IndustryDetailItem;
 import SDD.smash.domain.recommendation.application.dto.JobInfoSummary;
 import SDD.smash.domain.recommendation.application.dto.JobVacancyItem;
@@ -77,6 +78,9 @@ public class RegionDetailService {
                                 .toList()))
 
                 .dwellingInfo(DwellingInfoSummary.from(dwellingQueryService.getDwellingInfo(sigunguCode)))
+                .dwellingByType(dwellingQueryService.getDwellingByType(sigunguCode).stream()
+                        .map(DwellingTypeItem::from)
+                        .toList())
 
                 .infraDetails(infraQueryService.getInfraDetails(sigunguCode).stream()
                         .map(IndustryDetailItem::from)

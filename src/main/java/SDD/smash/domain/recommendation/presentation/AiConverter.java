@@ -5,6 +5,7 @@ import SDD.smash.domain.recommendation.application.dto.RegionPick;
 import SDD.smash.domain.recommendation.application.dto.RegionRecommendation;
 import SDD.smash.domain.recommendation.presentation.dto.AiPickEntry;
 import SDD.smash.domain.recommendation.presentation.dto.DetailResponse;
+import SDD.smash.domain.recommendation.presentation.dto.DwellingTypeEntry;
 import SDD.smash.domain.recommendation.presentation.dto.JobVacancyEntry;
 import SDD.smash.domain.recommendation.presentation.dto.RecommendAggregateResponse;
 import SDD.smash.domain.recommendation.presentation.dto.RegionJobProfileEntry;
@@ -42,6 +43,8 @@ public class AiConverter {
                 .totalSupportNum(dto.getTotalSupportNum())
                 .supportList(dto.getSupportList())
                 .dwellingInfo(dto.getDwellingInfo())
+                .dwellingByType(dto.getDwellingByType() == null ? List.of()
+                        : dto.getDwellingByType().stream().map(DwellingTypeEntry::from).toList())
                 .infraDetails(dto.getInfraDetails())
                 .infraMajors(dto.getInfraMajors())
                 .aiSummary(summarizeContent)
