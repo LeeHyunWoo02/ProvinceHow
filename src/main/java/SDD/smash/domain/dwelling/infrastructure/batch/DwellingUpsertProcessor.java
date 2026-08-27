@@ -31,10 +31,16 @@ import java.util.function.ToIntFunction;
  * <p>Step 을 유형별로 쪼개지 않은 이유: 통합 <b>중앙값</b>은 유형별 중앙값들로 재구성할 수 없다.
  * 올바른 통합값을 내려면 3종의 원시 레코드를 한 곳에 풀링한 뒤 계산해야 한다.
  *
- * <p><b>부분 실패 정책 변경</b> — 기존의 "일부 월이 실패하면 그 시군구는 저장하지 않는다"를
- * <b>(시군구, 유형) 단위로 좁혔다.</b> 한 유형이 실패해도 나머지 유형과, 성공한 유형만 풀링한
- * 통합값은 적재한다. 그렇게 하지 않으면 한 유형이라도 실패하는 지역은 통합 평균조차 받지 못한다.
- * 단 한 유형 <b>안에서의</b> 부분 실패는 여전히 금지다 — 표본이 온전하지 않은 평균은
+ * <p><b>부분 실패 정책</b> — 유형별 행은 (시군구, 유형) 단위로 격리한다. 성공한 유형은 그대로 적재하고
+ * 실패한 유형만 건너뛴다. 반면 <b>통합값은 3종이 모두 성공했을 때만</b> 쓴다. 한 유형이라도 실패했는데
+ * 남은 유형만 풀링해 덮어쓰면 이전 실행의 3종 통합값이 1~2종 값으로 조용히 열화되고,
+ * 그 값은 {@code DwellingScorePolicy} 의 입력이라 추천 점수가 실제로 바뀌면서도 어떤 검증에도 걸리지 않는다.
+ * 그래서 통합값은 {@code null} 로 두어 기존 {@code dwelling} 행을 보존한다.
+ *
+ * <p>자료가 없는 지역(전남·광주 등)은 이 정책으로 손해를 보지 않는다. 그런 응답은
+ * {@code totalCount=0} + {@code resultCode=000} 이라 {@code CONFIRMED_EMPTY} 이고 실패가 아니다.
+ * 완화가 실제로 구제하는 것은 일시적 네트워크 실패뿐이며, 그 이득은 점수 입력값 열화라는 대가보다 작다.
+ * 한 유형 <b>안에서의</b> 부분 실패도 여전히 금지다 — 표본이 온전하지 않은 평균은
  * "값이 있는데 틀린 값"이 되기 때문이다({@link RentCollection} 참고).
  */
 @Slf4j
@@ -60,6 +66,7 @@ public class DwellingUpsertProcessor
         List<Integer> pooledMonthly = new ArrayList<>();
         List<Integer> pooledJeonse = new ArrayList<>();
         List<DwellingByTypeUpsertRow> byType = new ArrayList<>();
+        List<HousingType> failedTypes = new ArrayList<>();
 
         for (HousingType housingType : HousingType.values()) {
             RentCollection collection = rentRecordProvider.collect(housingType, sigunguCode, period);
@@ -68,6 +75,7 @@ public class DwellingUpsertProcessor
             if (collection.hasFailures()) {
                 log.error("[dwelling] 유형 제외 - 수집 실패한 달이 있다 sigungu={}, type={}, failedMonths={}",
                         sigunguCode.value(), housingType, collection.failedMonths());
+                failedTypes.add(housingType);
                 continue;
             }
 
@@ -90,13 +98,15 @@ public class DwellingUpsertProcessor
                     .build());
         }
 
-        boolean hasCombined = !pooledMonthly.isEmpty() || !pooledJeonse.isEmpty();
-        if (!hasCombined && byType.isEmpty()) {
-            log.warn("[dwelling] 건너뜀 - 3종 모두 집계할 값이 없다 sigungu={}", sigunguCode.value());
-            return null;
+        // 통합값은 3종이 모두 성공했을 때만 쓴다. 실패가 있으면 null 로 두어 기존 dwelling 행을 보존한다.
+        boolean hasCombinedValues = !pooledMonthly.isEmpty() || !pooledJeonse.isEmpty();
+        if (!failedTypes.isEmpty()) {
+            log.warn("[dwelling] 통합값 건너뜀 - 실패한 유형이 있어 기존 dwelling 행을 보존한다 "
+                            + "sigungu={}, failedTypes={}, keptByTypeRows={}",
+                    sigunguCode.value(), failedTypes, byType.size());
         }
 
-        DwellingUpsertRow combined = hasCombined
+        DwellingUpsertRow combined = (failedTypes.isEmpty() && hasCombinedValues)
                 ? DwellingUpsertRow.builder()
                 .sigunguCode(sigunguCode.value())
                 .monthAvg(RentStatCalculator.mean(pooledMonthly))
@@ -106,6 +116,10 @@ public class DwellingUpsertProcessor
                 .build()
                 : null;
 
+        if (combined == null && byType.isEmpty()) {
+            log.warn("[dwelling] 건너뜀 - 적재할 통합값도 유형별 행도 없다 sigungu={}", sigunguCode.value());
+            return null;
+        }
         return new DwellingUpsertBundle(combined, byType);
     }
 

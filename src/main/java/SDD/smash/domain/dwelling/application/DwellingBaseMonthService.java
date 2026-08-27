@@ -51,7 +51,7 @@ public class DwellingBaseMonthService {
     public DwellingBaseMonthService(
             RentRecordProvider rentRecordProvider,
             @Value("${dwelling.confirmedLagMonths:2}") int confirmedLagMonths,
-            @Value("${dwelling.months:12}") int lookbackMonths,
+            @Value("${dwelling.months:10}") int lookbackMonths,
             @Value("${dwelling.maxFallbackMonths:3}") int maxFallbackMonths,
             @Value("${dwelling.dealYmd:}") String configuredOverride,
             @Value("${dwelling.baseMonthProbe.enabled:true}") boolean probeEnabled,
