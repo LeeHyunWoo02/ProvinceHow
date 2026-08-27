@@ -41,6 +41,9 @@ public class RegionDetailInfo {
 
     private DwellingInfoSummary dwellingInfo;
 
+    /** 주택유형별 시세. 통합 시세(dwellingInfo)를 대체하지 않고 추가로 실린다. 적재된 유형이 없으면 빈 목록. */
+    private List<DwellingTypeItem> dwellingByType;
+
     private List<IndustryDetailItem> infraDetails;
     private List<MajorInfraSummaryItem> infraMajors;
 }

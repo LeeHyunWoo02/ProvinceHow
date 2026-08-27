@@ -4,10 +4,16 @@ import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.dwelling.application.dto.DwellingInfo;
 import SDD.smash.domain.dwelling.application.dto.DwellingSimpleInfo;
+import SDD.smash.domain.dwelling.application.dto.DwellingTypeInfo;
+import SDD.smash.domain.dwelling.domain.model.DwellingTypeStat;
 import SDD.smash.domain.dwelling.domain.port.DwellingMarketRepository;
+import SDD.smash.domain.dwelling.domain.port.DwellingTypeStatRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * 전월세 시세 조회 유스케이스. {@code recommendation} 이 dwelling 을 호출하는 통로다.
@@ -21,6 +27,7 @@ public class DwellingQueryService {
 
     private final AddressQueryService addressQueryService;
     private final DwellingMarketRepository dwellingMarketRepository;
+    private final DwellingTypeStatRepository dwellingTypeStatRepository;
 
     /**
      * 해당 시군구의 월세·전세 중앙값. 실거래가 없으면 {@code null} 이다
@@ -43,5 +50,21 @@ public class DwellingQueryService {
         return dwellingMarketRepository.findBy(code)
                 .map(DwellingInfo::from)
                 .orElse(null);
+    }
+
+    /**
+     * 해당 시군구의 주택유형별 시세. 적재된 유형이 없으면 <b>빈 리스트</b>다(통합 시세와 달리 null 이 아니다).
+     *
+     * <p>순서는 {@code HousingType} 선언 순서(아파트 → 연립다세대 → 단독다가구)로 고정한다 —
+     * 저장소 조회 순서에 의존하지 않는다.
+     */
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    public List<DwellingTypeInfo> getDwellingByType(SigunguCode code) {
+        addressQueryService.checkSigunguExistsOrThrow(code);
+
+        return dwellingTypeStatRepository.findAllBy(code).stream()
+                .sorted(Comparator.comparing(DwellingTypeStat::housingType))
+                .map(DwellingTypeInfo::from)
+                .toList();
     }
 }

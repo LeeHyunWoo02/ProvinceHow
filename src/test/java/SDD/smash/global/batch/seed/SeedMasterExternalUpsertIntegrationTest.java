@@ -6,6 +6,9 @@ import SDD.smash.global.batch.launch.BatchLaunchResult;
 import SDD.smash.IntegrationTestSupport;
 import SDD.smash.domain.address.domain.model.PopulationSnapshot;
 import SDD.smash.domain.address.domain.port.PopulationSnapshotProvider;
+import SDD.smash.domain.dwelling.domain.model.AggregationPeriod;
+import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
+import SDD.smash.domain.dwelling.domain.model.RentCollection;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import SDD.smash.domain.dwelling.domain.port.RentRecordProvider;
 import org.junit.jupiter.api.DisplayName;
@@ -85,9 +88,16 @@ class SeedMasterExternalUpsertIntegrationTest extends IntegrationTestSupport {
         given(populationSnapshotProvider.fetch(any())).willAnswer(invocation ->
                 populationSnapshotProvider.fetchLatestNotAfter(invocation.getArgument(0)));
 
-        given(rentRecordProvider.fetch(any(), any())).willReturn(List.of(
-                new RentRecord("테스트아파트", "1-1", 20_000, 0),
-                new RentRecord("테스트아파트", "1-2", 5_000, 70)));
+        // 배치는 collect(유형, 시군구, 구간)로 3종을 순회한다. 유형마다 같은 대역 결과를 준다
+        given(rentRecordProvider.collect(any(), any(), any())).willAnswer(invocation -> {
+            SigunguCode code = invocation.getArgument(1);
+            AggregationPeriod period = invocation.getArgument(2);
+            return RentCollection.from(code, period, List.of(MonthlyRentResult.available(
+                    period.to(),
+                    List.of(new RentRecord("테스트건물", "1-1", 20_000, 0),
+                            new RentRecord("테스트건물", "1-2", 5_000, 70)),
+                    2, 1)));
+        });
 
         JobExecution first = launch("upsert-v1", "2026-07-01", "202607");
 
@@ -97,6 +107,8 @@ class SeedMasterExternalUpsertIntegrationTest extends IntegrationTestSupport {
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataDataSource);
         assertThat(countOf(jdbcTemplate, "population")).isEqualTo(3);
         assertThat(countOf(jdbcTemplate, "dwelling")).isEqualTo(3);
+        // 시군구 3개 × 주택유형 3종
+        assertThat(countOf(jdbcTemplate, "dwelling_by_type")).isEqualTo(9);
 
         // 기준월이 바뀌면 다시 돌지만 같은 시군구는 갱신되기만 해야 한다
         JobExecution second = launch("upsert-v1", "2026-08-01", "202608");
@@ -104,6 +116,7 @@ class SeedMasterExternalUpsertIntegrationTest extends IntegrationTestSupport {
         assertThat(executedStepNames(second)).contains("populationStep", "dwellingStep");
         assertThat(countOf(jdbcTemplate, "population")).isEqualTo(3);
         assertThat(countOf(jdbcTemplate, "dwelling")).isEqualTo(3);
+        assertThat(countOf(jdbcTemplate, "dwelling_by_type")).isEqualTo(9);
     }
 
     private JobExecution launch(String seedVersion, String baseDate, String baseMonth) {
