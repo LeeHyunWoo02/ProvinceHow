@@ -85,7 +85,7 @@ class SeedMasterExternalUpsertIntegrationTest extends IntegrationTestSupport {
         given(populationSnapshotProvider.fetch(any())).willAnswer(invocation ->
                 populationSnapshotProvider.fetchLatestNotAfter(invocation.getArgument(0)));
 
-        given(rentRecordProvider.fetch(any(), any())).willReturn(List.of(
+        given(rentRecordProvider.fetch(any(), any(), any())).willReturn(List.of(
                 new RentRecord("테스트아파트", "1-1", 20_000, 0),
                 new RentRecord("테스트아파트", "1-2", 5_000, 70)));
 

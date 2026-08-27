@@ -1,6 +1,7 @@
 package SDD.smash.domain.dwelling.domain.port;
 
 import SDD.smash.domain.dwelling.domain.model.AggregationPeriod;
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
 import SDD.smash.domain.dwelling.domain.model.RentCollection;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
@@ -14,6 +15,8 @@ import java.util.List;
  * 외부 실거래 자료 공급 out-port.
  *
  * <p>어느 기관의 어떤 프로토콜인지는 어댑터가 안다. 도메인은 "월 단위로 실거래를 받아온다"만 안다.
+ *
+ * <p>어느 주택유형({@link HousingType})의 실거래를 받을지는 <b>호출자가 정한다.</b>
  *
  * <p>조회 메서드가 셋인 이유는 <b>실패를 어떻게 알릴지가 호출자마다 다르기 때문</b>이다.
  * <ul>
@@ -31,7 +34,7 @@ public interface RentRecordProvider {
      *
      * @throws RuntimeException 공급 기관 응답을 신뢰할 수 없을 때. 빈 리스트로 삼키지 않는다
      */
-    List<RentRecord> fetch(SigunguCode code, YearMonth yearMonth);
+    List<RentRecord> fetch(HousingType housingType, SigunguCode code, YearMonth yearMonth);
 
     /**
      * 실패를 예외 대신 상태로 돌려주는 조회.
@@ -40,9 +43,9 @@ public interface RentRecordProvider {
      * 총건수를 주는 공급자는 이 메서드를 재정의해 {@code CONFIRMED_EMPTY} 와 {@code UNDETERMINED} 를
      * 실제 응답으로 구분해야 한다.
      */
-    default MonthlyRentResult fetchMonth(SigunguCode code, YearMonth yearMonth) {
+    default MonthlyRentResult fetchMonth(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
         try {
-            return MonthlyRentResult.of(yearMonth, fetch(code, yearMonth));
+            return MonthlyRentResult.of(yearMonth, fetch(housingType, code, yearMonth));
         } catch (RuntimeException e) {
             return MonthlyRentResult.undetermined(yearMonth, 1,
                     e.getClass().getSimpleName() + ": " + e.getMessage());
@@ -53,10 +56,10 @@ public interface RentRecordProvider {
      * 집계 구간 전체를 모은다. 한 달이 실패해도 나머지 달을 계속 확인하고,
      * 실패한 달 목록을 결과에 담아 돌려준다.
      */
-    default RentCollection collect(SigunguCode code, AggregationPeriod period) {
+    default RentCollection collect(HousingType housingType, SigunguCode code, AggregationPeriod period) {
         List<MonthlyRentResult> results = new ArrayList<>(period.monthCount());
         for (YearMonth yearMonth : period.months()) {
-            results.add(fetchMonth(code, yearMonth));
+            results.add(fetchMonth(housingType, code, yearMonth));
         }
         return RentCollection.from(code, period, results);
     }
