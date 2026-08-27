@@ -8,6 +8,7 @@ import SDD.smash.domain.dwelling.domain.model.RentDataStatus;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import SDD.smash.domain.dwelling.domain.service.RentStatCalculator;
 import SDD.smash.global.domain.model.SigunguCode;
+import SDD.smash.global.metrics.CallBudgetMetrics;
 import SDD.smash.global.metrics.ExternalApiMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -21,6 +22,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -57,8 +59,9 @@ class MolitRentApiAdapterTest {
     void setUp() {
         restTemplate = new RestTemplate();
         server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
         adapter = new MolitRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper(),
-                new ExternalApiMetrics(new SimpleMeterRegistry()));
+                new ExternalApiMetrics(meterRegistry), new CallBudgetMetrics(meterRegistry));
 
         // 운영 설정값과 같은 모양이다. apis.molit.paths.* 는 선행 슬래시가 있고 세그먼트가 2개다.
         ReflectionTestUtils.setField(adapter, "baseUrl", BASE_URL);
@@ -70,6 +73,7 @@ class MolitRentApiAdapterTest {
         ReflectionTestUtils.setField(adapter, "maxPages", 50);
         ReflectionTestUtils.setField(adapter, "requestIntervalMs", 0L);
         ReflectionTestUtils.setField(adapter, "maxConcurrentRequests", 1);
+        ReflectionTestUtils.setField(adapter, "dailyCallBudget", 9000);
         adapter.initRateLimiter();
     }
 
@@ -452,6 +456,101 @@ class MolitRentApiAdapterTest {
         assertThat(collection.recordCount()).isEqualTo(1);
     }
 
+    // ------------------------------------------------------------------ 일일 호출 예산
+
+    @Test
+    @DisplayName("일일 예산을 다 쓰면 다음 호출은 네트워크에 나가지 않는다")
+    void stopsCallingWhenDailyBudgetIsExhausted() {
+        // given - 예산 1회. 첫 달은 통과하고 두 번째는 호출 전에 막힌다
+        budget(1);
+        expectPage(1, successBody(1, 1, 1));
+
+        // when
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // then
+        assertThat(adapter.callsUsed()).isEqualTo(1);
+        assertThat(adapter.hasRemainingCapacity()).isFalse();
+        assertThatThrownBy(() -> adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026))
+                .isInstanceOf(MolitCallBudgetExceededException.class)
+                .hasMessageContaining("일일 호출 예산 소진");
+        server.verify();    // 두 번째 요청은 서버로 나가지 않았다
+    }
+
+    @Test
+    @DisplayName("예산 소진은 확정 0건이 아니라 판정 불가로 이어진다")
+    void treatsBudgetExhaustionAsUndeterminedNotConfirmedEmpty() {
+        // given - 확정 0건이 되면 '실거래가 없는 지역'이라는 뜻이 되어 평균·중앙값이 조용히 왜곡된다
+        budget(1);
+        expectPage(1, successBody(1, 1, 1));
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // when
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // then
+        assertThat(result.status()).isEqualTo(RentDataStatus.UNDETERMINED);
+        assertThat(result.status()).isNotEqualTo(RentDataStatus.CONFIRMED_EMPTY);
+        assertThat(result.failureReason()).contains("예산 소진");
+    }
+
+    @Test
+    @DisplayName("예산이 소진된 구간 수집은 모든 달이 실패로 남아 집계에서 제외된다")
+    void marksEveryMonthUndeterminedWhenBudgetIsAlreadyExhausted() {
+        // given - 예산 1회를 다른 유형이 이미 써버린 상태다
+        budget(1);
+        expectPage(1, successBody(1, 1, 1));
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // when
+        RentCollection collection =
+                adapter.collect(HousingType.MULTIPLEX_HOUSE, GANGNAM, AggregationPeriod.endingAt(MAY_2026, 3));
+
+        // then - 확정 0건 목록이 비어 있어야 한다. 여기 들어가면 0건으로 집계된다
+        assertThat(collection.failedMonths()).hasSize(3);
+        assertThat(collection.confirmedEmptyMonths()).isEmpty();
+        assertThat(collection.hasFailures()).isTrue();
+        assertThat(collection.apiCalls()).isZero();
+    }
+
+    @Test
+    @DisplayName("주택유형 3종이 하나의 일일 예산을 공유해 카운트된다")
+    void countsEveryHousingTypeAgainstOneSharedBudget() {
+        // given - 한도가 3종 데이터셋에 걸쳐 공유되는지 미확인이라 최악(공유)을 가정한다
+        budget(3);
+        expectPath(API_PATH);
+        expectPath(RH_PATH);
+        expectPath(SH_PATH);
+
+        // when
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+        adapter.fetch(HousingType.MULTIPLEX_HOUSE, GANGNAM, MAY_2026);
+        adapter.fetch(HousingType.DETACHED_HOUSE, GANGNAM, MAY_2026);
+
+        // then - 유형별로 예산을 따로 갖는다면 여기서 아직 여유가 있어야 한다
+        assertThat(adapter.callsUsed()).isEqualTo(3);
+        assertThat(adapter.hasRemainingCapacity()).isFalse();
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("호출 예산은 날짜가 바뀌면 리셋돼 다음 날 수집이 이어진다")
+    void resetsCallBudgetWhenDayChanges() {
+        // given - 예산 1회짜리 어댑터가 오늘 예산을 다 썼다
+        budget(1);
+        LocalDate day1 = LocalDate.of(2026, 8, 19);
+
+        assertThat(adapter.reserveCall(day1)).isTrue();
+        assertThat(adapter.reserveCall(day1)).isFalse();
+
+        // when
+        LocalDate day2 = day1.plusDays(1);
+
+        // then - 프로세스가 계속 떠 있어도 다음 날 예산이 살아난다
+        assertThat(adapter.reserveCall(day2)).isTrue();
+        assertThat(adapter.reserveCall(day2)).isFalse();
+    }
+
     // ------------------------------------------------------------------ 비밀값
 
     @Test
@@ -466,6 +565,11 @@ class MolitRentApiAdapterTest {
     }
 
     // ------------------------------------------------------------------ fixture
+
+    /** 남은 일일 예산을 바꾼다. */
+    private void budget(int dailyCallBudget) {
+        ReflectionTestUtils.setField(adapter, "dailyCallBudget", dailyCallBudget);
+    }
 
     /** 해당 엔드포인트로 정확히 한 번 요청이 오는지 본다. */
     private void expectPath(String path) {
