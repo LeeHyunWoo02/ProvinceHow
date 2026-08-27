@@ -18,7 +18,6 @@ import SDD.smash.domain.infra.infrastructure.persistence.InfraCollectionStagingS
 import SDD.smash.domain.infra.infrastructure.persistence.InfraCollectionStagingStore.TargetKey;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.exception.DomainException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -83,7 +82,6 @@ import java.util.stream.Collectors;
  */
 @Configuration
 @Slf4j
-@RequiredArgsConstructor
 public class InfraBatchConfig {
 
     /** 회차 키의 기준 시간대. 예산도 한국 시간 자정에 리셋된다. */
@@ -108,7 +106,7 @@ public class InfraBatchConfig {
     private final JobRepository jobRepository;
 
     /**
-     * 청크 트랜잭션 매니저. <b>이름을 명시</b>한다.
+     * 청크 트랜잭션 매니저. 아래 생성자에서 <b>이름을 명시</b>해 주입받는다.
      *
      * <p>타입만으로 주입받으면 {@code @Primary} 해석에 결과가 걸린다. 지금은
      * {@code dataTransactionManager}(JPA)가 {@code @Primary} 라 우연히 맞지만, 이 설계의
@@ -117,14 +115,42 @@ public class InfraBatchConfig {
      * 두 쓰기가 별개의 autocommit 으로 쪼개져 "카운트만 커밋 → 재수집 시 이중 합산"이
      * 조용히 살아난다. 그래서 암묵 해석에 기대지 않고 못 박는다.
      */
-    private final @Qualifier("dataTransactionManager") PlatformTransactionManager dataTransactionManager;
+    private final PlatformTransactionManager dataTransactionManager;
     private final IndustryJpaRepository industryJpaRepository;
     private final AddressQueryService addressQueryService;
     private final InfraSnapshotAssembler snapshotAssembler;
     private final InfraMasterCatalog masterCatalog;
     private final InfraCollectionStagingStore stagingStore;
     private final InfraScoreCacheCleaner infraScoreCacheCleaner;
-    private final @Qualifier("dataDBSource") DataSource dataDataSource;
+    /** Upsert 대상 DataSource. 이름을 명시하지 않으면 meta 스키마에 쓸 수 있다. */
+    private final DataSource dataDataSource;
+
+    /**
+     * 명시적 생성자다. <b>필드에 붙인 {@code @Qualifier} 는 효과가 없다</b> — 이 프로젝트에는
+     * {@code lombok.config}({@code lombok.copyableAnnotations})가 없어 {@code @RequiredArgsConstructor}
+     * 가 만드는 생성자 파라미터로 애노테이션이 복사되지 않고, Spring 은 생성자 주입을
+     * <b>파라미터</b> 기준으로 해석한다. 필드로 되돌리면 위 이중 합산 방지가 다시
+     * {@code @Primary} 라는 우연에만 걸린다.
+     */
+    public InfraBatchConfig(JobRepository jobRepository,
+                            @Qualifier("dataTransactionManager") PlatformTransactionManager dataTransactionManager,
+                            IndustryJpaRepository industryJpaRepository,
+                            AddressQueryService addressQueryService,
+                            InfraSnapshotAssembler snapshotAssembler,
+                            InfraMasterCatalog masterCatalog,
+                            InfraCollectionStagingStore stagingStore,
+                            InfraScoreCacheCleaner infraScoreCacheCleaner,
+                            @Qualifier("dataDBSource") DataSource dataDataSource) {
+        this.jobRepository = jobRepository;
+        this.dataTransactionManager = dataTransactionManager;
+        this.industryJpaRepository = industryJpaRepository;
+        this.addressQueryService = addressQueryService;
+        this.snapshotAssembler = snapshotAssembler;
+        this.masterCatalog = masterCatalog;
+        this.stagingStore = stagingStore;
+        this.infraScoreCacheCleaner = infraScoreCacheCleaner;
+        this.dataDataSource = dataDataSource;
+    }
 
     /**
      * 회차가 이 일수를 넘도록 완성되지 않으면 {@code log.error} 로 stall 을 알린다.

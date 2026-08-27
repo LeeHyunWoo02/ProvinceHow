@@ -4,7 +4,6 @@ import SDD.smash.domain.address.application.PopulationCollectService;
 import SDD.smash.domain.address.application.dto.PopulationCollectionInfo;
 import SDD.smash.domain.address.domain.model.PopulationSnapshot;
 import SDD.smash.domain.address.infrastructure.batch.dto.PopulationUpsertRow;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -41,7 +40,6 @@ import java.time.format.DateTimeFormatter;
  */
 @Configuration
 @Slf4j
-@RequiredArgsConstructor
 public class PopulationBatchConfig {
 
     private static final DateTimeFormatter BASE_MONTH_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
@@ -49,7 +47,22 @@ public class PopulationBatchConfig {
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
     private final PopulationCollectService populationCollectService;
-    private final @Qualifier("dataDBSource") DataSource dataDataSource;
+    private final DataSource dataDataSource;
+
+    /**
+     * 명시적 생성자다. 이 프로젝트에는 {@code lombok.config} 가 없어 {@code @RequiredArgsConstructor}
+     * 가 만드는 생성자에 필드의 {@code @Qualifier} 가 복사되지 않는다 — 필드에만 붙이면 효과가 없고
+     * {@code @Primary} 라는 우연에 걸린다. 파라미터에 붙여 못 박는다.
+     */
+    public PopulationBatchConfig(JobRepository jobRepository,
+                                 @Qualifier("dataTransactionManager") PlatformTransactionManager platformTransactionManager,
+                                 PopulationCollectService populationCollectService,
+                                 @Qualifier("dataDBSource") DataSource dataDataSource) {
+        this.jobRepository = jobRepository;
+        this.platformTransactionManager = platformTransactionManager;
+        this.populationCollectService = populationCollectService;
+        this.dataDataSource = dataDataSource;
+    }
 
 
 
