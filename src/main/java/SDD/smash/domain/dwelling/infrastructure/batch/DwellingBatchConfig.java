@@ -70,8 +70,7 @@ public class DwellingBatchConfig {
     /**
      * 명시적 생성자다. 이 프로젝트에는 {@code lombok.config} 가 없어 {@code @RequiredArgsConstructor} 가
      * 만드는 생성자에 필드의 {@code @Qualifier} 가 복사되지 않는다 — 필드에만 붙이면 아무 효과가 없고
-     * {@code @Primary} 라는 우연에 원자성이 걸린다. 파라미터에 붙여 못 박는다
-     * ({@code SidoBatchConfig}·{@code SigunguBatchConfig} 와 같은 방식).
+     * {@code @Primary} 라는 우연에 원자성이 걸린다. 파라미터에 붙여 못 박는다.
      */
     public DwellingBatchConfig(JobRepository jobRepository,
                                @Qualifier("dataTransactionManager") PlatformTransactionManager dataTransactionManager,
