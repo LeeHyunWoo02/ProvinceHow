@@ -1,6 +1,7 @@
 package SDD.smash.domain.dwelling.application;
 
 import SDD.smash.domain.dwelling.domain.model.AggregationPeriod;
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
 import SDD.smash.domain.dwelling.domain.port.RentRecordProvider;
 import SDD.smash.domain.dwelling.domain.service.DwellingBaseMonthPolicy;
@@ -116,7 +117,10 @@ public class DwellingBaseMonthService {
         }
 
         for (YearMonth candidate : candidates) {
-            MonthlyRentResult probe = rentRecordProvider.fetchMonth(probeRegion, candidate);
+            // 탐침은 아파트로 고정한다. 목적이 "국토부 신고 인프라에 이번 달 자료가 확정 반영됐는가"
+            // 확인이고, 거래량이 가장 많은 아파트라야 확정 0건과 장애를 가장 명확히 구분할 수 있다.
+            MonthlyRentResult probe =
+                    rentRecordProvider.fetchMonth(HousingType.APARTMENT, probeRegion, candidate);
             switch (probe.status()) {
                 case AVAILABLE -> {
                     log.info("[DwellingBaseMonth] 자동 계산 baseMonth={}, 탐침지역={}, 탐침건수={}",

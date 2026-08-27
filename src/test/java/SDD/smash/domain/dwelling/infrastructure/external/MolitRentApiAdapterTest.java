@@ -1,6 +1,7 @@
 package SDD.smash.domain.dwelling.infrastructure.external;
 
 import SDD.smash.domain.dwelling.domain.model.AggregationPeriod;
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
 import SDD.smash.domain.dwelling.domain.model.RentCollection;
 import SDD.smash.domain.dwelling.domain.model.RentDataStatus;
@@ -35,7 +36,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 /**
  * 실제 국토부 API 를 호출하지 않는다. {@code MockRestServiceServer} 로 합성 응답만 쓴다.
  */
-class MolitAptRentApiAdapterTest {
+class MolitRentApiAdapterTest {
 
     private static final SigunguCode GANGNAM = SigunguCode.of("11680");
     private static final YearMonth MAY_2026 = YearMonth.of(2026, 5);
@@ -46,13 +47,13 @@ class MolitAptRentApiAdapterTest {
 
     private RestTemplate restTemplate;
     private MockRestServiceServer server;
-    private MolitAptRentApiAdapter adapter;
+    private MolitRentApiAdapter adapter;
 
     @BeforeEach
     void setUp() {
         restTemplate = new RestTemplate();
         server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
-        adapter = new MolitAptRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper(),
+        adapter = new MolitRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper(),
                 new ExternalApiMetrics(new SimpleMeterRegistry()));
 
         // 운영 설정값과 같은 모양이다. apis.molit.path 는 선행 슬래시가 있고 세그먼트가 2개다.
@@ -77,7 +78,7 @@ class MolitAptRentApiAdapterTest {
                 .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
 
         // when
-        List<RentRecord> records = adapter.fetch(GANGNAM, MAY_2026);
+        List<RentRecord> records = adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
         assertThat(records).hasSize(1);
@@ -99,7 +100,7 @@ class MolitAptRentApiAdapterTest {
                 .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
 
         // when
-        adapter.fetch(GANGNAM, MAY_2026);
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
         server.verify();
@@ -115,7 +116,7 @@ class MolitAptRentApiAdapterTest {
         expectPage(2, successBody(1892, 892, 2));
 
         // when
-        List<RentRecord> records = adapter.fetch(GANGNAM, MAY_2026);
+        List<RentRecord> records = adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
         assertThat(records).hasSize(1892);
@@ -129,7 +130,7 @@ class MolitAptRentApiAdapterTest {
         expectPage(1, successBody(181, 181, 1));
 
         // when
-        MonthlyRentResult result = adapter.fetchMonth(SigunguCode.of("11110"), MAY_2026);
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, SigunguCode.of("11110"), MAY_2026);
 
         // then
         assertThat(result.records()).hasSize(181);
@@ -147,7 +148,7 @@ class MolitAptRentApiAdapterTest {
         expectPage(1, successBody(1892, 1000, 1));
 
         // when
-        MonthlyRentResult result = adapter.fetchMonth(GANGNAM, MAY_2026);
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
         assertThat(result.records()).hasSize(1000);
@@ -166,7 +167,7 @@ class MolitAptRentApiAdapterTest {
         expectPage(1, emptyBody());
 
         // when
-        MonthlyRentResult result = adapter.fetchMonth(SigunguCode.of("41110"), MAY_2026);
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, SigunguCode.of("41110"), MAY_2026);
 
         // then
         assertThat(result.status()).isEqualTo(RentDataStatus.CONFIRMED_EMPTY);
@@ -183,7 +184,7 @@ class MolitAptRentApiAdapterTest {
                  "body":{"items":{"item":[]}}}}""");
 
         // when
-        MonthlyRentResult result = adapter.fetchMonth(GANGNAM, MAY_2026);
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
         assertThat(result.status()).isEqualTo(RentDataStatus.UNDETERMINED);
@@ -200,7 +201,7 @@ class MolitAptRentApiAdapterTest {
                    "returnAuthMsg":"등록되지 않은 서비스키","returnReasonCode":"30"}}}""");
 
         // when / then
-        assertThatThrownBy(() -> adapter.fetch(GANGNAM, MAY_2026))
+        assertThatThrownBy(() -> adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026))
                 .isInstanceOf(MolitApiException.class)
                 .hasMessageContaining("SERVICE_KEY_IS_NOT_REGISTERED_ERROR")
                 .hasMessageContaining("30");
@@ -215,7 +216,7 @@ class MolitAptRentApiAdapterTest {
                  "body":{"items":"","totalCount":0}}}""");
 
         // when / then
-        assertThatThrownBy(() -> adapter.fetch(GANGNAM, MAY_2026))
+        assertThatThrownBy(() -> adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026))
                 .isInstanceOf(MolitApiException.class)
                 .hasMessageContaining("22");
     }
@@ -229,7 +230,7 @@ class MolitAptRentApiAdapterTest {
         server.expect(once(), requestTo(containsString("pageNo=1"))).andRespond(withServerError());
 
         // when / then
-        assertThatThrownBy(() -> adapter.fetch(GANGNAM, MAY_2026))
+        assertThatThrownBy(() -> adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026))
                 .isInstanceOf(HttpServerErrorException.class);
     }
 
@@ -240,7 +241,7 @@ class MolitAptRentApiAdapterTest {
         server.expect(once(), requestTo(containsString("pageNo=1"))).andRespond(withServerError());
 
         // when
-        MonthlyRentResult result = adapter.fetchMonth(GANGNAM, MAY_2026);
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
         assertThat(result.status()).isEqualTo(RentDataStatus.UNDETERMINED);
@@ -260,7 +261,7 @@ class MolitAptRentApiAdapterTest {
                 .andRespond(withSuccess(xml, MediaType.APPLICATION_XML));
 
         // when
-        List<RentRecord> records = adapter.fetch(GANGNAM, MAY_2026);
+        List<RentRecord> records = adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
         assertThat(records).hasSize(1);
@@ -282,7 +283,7 @@ class MolitAptRentApiAdapterTest {
 
         // when
         RentCollection collection =
-                adapter.collect(GANGNAM, AggregationPeriod.endingAt(YearMonth.of(2026, 6), 3));
+                adapter.collect(HousingType.APARTMENT, GANGNAM, AggregationPeriod.endingAt(YearMonth.of(2026, 6), 3));
 
         // then
         assertThat(collection.hasFailures()).isTrue();
@@ -302,7 +303,7 @@ class MolitAptRentApiAdapterTest {
 
         // when
         RentCollection collection =
-                adapter.collect(GANGNAM, AggregationPeriod.endingAt(YearMonth.of(2026, 6), 2));
+                adapter.collect(HousingType.APARTMENT, GANGNAM, AggregationPeriod.endingAt(YearMonth.of(2026, 6), 2));
 
         // then
         assertThat(collection.isComplete()).isTrue();
@@ -317,7 +318,7 @@ class MolitAptRentApiAdapterTest {
     @Test
     @DisplayName("로그용 URL 에서 serviceKey 가 마스킹된다")
     void masksServiceKeyInUrl() {
-        String masked = MolitAptRentApiAdapter.mask(
+        String masked = MolitRentApiAdapter.mask(
                 "http://x/y?LAWD_CD=11680&serviceKey=abc%2BdEf%3D&_type=json");
 
         assertThat(masked).doesNotContain("abc%2BdEf%3D");

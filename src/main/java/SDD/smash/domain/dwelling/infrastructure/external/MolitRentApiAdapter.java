@@ -1,6 +1,7 @@
 package SDD.smash.domain.dwelling.infrastructure.external;
 
 import SDD.smash.domain.dwelling.domain.model.AggregationPeriod;
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
 import SDD.smash.domain.dwelling.domain.model.RentCollection;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
@@ -28,10 +29,14 @@ import java.util.List;
 import java.util.concurrent.Semaphore;
 
 /**
- * 국토부 아파트 전월세 실거래 API 어댑터. {@code RentRecordProvider} 포트 구현이다.
+ * 국토부 전월세 실거래 API 어댑터. 아파트·연립다세대·단독다가구 3종을 다룬다.
+ * {@code RentRecordProvider} 포트 구현이다.
  *
  * <p>외부 API 어휘({@code LAWD_CD}, {@code DEAL_YMD}, {@code serviceKey}, {@code totalCount})는
- * 이 클래스 밖으로 나가지 않는다. 도메인은 "시군구와 연월로 실거래를 받는다"만 안다.
+ * 이 클래스 밖으로 나가지 않는다. 도메인은 "주택유형·시군구·연월로 실거래를 받는다"만 안다.
+ *
+ * <p>주택유형 3종을 한 어댑터가 맡는다. 유형별로 쪼개면 각자 세마포어를 갖게 되어
+ * 일일 트래픽 한도 통제가 무너지기 때문이다.
  *
  * <h2>페이지네이션</h2>
  * 이전 구현은 {@code pageNo=1, numOfRows=1000} 을 고정하고 {@code totalCount} 를 보지 않았다.
@@ -49,7 +54,7 @@ import java.util.concurrent.Semaphore;
  */
 @Component
 @Slf4j
-public class MolitAptRentApiAdapter implements RentRecordProvider {
+public class MolitRentApiAdapter implements RentRecordProvider {
 
     private static final DateTimeFormatter DEAL_YMD_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");
 
@@ -59,14 +64,22 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
     /** 이미 URL 인코딩된 키인지 판정하는 흔적. */
     private static final String[] ENCODED_KEY_MARKERS = {"%2B", "%2F", "%3D"};
 
+    /**
+     * 국토부 실거래 서비스명의 공통 접두어. base-url 에 이게 들어 있으면 서비스명까지 포함된
+     * 옛 설정값이라 유형별 경로 분기가 성립하지 않는다.
+     */
+    private static final String SERVICE_NAME_MARKER = "RTMSDataSvc";
+
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
     private final XmlMapper xmlMapper;
 
     @Value("${apis.molit.base-url}")
     private String baseUrl;
+
     @Value("${apis.molit.path}")
     private String apiPath;
+
     @Value("${apis.molit.service-key}")
     private String serviceKey;
 
@@ -96,9 +109,9 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
     /** 메트릭의 api 태그 값. */
     private static final String API_NAME = "molit";
 
-    public MolitAptRentApiAdapter(RestTemplate restTemplate,
-                                  ObjectMapper objectMapper, XmlMapper xmlMapper,
-                                  ExternalApiMetrics externalApiMetrics) {
+    public MolitRentApiAdapter(RestTemplate restTemplate,
+                               ObjectMapper objectMapper, XmlMapper xmlMapper,
+                               ExternalApiMetrics externalApiMetrics) {
         this.restTemplate = restTemplate;
         this.objectMapper = objectMapper;
         this.xmlMapper = xmlMapper;
@@ -125,18 +138,18 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
      * 재시도/실패 처리가 동작하도록 반드시 예외로 알린다.
      */
     @Override
-    public List<RentRecord> fetch(SigunguCode code, YearMonth yearMonth) {
-        return fetchStrict(code, yearMonth).records();
+    public List<RentRecord> fetch(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
+        return fetchStrict(housingType, code, yearMonth).records();
     }
 
     /** 관대 조회. 실패를 예외 대신 {@link MonthlyRentResult} 상태로 돌려준다. */
     @Override
-    public MonthlyRentResult fetchMonth(SigunguCode code, YearMonth yearMonth) {
+    public MonthlyRentResult fetchMonth(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
         try {
-            return fetchStrict(code, yearMonth);
+            return fetchStrict(housingType, code, yearMonth);
         } catch (RuntimeException e) {
-            log.warn("[MOLIT] 월 수집 실패 sigungu={}, ym={}, reason={}",
-                    code.value(), yearMonth, summarize(e));
+            log.warn("[MOLIT] 월 수집 실패 housingType={}, sigungu={}, ym={}, reason={}",
+                    housingType, code.value(), yearMonth, summarize(e));
             return MonthlyRentResult.undetermined(yearMonth, 1, summarize(e));
         }
     }
@@ -146,26 +159,26 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
      * 배치 이름·기준월·호출 수·건수·소요 시간을 한 줄로 남긴다.
      */
     @Override
-    public RentCollection collect(SigunguCode code, AggregationPeriod period) {
+    public RentCollection collect(HousingType housingType, SigunguCode code, AggregationPeriod period) {
         long startedAt = System.currentTimeMillis();
 
         List<MonthlyRentResult> monthly = new ArrayList<>(period.monthCount());
         for (YearMonth yearMonth : period.months()) {
-            monthly.add(fetchMonth(code, yearMonth));
+            monthly.add(fetchMonth(housingType, code, yearMonth));
         }
         RentCollection collection = RentCollection.from(code, period, monthly);
 
         long elapsedMs = System.currentTimeMillis() - startedAt;
         if (collection.hasFailures()) {
-            log.error("[dwellingJob] 수집 부분 실패 sigungu={}, baseMonth={}, months={}, apiCalls={}, "
+            log.error("[dwellingJob] 수집 부분 실패 housingType={}, sigungu={}, baseMonth={}, months={}, apiCalls={}, "
                             + "read={}, failedMonths={}, emptyMonths={}, elapsed={}ms, status=FAILED",
-                    code.value(), period.to(), period.monthCount(), collection.apiCalls(),
+                    housingType, code.value(), period.to(), period.monthCount(), collection.apiCalls(),
                     collection.recordCount(), collection.failedMonths(),
                     collection.confirmedEmptyMonths().size(), elapsedMs);
         } else {
-            log.info("[dwellingJob] 수집 완료 sigungu={}, baseMonth={}, months={}, apiCalls={}, "
+            log.info("[dwellingJob] 수집 완료 housingType={}, sigungu={}, baseMonth={}, months={}, apiCalls={}, "
                             + "read={}, emptyMonths={}, elapsed={}ms, status=OK",
-                    code.value(), period.to(), period.monthCount(), collection.apiCalls(),
+                    housingType, code.value(), period.to(), period.monthCount(), collection.apiCalls(),
                     collection.recordCount(), collection.confirmedEmptyMonths().size(), elapsedMs);
         }
         return collection;
@@ -178,7 +191,7 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
      *
      * @throws MolitApiException 게이트웨이 오류, 실패 {@code resultCode}, {@code totalCount} 부재
      */
-    private MonthlyRentResult fetchStrict(SigunguCode code, YearMonth yearMonth) {
+    private MonthlyRentResult fetchStrict(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
         long startedAt = System.currentTimeMillis();
 
         List<RentRecord> collected = new ArrayList<>();
@@ -188,7 +201,7 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
         int pageLimit = maxPages;
 
         while (page <= pageLimit) {
-            MolitApiResponse response = call(code, yearMonth, page);
+            MolitApiResponse response = call(housingType, code, yearMonth, page);
             calls++;
 
             String gatewayError = response.gatewayError();
@@ -214,7 +227,7 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
                 }
             }
 
-            List<RentRecord> pageRecords = extractRecords(response.items());
+            List<RentRecord> pageRecords = extractRecords(housingType, response.items());
             collected.addAll(pageRecords);
 
             if (collected.size() >= totalCount || pageRecords.isEmpty()) {
@@ -226,12 +239,12 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
         if (collected.size() < totalCount) {
             // 신고 정보가 실시간으로 변경·해제되므로 페이지 사이에 총건수가 줄 수 있다.
             // 다만 페이지 상한에 걸린 경우는 설정 문제이므로 구분해 남긴다.
-            log.warn("[MOLIT] 수집 건수 미달 sigungu={}, ym={}, totalCount={}, read={}, pages={}, maxPages={}",
-                    code.value(), yearMonth, totalCount, collected.size(), calls, maxPages);
+            log.warn("[MOLIT] 수집 건수 미달 housingType={}, sigungu={}, ym={}, totalCount={}, read={}, pages={}, maxPages={}",
+                    housingType, code.value(), yearMonth, totalCount, collected.size(), calls, maxPages);
         }
 
-        log.debug("[MOLIT] 월 수집 sigungu={}, ym={}, totalCount={}, read={}, apiCalls={}, elapsed={}ms",
-                code.value(), yearMonth, totalCount, collected.size(), calls,
+        log.debug("[MOLIT] 월 수집 housingType={}, sigungu={}, ym={}, totalCount={}, read={}, apiCalls={}, elapsed={}ms",
+                housingType, code.value(), yearMonth, totalCount, collected.size(), calls,
                 System.currentTimeMillis() - startedAt);
 
         return MonthlyRentResult.available(yearMonth, collected, totalCount, calls);
@@ -249,8 +262,8 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
 
     // ------------------------------------------------------------------ HTTP
 
-    private MolitApiResponse call(SigunguCode code, YearMonth yearMonth, int page) {
-        String url = buildUrl(code, yearMonth, page);
+    private MolitApiResponse call(HousingType housingType, SigunguCode code, YearMonth yearMonth, int page) {
+        String url = buildUrl(housingType, code, yearMonth, page);
         acquireSlot();
         try {
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
@@ -260,22 +273,21 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
             return parsed;
         } catch (RuntimeException e) {
             externalApiMetrics.failure(API_NAME);
-            log.error("[MOLIT] 호출 실패 sigungu={}, ym={}, page={}, url={}",
-                    code.value(), yearMonth, page, mask(url), e);
+            log.error("[MOLIT] 호출 실패 housingType={}, sigungu={}, ym={}, page={}, url={}",
+                    housingType, code.value(), yearMonth, page, mask(url), e);
             throw e;
         } finally {
             concurrencyPermits.release();
         }
     }
 
-    private String buildUrl(SigunguCode code, YearMonth yearMonth, int page) {
+    private String buildUrl(HousingType housingType, SigunguCode code, YearMonth yearMonth, int page) {
         String key = (serviceKey == null) ? "" : serviceKey.trim();
 
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromHttpUrl(baseUrl)
-                // apis.molit.path 는 "/RTMSDataSvcAptRent/getRTMSDataSvcAptRent" 처럼 선행 슬래시가 있고
-                // 세그먼트가 2개다. pathSegment() 는 인자 하나를 슬래시 없는 단일 세그먼트로 보기 때문에
-                // '/' 를 만나면 IllegalArgumentException 을 던진다. 경로는 그대로 이어붙인다.
+                // TODO Phase 2 — housingType 별 경로 분기. 지금은 3종 모두 아파트 경로다.
+                // path 는 세그먼트가 2개라 pathSegment() 가 '/' 에서 예외를 던진다. 그대로 이어붙인다.
                 .path(apiPath)
                 .queryParam("LAWD_CD", code.value())
                 .queryParam("DEAL_YMD", yearMonth.format(DEAL_YMD_FORMAT))
@@ -306,19 +318,19 @@ public class MolitAptRentApiAdapter implements RentRecordProvider {
         }
     }
 
-    private List<RentRecord> extractRecords(JsonNode items) {
+    private List<RentRecord> extractRecords(HousingType housingType, JsonNode items) {
         if (items == null || items.isMissingNode() || items.isNull()) {
             return List.of();
         }
         if (items.isArray()) {
             List<RentRecord> list = new ArrayList<>(items.size());
             for (JsonNode item : items) {
-                list.add(RentRecordJsonMapper.toRecord(item));
+                list.add(RentRecordJsonMapper.toRecord(housingType, item));
             }
             return list;
         }
         if (items.isObject()) {
-            return List.of(RentRecordJsonMapper.toRecord(items));
+            return List.of(RentRecordJsonMapper.toRecord(housingType, items));
         }
         // items 가 빈 문자열("")로 오는 정상 케이스. 거래 0건이다.
         return List.of();

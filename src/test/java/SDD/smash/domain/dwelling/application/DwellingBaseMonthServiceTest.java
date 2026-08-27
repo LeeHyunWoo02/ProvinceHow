@@ -1,6 +1,7 @@
 package SDD.smash.domain.dwelling.application;
 
 import SDD.smash.domain.dwelling.domain.model.AggregationPeriod;
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import SDD.smash.domain.dwelling.domain.port.RentRecordProvider;
@@ -36,6 +37,7 @@ class DwellingBaseMonthServiceTest {
     private static class FakeRentRecordProvider implements RentRecordProvider {
         private final Map<YearMonth, MonthlyRentResult> byMonth = new HashMap<>();
         private final List<YearMonth> probed = new ArrayList<>();
+        private final List<HousingType> probedTypes = new ArrayList<>();
 
         void available(YearMonth ym, int total) {
             byMonth.put(ym, MonthlyRentResult.available(ym, List.of(new RentRecord("A", "1", 10000, 50)), total, 1));
@@ -50,12 +52,13 @@ class DwellingBaseMonthServiceTest {
         }
 
         @Override
-        public List<RentRecord> fetch(SigunguCode code, YearMonth yearMonth) {
+        public List<RentRecord> fetch(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
             throw new UnsupportedOperationException("탐침은 fetchMonth 만 쓴다");
         }
 
         @Override
-        public MonthlyRentResult fetchMonth(SigunguCode code, YearMonth yearMonth) {
+        public MonthlyRentResult fetchMonth(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
+            probedTypes.add(housingType);
             probed.add(yearMonth);
             return byMonth.getOrDefault(yearMonth, MonthlyRentResult.confirmedEmpty(yearMonth, 1));
         }
@@ -96,6 +99,22 @@ class DwellingBaseMonthServiceTest {
         // when / then
         assertThat(service.resolveBaseMonth()).isEqualTo(YearMonth.of(2026, 6));
         assertThat(service.resolveBaseMonthText()).isEqualTo("202606");
+    }
+
+    @Test
+    @DisplayName("탐침은 거래량이 가장 많은 아파트로 고정한다")
+    void probesWithApartmentHousingType() {
+        // given
+        FakeRentRecordProvider provider = new FakeRentRecordProvider();
+        provider.available(YearMonth.of(2026, 6), 181);
+        DwellingBaseMonthService service =
+                service(utcClockAt("2026-08-13T02:00:00Z"), provider, "", true);
+
+        // when
+        service.resolveBaseMonth();
+
+        // then
+        assertThat(provider.probedTypes).containsExactly(HousingType.APARTMENT);
     }
 
     @Test

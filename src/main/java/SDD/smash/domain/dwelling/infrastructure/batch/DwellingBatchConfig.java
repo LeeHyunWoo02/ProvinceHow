@@ -3,6 +3,7 @@ package SDD.smash.domain.dwelling.infrastructure.batch;
 import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.exception.DomainException;
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import SDD.smash.domain.dwelling.domain.port.RentRecordProvider;
 import SDD.smash.domain.dwelling.domain.service.RentStatCalculator;
@@ -128,7 +129,8 @@ public class DwellingBatchConfig {
 
             List<RentRecord> all = new ArrayList<>();
             for (YearMonth ym = work.from(); !ym.isAfter(work.to()); ym = ym.plusMonths(1)) {
-                List<RentRecord> records = rentRecordProvider.fetch(sigunguCode, ym);
+                List<RentRecord> records =
+                        rentRecordProvider.fetch(HousingType.APARTMENT, sigunguCode, ym);
                 if (records.isEmpty()) {
                     log.warn("No records for sigungu={}, ym={}", sigunguCode.value(), ym);
                 }

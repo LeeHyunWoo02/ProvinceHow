@@ -1,5 +1,6 @@
 package SDD.smash.domain.dwelling.infrastructure.external;
 
+import SDD.smash.domain.dwelling.domain.model.HousingType;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -19,12 +20,15 @@ final class RentRecordJsonMapper {
     private RentRecordJsonMapper() {
     }
 
-    static RentRecord toRecord(JsonNode node) {
-        String aptNm = text(node, "aptNm", "아파트");
+    /**
+     * @param housingType 유형별 필드 분기는 다음 Phase 에서 채운다. 지금은 아파트 후보 필드로 공통 처리한다
+     */
+    static RentRecord toRecord(HousingType housingType, JsonNode node) {
+        String buildingName = text(node, "aptNm", "아파트");
         String jibun = text(node, "jibun", "지번");
         Integer deposit = num(node, "deposit", "보증금액");
         Integer monthly = num(node, "monthlyRent", "월세금액");
 
-        return new RentRecord(aptNm, jibun, nullZero(deposit), nullZero(monthly));
+        return new RentRecord(buildingName, jibun, nullZero(deposit), nullZero(monthly));
     }
 }

@@ -20,7 +20,7 @@ import java.util.Map;
  * 공공데이터포털 / 한국고용정보원 <b>워크넷 채용정보 채용목록</b> API 어댑터.
  * {@link JobPostingProvider} 포트 구현이다.
  *
- * <p>호출 방식·인증키 주입·예외 처리는 {@code MolitAptRentApiAdapter}(국토부 실거래 API) 를 따랐다.
+ * <p>호출 방식·인증키 주입·예외 처리는 {@code MolitRentApiAdapter}(국토부 실거래 API) 를 따랐다.
  * 다른 점은 두 가지다.
  * <ul>
  *   <li>워크넷은 <b>XML 만</b> 돌려준다({@code returnType=JSON} → {@code messageCd=004}). 실측 확인</li>
