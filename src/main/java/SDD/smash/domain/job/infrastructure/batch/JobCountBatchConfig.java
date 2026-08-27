@@ -6,7 +6,6 @@ import SDD.smash.domain.job.infrastructure.batch.dto.JobCountCsvRow;
 import SDD.smash.domain.job.infrastructure.batch.dto.JobCountUpsertRow;
 import SDD.smash.domain.job.infrastructure.persistence.JobCodeMiddleJpaEntity;
 import SDD.smash.domain.job.infrastructure.persistence.JobCodeMiddleJpaRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -46,7 +45,6 @@ import static SDD.smash.global.util.BatchTextUtil.normalize;
  */
 @Configuration
 @Slf4j
-@RequiredArgsConstructor
 public class JobCountBatchConfig {
 
     private final JobRepository jobRepository;
@@ -55,7 +53,28 @@ public class JobCountBatchConfig {
     private final AddressQueryService addressQueryService;
     private final JobScoreCacheCleaner jobScoreCacheCleaner;
     private final WorknetJobCountItemReader worknetJobCountItemReader;
-    private final @Qualifier("dataDBSource") DataSource dataDataSource;
+    private final DataSource dataDataSource;
+
+    /**
+     * 명시적 생성자다. 이 프로젝트에는 {@code lombok.config} 가 없어 {@code @RequiredArgsConstructor}
+     * 가 만드는 생성자에 필드의 {@code @Qualifier} 가 복사되지 않는다 — 필드에만 붙이면 효과가 없고
+     * {@code @Primary} 라는 우연에 걸린다. 파라미터에 붙여 못 박는다.
+     */
+    public JobCountBatchConfig(JobRepository jobRepository,
+                               @Qualifier("dataTransactionManager") PlatformTransactionManager platformTransactionManager,
+                               JobCodeMiddleJpaRepository jobCodeMiddleJpaRepository,
+                               AddressQueryService addressQueryService,
+                               JobScoreCacheCleaner jobScoreCacheCleaner,
+                               WorknetJobCountItemReader worknetJobCountItemReader,
+                               @Qualifier("dataDBSource") DataSource dataDataSource) {
+        this.jobRepository = jobRepository;
+        this.platformTransactionManager = platformTransactionManager;
+        this.jobCodeMiddleJpaRepository = jobCodeMiddleJpaRepository;
+        this.addressQueryService = addressQueryService;
+        this.jobScoreCacheCleaner = jobScoreCacheCleaner;
+        this.worknetJobCountItemReader = worknetJobCountItemReader;
+        this.dataDataSource = dataDataSource;
+    }
 
     private Set<String> sigunguCodeCache = null;
     private Set<String> middleCodeCache = null;
