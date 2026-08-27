@@ -6,6 +6,7 @@ import SDD.smash.domain.dwelling.domain.model.MonthlyRentResult;
 import SDD.smash.domain.dwelling.domain.model.RentCollection;
 import SDD.smash.domain.dwelling.domain.model.RentDataStatus;
 import SDD.smash.domain.dwelling.domain.model.RentRecord;
+import SDD.smash.domain.dwelling.domain.service.RentStatCalculator;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.metrics.ExternalApiMetrics;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,6 +23,7 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.YearMonth;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,9 +43,11 @@ class MolitRentApiAdapterTest {
     private static final SigunguCode GANGNAM = SigunguCode.of("11680");
     private static final YearMonth MAY_2026 = YearMonth.of(2026, 5);
 
-    /** 운영 설정(backend.env.example)의 MOLIT_BASE_URL / MOLIT_PATH 와 같은 모양이다. */
+    /** 운영 설정(backend.env.example)의 MOLIT_BASE_URL / MOLIT_PATH_* 와 같은 모양이다. */
     private static final String BASE_URL = "http://localhost/1613000";
     private static final String API_PATH = "/RTMSDataSvcAptRent/getRTMSDataSvcAptRent";
+    private static final String RH_PATH = "/RTMSDataSvcRHRent/getRTMSDataSvcRHRent";
+    private static final String SH_PATH = "/RTMSDataSvcSHRent/getRTMSDataSvcSHRent";
 
     private RestTemplate restTemplate;
     private MockRestServiceServer server;
@@ -56,9 +60,11 @@ class MolitRentApiAdapterTest {
         adapter = new MolitRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper(),
                 new ExternalApiMetrics(new SimpleMeterRegistry()));
 
-        // 운영 설정값과 같은 모양이다. apis.molit.path 는 선행 슬래시가 있고 세그먼트가 2개다.
+        // 운영 설정값과 같은 모양이다. apis.molit.paths.* 는 선행 슬래시가 있고 세그먼트가 2개다.
         ReflectionTestUtils.setField(adapter, "baseUrl", BASE_URL);
-        ReflectionTestUtils.setField(adapter, "apiPath", API_PATH);
+        ReflectionTestUtils.setField(adapter, "apartmentPath", API_PATH);
+        ReflectionTestUtils.setField(adapter, "multiplexHousePath", RH_PATH);
+        ReflectionTestUtils.setField(adapter, "detachedHousePath", SH_PATH);
         ReflectionTestUtils.setField(adapter, "serviceKey", "super-secret-key");
         ReflectionTestUtils.setField(adapter, "pageSize", 1000);
         ReflectionTestUtils.setField(adapter, "maxPages", 50);
@@ -103,6 +109,139 @@ class MolitRentApiAdapterTest {
         adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
 
         // then
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("주택유형마다 서로 다른 엔드포인트로 요청한다")
+    void routesEachHousingTypeToItsOwnEndpoint() {
+        // given - 유형을 무시하고 아파트 경로로 부르면 다른 유형의 자료가 조용히 아파트 자료로 섞인다
+        expectPath(API_PATH);
+        expectPath(RH_PATH);
+        expectPath(SH_PATH);
+
+        // when
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+        adapter.fetch(HousingType.MULTIPLEX_HOUSE, GANGNAM, MAY_2026);
+        adapter.fetch(HousingType.DETACHED_HOUSE, GANGNAM, MAY_2026);
+
+        // then
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("유형별 경로 설정이 비어 있으면 아파트로 폴백하지 않고 실패한다")
+    void failsInsteadOfFallingBackWhenPathIsNotConfigured() {
+        // given
+        ReflectionTestUtils.setField(adapter, "detachedHousePath", "  ");
+
+        // when / then
+        assertThatThrownBy(() -> adapter.fetch(HousingType.DETACHED_HOUSE, GANGNAM, MAY_2026))
+                .isInstanceOf(MolitApiException.class)
+                .hasMessageContaining("DETACHED_HOUSE");
+    }
+
+    @Test
+    @DisplayName("base-url 에 서비스명이 남아 있어도 떼어내고 유형별 경로를 붙인다")
+    void stripsLegacyServiceNameFromBaseUrl() {
+        // given - 운영 backend.env 의 옛 값 모양이다
+        ReflectionTestUtils.setField(adapter, "baseUrl", "http://localhost/1613000/RTMSDataSvcAptRent/");
+        adapter.initRateLimiter();
+        expectPath(RH_PATH);
+
+        // when
+        adapter.fetch(HousingType.MULTIPLEX_HOUSE, GANGNAM, MAY_2026);
+
+        // then
+        server.verify();
+    }
+
+    // ------------------------------------------------------------------ 유형별 필드 매핑
+
+    @Test
+    @DisplayName("연립다세대는 건물명을 mhouseNm 에서 읽는다")
+    void mapsMultiplexHouseBuildingNameFromMhouseNm() {
+        // given - docs/external-api-spec.md 4.4 의 실측 응답이다
+        expectPage(1, itemsBody("""
+                {"buildYear":2018,"dealDay":20,"dealMonth":6,"dealYear":2026,"deposit":"4,000",
+                 "excluUseAr":43.845,"floor":4,"houseType":"다세대","jibun":"1180-1",
+                 "mhouseNm":"신양빌라","monthlyRent":94,"sggCd":11680,"umdNm":"개포동"}"""));
+
+        // when
+        List<RentRecord> records = adapter.fetch(HousingType.MULTIPLEX_HOUSE, GANGNAM, MAY_2026);
+
+        // then
+        RentRecord record = records.get(0);
+        assertThat(record.buildingName()).isEqualTo("신양빌라");
+        assertThat(record.jibun()).isEqualTo("1180-1");
+        assertThat(record.deposit()).isEqualTo(4000);
+        assertThat(record.monthlyRent()).isEqualTo(94);
+        assertThat(record.isMonthly()).isTrue();
+    }
+
+    @Test
+    @DisplayName("단독다가구는 건물명·지번이 응답에 없어 null 이 된다")
+    void mapsDetachedHouseWithoutBuildingNameAndJibun() {
+        // given - docs/external-api-spec.md 4.4 의 실측 응답이다
+        expectPage(1, itemsBody("""
+                {"buildYear":" ","dealDay":28,"dealMonth":6,"dealYear":2026,"deposit":"18,000",
+                 "houseType":"다가구","monthlyRent":40,"sggCd":11680,"totalFloorAr":52,"umdNm":"논현동"}"""));
+
+        // when
+        List<RentRecord> records = adapter.fetch(HousingType.DETACHED_HOUSE, GANGNAM, MAY_2026);
+
+        // then
+        RentRecord record = records.get(0);
+        assertThat(record.buildingName()).isNull();
+        assertThat(record.jibun()).isNull();
+        assertThat(record.deposit()).isEqualTo(18000);
+        assertThat(record.monthlyRent()).isEqualTo(40);
+    }
+
+    @Test
+    @DisplayName("건물명·지번이 null 이어도 전세/월세 판정과 평균·중앙값 집계가 정상이다")
+    void aggregatesDetachedHouseRecordsEvenWithoutBuildingName() {
+        // given - 월세 40 / 전세(월세 0) 2건
+        expectPage(1, itemsBody("""
+                {"deposit":"18,000","monthlyRent":40,"houseType":"다가구","umdNm":"논현동"}""", """
+                {"deposit":"30,000","monthlyRent":0,"houseType":"단독","umdNm":"논현동"}""", """
+                {"deposit":"20,000","monthlyRent":0,"houseType":"단독","umdNm":"논현동"}"""));
+
+        // when
+        List<RentRecord> records = adapter.fetch(HousingType.DETACHED_HOUSE, GANGNAM, MAY_2026);
+
+        // then
+        assertThat(records).allSatisfy(record -> assertThat(record.buildingName()).isNull());
+        assertThat(records.stream().filter(RentRecord::isMonthly)).hasSize(1);
+
+        List<Integer> jeonseDeposits = records.stream()
+                .filter(RentRecord::isJeonse).map(RentRecord::deposit).toList();
+        assertThat(RentStatCalculator.mean(jeonseDeposits)).isEqualTo(25000.0);
+        assertThat(RentStatCalculator.median(jeonseDeposits)).isEqualTo(25000);
+    }
+
+    // ------------------------------------------------------------------ 호출 제한 공유
+
+    @Test
+    @DisplayName("유형이 달라도 하나의 세마포어와 최소 호출 간격을 공유한다")
+    void sharesRateLimiterAcrossHousingTypes() {
+        // given - 유형별로 어댑터를 쪼개면 각자 제한을 갖게 되어 일일 호출 한도 통제가 무너진다
+        ReflectionTestUtils.setField(adapter, "requestIntervalMs", 60L);
+        expectPath(API_PATH);
+        expectPath(RH_PATH);
+        expectPath(SH_PATH);
+
+        // when
+        long startedAt = System.currentTimeMillis();
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+        adapter.fetch(HousingType.MULTIPLEX_HOUSE, GANGNAM, MAY_2026);
+        adapter.fetch(HousingType.DETACHED_HOUSE, GANGNAM, MAY_2026);
+        long elapsed = System.currentTimeMillis() - startedAt;
+
+        // then - 첫 호출은 대기가 없고 이후 두 번이 간격만큼 밀린다
+        assertThat(elapsed).isGreaterThanOrEqualTo(100L);
+        Semaphore permits = (Semaphore) ReflectionTestUtils.getField(adapter, "concurrencyPermits");
+        assertThat(permits.availablePermits()).isEqualTo(1);
         server.verify();
     }
 
@@ -327,6 +466,19 @@ class MolitRentApiAdapterTest {
     }
 
     // ------------------------------------------------------------------ fixture
+
+    /** 해당 엔드포인트로 정확히 한 번 요청이 오는지 본다. */
+    private void expectPath(String path) {
+        server.expect(once(), requestTo(startsWith(BASE_URL + path + "?")))
+                .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
+    }
+
+    /** 실측 응답 조각을 그대로 items 에 담은 성공 응답. */
+    private static String itemsBody(String... items) {
+        return "{\"response\":{\"header\":{\"resultCode\":\"000\",\"resultMsg\":\"OK\"},"
+                + "\"body\":{\"items\":{\"item\":[" + String.join(",", items) + "]},"
+                + "\"numOfRows\":1000,\"pageNo\":1,\"totalCount\":" + items.length + "}}}";
+    }
 
     private void expectPage(int pageNo, String body) {
         server.expect(once(), requestTo(containsString("pageNo=" + pageNo)))
