@@ -1,12 +1,10 @@
 package SDD.smash.domain.dwelling.infrastructure.batch;
 
 import SDD.smash.domain.address.application.AddressQueryService;
-import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.exception.DomainException;
-import SDD.smash.domain.dwelling.domain.model.HousingType;
-import SDD.smash.domain.dwelling.domain.model.RentRecord;
 import SDD.smash.domain.dwelling.domain.port.RentRecordProvider;
-import SDD.smash.domain.dwelling.domain.service.RentStatCalculator;
+import SDD.smash.domain.dwelling.infrastructure.batch.dto.DwellingByTypeUpsertRow;
+import SDD.smash.domain.dwelling.infrastructure.batch.dto.DwellingUpsertBundle;
 import SDD.smash.domain.dwelling.infrastructure.batch.dto.DwellingUpsertRow;
 import SDD.smash.domain.dwelling.infrastructure.batch.dto.WorkItem;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +15,9 @@ import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
-import org.springframework.batch.item.ItemProcessor;
+import org.springframework.batch.item.Chunk;
 import org.springframework.batch.item.ItemReader;
+import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.item.database.BeanPropertyItemSqlParameterSourceProvider;
 import org.springframework.batch.item.database.JdbcBatchItemWriter;
 import org.springframework.batch.item.database.builder.JdbcBatchItemWriterBuilder;
@@ -33,8 +32,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import javax.sql.DataSource;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static SDD.smash.global.exception.ErrorCode.NOT_FOUND_YEARMONTH;
 
@@ -44,6 +43,9 @@ import static SDD.smash.global.exception.ErrorCode.NOT_FOUND_YEARMONTH;
  * <p>Job 이름("dwellingJob")과 빈 이름, chunk 크기, 재시도 설정, Upsert SQL 을 그대로 유지한다.
  * Step 빈 이름("dwellingStep")은 {@code seedMasterJob} 이 {@code @Qualifier} 로 찾고
  * {@code BatchGuard} 가 STEP_NAME 으로 재실행 여부를 판단하므로 바꾸지 않는다.
+ *
+ * <p>주택유형 3종을 모두 수집한다. 통합값(3종 풀링)은 {@code dwelling} 에,
+ * 유형별 집계는 {@code dwelling_by_type} 에 같은 청크 트랜잭션으로 나눠 쓴다.
  *
  * <p>바뀐 것은 협력자뿐이다.
  * 시군구 목록은 address 의 application Service 로, 외부 API 호출은 {@code RentRecordProvider} 포트로,
@@ -74,13 +76,13 @@ public class DwellingBatchConfig {
 
     @Bean
     public Step dwellingStep(ItemReader<WorkItem> dwellingReader,
-                             ItemProcessor<WorkItem, DwellingUpsertRow> dwellingProcessor,
-                             JdbcBatchItemWriter<DwellingUpsertRow> dwellingWriterJdbc) {
+                             DwellingUpsertProcessor dwellingProcessor,
+                             ItemWriter<DwellingUpsertBundle> dwellingBundleWriter) {
         return new StepBuilder("dwellingStep", jobRepository)
-                .<WorkItem, DwellingUpsertRow>chunk(10, platformTransactionManager)
+                .<WorkItem, DwellingUpsertBundle>chunk(10, platformTransactionManager)
                 .reader(dwellingReader)
                 .processor(dwellingProcessor)
-                .writer(dwellingWriterJdbc)
+                .writer(dwellingBundleWriter)
                 .faultTolerant()
                 .retry(org.springframework.web.client.ResourceAccessException.class) // Read timed out 포함
                 .retry(java.net.SocketTimeoutException.class)
@@ -117,49 +119,12 @@ public class DwellingBatchConfig {
     }
 
     /**
-     * PROCESSOR
-     * - 시군구별로 월 단위 API 호출 → 월세/전세 분리 → 평균·중앙값 계산
-     * - 월세는 월세금액 &gt; 0, 전세는 월세금액 == 0 인 건의 보증금이다(As-Is 판정 그대로)
-     * - 양쪽 다 비어 있으면 null 반환(= writer 로 넘기지 않음)
+     * PROCESSOR — 주택유형 3종을 수집해 통합 1행 + 유형별 행들을 만든다.
+     * 로직이 길어 단위 테스트가 가능하도록 {@link DwellingUpsertProcessor} 로 분리했다.
      */
     @Bean
-    public ItemProcessor<WorkItem, DwellingUpsertRow> dwellingProcessor() {
-        return work -> {
-            SigunguCode sigunguCode = work.sigunguCode();
-
-            List<RentRecord> all = new ArrayList<>();
-            for (YearMonth ym = work.from(); !ym.isAfter(work.to()); ym = ym.plusMonths(1)) {
-                List<RentRecord> records =
-                        rentRecordProvider.fetch(HousingType.APARTMENT, sigunguCode, ym);
-                if (records.isEmpty()) {
-                    log.warn("No records for sigungu={}, ym={}", sigunguCode.value(), ym);
-                }
-                all.addAll(records);
-            }
-
-            List<Integer> monthValues = all.stream()
-                    .filter(RentRecord::isMonthly)
-                    .map(RentRecord::monthlyRent)
-                    .toList();
-
-            List<Integer> jeonseValues = all.stream()
-                    .filter(RentRecord::isJeonse)
-                    .map(RentRecord::deposit)
-                    .toList();
-
-            if (monthValues.isEmpty() && jeonseValues.isEmpty()) {
-                log.warn("Skip: aggregated empty for sigungu={}", sigunguCode.value());
-                return null; // skip
-            }
-
-            return DwellingUpsertRow.builder()
-                    .sigunguCode(sigunguCode.value())
-                    .monthAvg(RentStatCalculator.mean(monthValues))
-                    .monthMid(RentStatCalculator.median(monthValues))
-                    .jeonseAvg(RentStatCalculator.mean(jeonseValues))
-                    .jeonseMid(RentStatCalculator.median(jeonseValues))
-                    .build();
-        };
+    public DwellingUpsertProcessor dwellingProcessor() {
+        return new DwellingUpsertProcessor(rentRecordProvider);
     }
 
     /**
@@ -185,5 +150,55 @@ public class DwellingBatchConfig {
                 .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
                 .assertUpdates(false)
                 .build();
+    }
+
+    /**
+     * 유형별 시세 Upsert. 복합 유니크 {@code (sigungu_code, housing_type)} 에 기대 멱등하다.
+     * {@code housing_type} 은 JPA 가 만든 MySQL ENUM 이므로 {@code HousingType.name()} 문자열을 넘긴다.
+     */
+    @Bean
+    public JdbcBatchItemWriter<DwellingByTypeUpsertRow> dwellingByTypeWriterJdbc() {
+        final String upsertSql = """
+        INSERT INTO dwelling_by_type (sigungu_code, housing_type, month_avg, month_mid, jeonse_avg, jeonse_mid)
+        VALUES (:sigunguCode, :housingType, :monthAvg, :monthMid, :jeonseAvg, :jeonseMid)
+        ON DUPLICATE KEY UPDATE
+            month_avg  = VALUES(month_avg),
+            month_mid  = VALUES(month_mid),
+            jeonse_avg = VALUES(jeonse_avg),
+            jeonse_mid = VALUES(jeonse_mid)
+        """;
+        return new JdbcBatchItemWriterBuilder<DwellingByTypeUpsertRow>()
+                .dataSource(dataDataSource)
+                .sql(upsertSql)
+                .itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<>())
+                .assertUpdates(false)
+                .build();
+    }
+
+    /**
+     * 번들을 두 테이블로 갈라 쓴다. 두 Writer 가 같은 {@code dataDBSource} 를 쓰므로
+     * 한 청크 트랜잭션 안에서 함께 커밋/롤백된다.
+     */
+    @Bean
+    public ItemWriter<DwellingUpsertBundle> dwellingBundleWriter(
+            JdbcBatchItemWriter<DwellingUpsertRow> dwellingWriterJdbc,
+            JdbcBatchItemWriter<DwellingByTypeUpsertRow> dwellingByTypeWriterJdbc) {
+
+        return bundles -> {
+            List<DwellingUpsertRow> combined = bundles.getItems().stream()
+                    .map(DwellingUpsertBundle::combined)
+                    .filter(Objects::nonNull)
+                    .toList();
+            List<DwellingByTypeUpsertRow> byType = bundles.getItems().stream()
+                    .flatMap(bundle -> bundle.byType().stream())
+                    .toList();
+
+            if (!combined.isEmpty()) {
+                dwellingWriterJdbc.write(new Chunk<>(combined));
+            }
+            if (!byType.isEmpty()) {
+                dwellingByTypeWriterJdbc.write(new Chunk<>(byType));
+            }
+        };
     }
 }
