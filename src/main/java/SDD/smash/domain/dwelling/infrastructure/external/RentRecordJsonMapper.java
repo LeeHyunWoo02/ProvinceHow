@@ -21,11 +21,16 @@ final class RentRecordJsonMapper {
     }
 
     /**
-     * @param housingType 유형별 필드 분기는 다음 Phase 에서 채운다. 지금은 아파트 후보 필드로 공통 처리한다
+     * 건물명·지번은 유형마다 다르다(docs/external-api-spec.md 4.4). 단독다가구는 두 필드가 아예 없어 null 이 되며,
+     * 전월세 판정은 {@code deposit}/{@code monthlyRent} 만 쓰므로 집계에는 영향이 없다.
      */
     static RentRecord toRecord(HousingType housingType, JsonNode node) {
-        String buildingName = text(node, "aptNm", "아파트");
-        String jibun = text(node, "jibun", "지번");
+        String buildingName = switch (housingType) {
+            case APARTMENT -> text(node, "aptNm", "아파트");
+            case MULTIPLEX_HOUSE -> text(node, "mhouseNm", "연립다세대");
+            case DETACHED_HOUSE -> null;
+        };
+        String jibun = (housingType == HousingType.DETACHED_HOUSE) ? null : text(node, "jibun", "지번");
         Integer deposit = num(node, "deposit", "보증금액");
         Integer monthly = num(node, "monthlyRent", "월세금액");
 

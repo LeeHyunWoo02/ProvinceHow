@@ -77,8 +77,15 @@ public class MolitRentApiAdapter implements RentRecordProvider {
     @Value("${apis.molit.base-url}")
     private String baseUrl;
 
-    @Value("${apis.molit.path}")
-    private String apiPath;
+    /** 유형별 엔드포인트. 서비스명이 유형마다 달라 경로를 3개로 나눠 받는다(docs/external-api-spec.md 4.1). */
+    @Value("${apis.molit.paths.apartment:}")
+    private String apartmentPath;
+
+    @Value("${apis.molit.paths.multiplex-house:}")
+    private String multiplexHousePath;
+
+    @Value("${apis.molit.paths.detached-house:}")
+    private String detachedHousePath;
 
     @Value("${apis.molit.service-key}")
     private String serviceKey;
@@ -127,6 +134,31 @@ public class MolitRentApiAdapter implements RentRecordProvider {
             maxPages = 1;
         }
         this.concurrencyPermits = new Semaphore(Math.max(1, maxConcurrentRequests), true);
+
+        String normalized = stripServiceName(baseUrl);
+        if (normalized != null && !normalized.equals(baseUrl)) {
+            log.warn("[MOLIT] base-url 에 서비스명이 포함돼 있어 떼어냈다. MOLIT_BASE_URL 을 '{}' 로 바꿔라", normalized);
+        }
+        this.baseUrl = normalized;
+    }
+
+    /**
+     * 옛 설정은 base-url 에 서비스명({@code .../1613000/RTMSDataSvcAptRent})까지 넣었다.
+     * 그대로 두면 유형별 경로가 세그먼트 중복이 되므로 떼어내고 경고만 남긴다 — 운영 환경변수 수정 전에도 3종이 정상 동작한다.
+     */
+    static String stripServiceName(String rawBaseUrl) {
+        if (rawBaseUrl == null) {
+            return null;
+        }
+        String trimmed = rawBaseUrl.trim();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        int lastSlash = trimmed.lastIndexOf('/');
+        if (lastSlash < 0 || !trimmed.substring(lastSlash + 1).startsWith(SERVICE_NAME_MARKER)) {
+            return trimmed;
+        }
+        return trimmed.substring(0, lastSlash);
     }
 
     // ------------------------------------------------------------------ 포트 구현
@@ -286,9 +318,8 @@ public class MolitRentApiAdapter implements RentRecordProvider {
 
         UriComponentsBuilder builder = UriComponentsBuilder
                 .fromHttpUrl(baseUrl)
-                // TODO Phase 2 — housingType 별 경로 분기. 지금은 3종 모두 아파트 경로다.
                 // path 는 세그먼트가 2개라 pathSegment() 가 '/' 에서 예외를 던진다. 그대로 이어붙인다.
-                .path(apiPath)
+                .path(pathFor(housingType))
                 .queryParam("LAWD_CD", code.value())
                 .queryParam("DEAL_YMD", yearMonth.format(DEAL_YMD_FORMAT))
                 .queryParam("pageNo", page)
@@ -301,6 +332,19 @@ public class MolitRentApiAdapter implements RentRecordProvider {
             return template.replace("{sk}", key);
         }
         return builder.queryParam(SERVICE_KEY_PARAM, key).build(true).toUriString();
+    }
+
+    /** 설정이 비어 있으면 아파트로 폴백하지 않고 실패시킨다. 조용한 폴백은 다른 유형의 자료를 섞어버린다. */
+    private String pathFor(HousingType housingType) {
+        String path = switch (housingType) {
+            case APARTMENT -> apartmentPath;
+            case MULTIPLEX_HOUSE -> multiplexHousePath;
+            case DETACHED_HOUSE -> detachedHousePath;
+        };
+        if (path == null || path.isBlank()) {
+            throw new MolitApiException("경로 설정이 비어 있다 housingType=" + housingType);
+        }
+        return path.trim();
     }
 
     private JsonNode parseJsonWithXmlFallback(@Nullable MediaType contentType, String body) {
