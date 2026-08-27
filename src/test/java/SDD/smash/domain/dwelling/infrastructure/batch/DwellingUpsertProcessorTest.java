@@ -124,6 +124,21 @@ class DwellingUpsertProcessorTest {
                 .containsExactly(15, 100, 200);
     }
 
+    @Test
+    @DisplayName("예산 소진으로 3종 모두 판정 불가면 0건 행을 쓰지 않고 건너뛴다")
+    void skipsInsteadOfWritingZerosWhenEveryTypeIsUndetermined() {
+        // given - 판정 불가를 0건으로 적재하면 '실거래가 없는 지역'이 되어 시세가 조용히 왜곡된다
+        for (HousingType housingType : HousingType.values()) {
+            provider.budgetExhausted(housingType);
+        }
+
+        // when
+        DwellingUpsertBundle bundle = processor.process(workItem());
+
+        // then - null 이므로 기존 값이 그대로 유지된다
+        assertThat(bundle).isNull();
+    }
+
     private WorkItem workItem() {
         return new WorkItem(SIGUNGU, FROM, TO);
     }
@@ -166,6 +181,11 @@ class DwellingUpsertProcessorTest {
         @SafeVarargs
         private void partiallyFailed(HousingType housingType, List<RentRecord>... records) {
             put(housingType, concat(records), List.of(FROM));
+        }
+
+        /** 예산 소진 - 아예 시도하지 못해 모든 달이 판정 불가다. */
+        private void budgetExhausted(HousingType housingType) {
+            put(housingType, List.of(), new AggregationPeriod(FROM, TO).months());
         }
 
         private void put(HousingType housingType, List<RentRecord> records, List<YearMonth> failedMonths) {
