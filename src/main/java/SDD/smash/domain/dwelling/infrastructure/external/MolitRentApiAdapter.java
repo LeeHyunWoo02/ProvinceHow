@@ -19,9 +19,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -49,7 +51,7 @@ import java.util.concurrent.Semaphore;
  *
  * <h2>호출 제한</h2>
  * 개발계정 트래픽이 10,000건/일이고 게이트웨이에 초당 호출 제한(에러코드 23)이 있다.
- * 시군구 264개 × 12개월 × 3유형 × 페이지 수만큼 호출하므로 <b>최소 호출 간격</b>, <b>동시 호출 수</b>,
+ * 시군구 264개 × 10개월 × 3유형 × 페이지 수만큼 호출하므로 <b>최소 호출 간격</b>, <b>동시 호출 수</b>,
  * <b>일일 호출 예산</b>을 프로퍼티로 조인다.
  *
  * <p>일일 예산은 <b>주택유형과 무관하게 하나로</b> 센다. 한도가 3종 데이터셋에 걸쳐 공유되는지
@@ -121,6 +123,14 @@ public class MolitRentApiAdapter implements RentRecordProvider {
     @Value("${apis.molit.daily-call-budget:9000}")
     private int dailyCallBudget;
 
+    /** 한 달치 수집의 총 시도 횟수. 1 이면 재시도하지 않는다. */
+    @Value("${apis.molit.retry-max-attempts:3}")
+    private int retryMaxAttempts;
+
+    /** 재시도 사이 고정 대기(ms). */
+    @Value("${apis.molit.retry-backoff-ms:1000}")
+    private long retryBackoffMs;
+
     private Semaphore concurrencyPermits;
     private final Object intervalLock = new Object();
     private long nextAllowedAtMillis;
@@ -164,13 +174,44 @@ public class MolitRentApiAdapter implements RentRecordProvider {
         if (dailyCallBudget <= 0) {
             dailyCallBudget = 1;
         }
+        if (retryMaxAttempts <= 0) {
+            retryMaxAttempts = 1;
+        }
+        if (retryBackoffMs < 0) {
+            retryBackoffMs = 0;
+        }
         this.concurrencyPermits = new Semaphore(Math.max(1, maxConcurrentRequests), true);
+
+        verifyPathsConfigured();
 
         String normalized = stripServiceName(baseUrl);
         if (normalized != null && !normalized.equals(baseUrl)) {
             log.warn("[MOLIT] base-url 에 서비스명이 포함돼 있어 떼어냈다. MOLIT_BASE_URL 을 '{}' 로 바꿔라", normalized);
         }
         this.baseUrl = normalized;
+    }
+
+    /**
+     * 유형별 경로 3개가 모두 채워졌는지 부팅 시점에 확인한다.
+     *
+     * <p>설정 오류는 런타임 데이터 조건이 아니라 배포 시점 오류다. 그냥 두면 {@code pathFor} 의 예외가
+     * {@code fetchMonth} 에서 판정 불가로 흡수되고 배치가 {@code COMPLETED} 로 끝나면서
+     * 그 유형이 전국에서 조용히 사라진다. {@code MOLIT_PATH_X=} 처럼 <b>빈 값으로 정의</b>하면
+     * Spring 이 {@code ${...:기본값}} 의 기본값으로 대체하지 않으므로 실제로 일어날 수 있는 일이다.
+     */
+    private void verifyPathsConfigured() {
+        List<HousingType> missing = new ArrayList<>();
+        for (HousingType housingType : HousingType.values()) {
+            String path = rawPathFor(housingType);
+            if (path == null || path.isBlank()) {
+                missing.add(housingType);
+            }
+        }
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException(
+                    "[MOLIT] 유형별 경로 설정이 비어 있다 housingTypes=" + missing
+                            + " — apis.molit.paths.* (MOLIT_PATH_*) 를 채워라. 비워두면 그 유형이 전국에서 누락된다.");
+        }
     }
 
     /**
@@ -197,23 +238,77 @@ public class MolitRentApiAdapter implements RentRecordProvider {
     /**
      * 엄격 조회. 응답을 신뢰할 수 없으면 예외를 던진다.
      *
-     * <p>빈 리스트로 삼키면 그 달이 "거래 0건"으로 집계에 들어간다. 배치 Step 의
-     * 재시도/실패 처리가 동작하도록 반드시 예외로 알린다.
+     * <p>빈 리스트로 삼키면 그 달이 "거래 0건"으로 집계에 들어간다. 관대 경로({@link #fetchMonth})가
+     * 재시도·판정을 할 수 있도록 반드시 예외로 알린다.
      */
     @Override
     public List<RentRecord> fetch(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
         return fetchStrict(housingType, code, yearMonth).records();
     }
 
-    /** 관대 조회. 실패를 예외 대신 {@link MonthlyRentResult} 상태로 돌려준다. */
+    /**
+     * 관대 조회. 실패를 예외 대신 {@link MonthlyRentResult} 상태로 돌려준다.
+     *
+     * <p><b>재시도가 여기(월 단위)에 있다.</b> 8,000회 규모에서 단발 타임아웃은 매 실행 몇 건씩
+     * 기대되는 사건이고, 재시도가 없으면 그 (시군구, 유형)의 10개월치가 통째로 버려진다.
+     * Step 재시도로 올리면 청크(10개 시군구)가 통째로 다시 돌아 이미 성공한 항목까지 API 를 다시 부른다.
+     *
+     * <p>재시도 대상은 일시적 네트워크 실패뿐이다. 재시도한 호출도 {@code acquireSlot()} 을 거치므로
+     * 일일 예산을 소모하고 최소 호출 간격을 지킨다.
+     */
     @Override
     public MonthlyRentResult fetchMonth(HousingType housingType, SigunguCode code, YearMonth yearMonth) {
+        int attempts = Math.max(1, retryMaxAttempts);
+        RuntimeException lastFailure = null;
+        int attemptsMade = 0;
+
+        for (int attempt = 1; attempt <= attempts; attempt++) {
+            try {
+                return fetchStrict(housingType, code, yearMonth);
+            } catch (RuntimeException e) {
+                lastFailure = e;
+                attemptsMade = attempt;
+                if (attempt >= attempts || !isRetryable(e)) {
+                    break;
+                }
+                log.warn("[MOLIT] 월 수집 재시도 housingType={}, sigungu={}, ym={}, attempt={}/{}, reason={}",
+                        housingType, code.value(), yearMonth, attempt, attempts, summarize(e));
+                sleepQuietly(retryBackoffMs);
+            }
+        }
+
+        log.warn("[MOLIT] 월 수집 실패 housingType={}, sigungu={}, ym={}, attempts={}, reason={}",
+                housingType, code.value(), yearMonth, attemptsMade, summarize(lastFailure));
+        return MonthlyRentResult.undetermined(yearMonth, attemptsMade, summarize(lastFailure));
+    }
+
+    /**
+     * 다시 부르면 결과가 달라질 수 있는 실패인가. 기존 Step 재시도와 같은 범위로 한정한다.
+     *
+     * <p>{@link MolitApiException}(게이트웨이 오류·파싱 실패·{@code totalCount} 부재)과
+     * 그 하위인 {@link MolitCallBudgetExceededException}(예산 소진)은 재시도하지 않는다 —
+     * 예산이 없어서 실패한 것을 다시 부르는 것은 무의미하고, 나머지도 보수적으로 간다.
+     */
+    private static boolean isRetryable(Throwable failure) {
+        if (failure instanceof MolitApiException) {
+            return false;
+        }
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof ResourceAccessException || cause instanceof SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void sleepQuietly(long millis) {
+        if (millis <= 0) {
+            return;
+        }
         try {
-            return fetchStrict(housingType, code, yearMonth);
-        } catch (RuntimeException e) {
-            log.warn("[MOLIT] 월 수집 실패 housingType={}, sigungu={}, ym={}, reason={}",
-                    housingType, code.value(), yearMonth, summarize(e));
-            return MonthlyRentResult.undetermined(yearMonth, 1, summarize(e));
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -385,17 +480,24 @@ public class MolitRentApiAdapter implements RentRecordProvider {
         return builder.queryParam(SERVICE_KEY_PARAM, key).build(true).toUriString();
     }
 
-    /** 설정이 비어 있으면 아파트로 폴백하지 않고 실패시킨다. 조용한 폴백은 다른 유형의 자료를 섞어버린다. */
+    /**
+     * 설정이 비어 있으면 아파트로 폴백하지 않고 실패시킨다. 조용한 폴백은 다른 유형의 자료를 섞어버린다.
+     * 정상 경로에서는 {@link #verifyPathsConfigured()} 가 부팅 때 걸러내므로 여기는 방어용이다.
+     */
     private String pathFor(HousingType housingType) {
-        String path = switch (housingType) {
-            case APARTMENT -> apartmentPath;
-            case MULTIPLEX_HOUSE -> multiplexHousePath;
-            case DETACHED_HOUSE -> detachedHousePath;
-        };
+        String path = rawPathFor(housingType);
         if (path == null || path.isBlank()) {
             throw new MolitApiException("경로 설정이 비어 있다 housingType=" + housingType);
         }
         return path.trim();
+    }
+
+    private String rawPathFor(HousingType housingType) {
+        return switch (housingType) {
+            case APARTMENT -> apartmentPath;
+            case MULTIPLEX_HOUSE -> multiplexHousePath;
+            case DETACHED_HOUSE -> detachedHousePath;
+        };
     }
 
     private JsonNode parseJsonWithXmlFallback(@Nullable MediaType contentType, String body) {

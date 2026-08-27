@@ -22,6 +22,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.SocketTimeoutException;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
@@ -34,6 +35,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.ExpectedCount.once;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
@@ -74,6 +76,9 @@ class MolitRentApiAdapterTest {
         ReflectionTestUtils.setField(adapter, "requestIntervalMs", 0L);
         ReflectionTestUtils.setField(adapter, "maxConcurrentRequests", 1);
         ReflectionTestUtils.setField(adapter, "dailyCallBudget", 9000);
+        // 운영과 같은 총 3회 시도. 대기만 없앤다
+        ReflectionTestUtils.setField(adapter, "retryMaxAttempts", 3);
+        ReflectionTestUtils.setField(adapter, "retryBackoffMs", 0L);
         adapter.initRateLimiter();
     }
 
@@ -134,9 +139,22 @@ class MolitRentApiAdapterTest {
     }
 
     @Test
-    @DisplayName("유형별 경로 설정이 비어 있으면 아파트로 폴백하지 않고 실패한다")
+    @DisplayName("유형별 경로 설정이 비어 있으면 부팅 초기화에서 실패한다")
+    void failsInitializationWhenPathIsNotConfigured() {
+        // given - MOLIT_PATH_DETACHED_HOUSE= 처럼 빈 값으로 정의된 경우다.
+        //         런타임에 흡수되면 배치가 COMPLETED 로 끝나면서 그 유형이 전국에서 사라진다
+        ReflectionTestUtils.setField(adapter, "detachedHousePath", "  ");
+
+        // when / then
+        assertThatThrownBy(() -> adapter.initRateLimiter())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DETACHED_HOUSE");
+    }
+
+    @Test
+    @DisplayName("초기화 이후 경로가 비어도 아파트로 폴백하지 않고 실패한다")
     void failsInsteadOfFallingBackWhenPathIsNotConfigured() {
-        // given
+        // given - 부팅 검증을 통과한 뒤의 방어 가드다. 조용한 폴백은 다른 유형의 자료를 섞어버린다
         ReflectionTestUtils.setField(adapter, "detachedHousePath", "  ");
 
         // when / then
@@ -410,6 +428,80 @@ class MolitRentApiAdapterTest {
         assertThat(records).hasSize(1);
         assertThat(records.get(0).deposit()).isEqualTo(95000);
         assertThat(records.get(0).monthlyRent()).isEqualTo(20);
+    }
+
+    // ------------------------------------------------------------------ 월 단위 재시도
+
+    @Test
+    @DisplayName("일시적 읽기 타임아웃은 재시도해 최종적으로 성공한다")
+    void retriesTransientTimeoutUntilItSucceeds() {
+        // given - 재시도가 없으면 이 (시군구, 유형)의 10개월치가 통째로 버려지고 월 1회 배치라 한 달을 기다린다
+        server.expect(once(), requestTo(containsString("pageNo=1")))
+                .andRespond(withException(new SocketTimeoutException("Read timed out")));
+        server.expect(once(), requestTo(containsString("pageNo=1")))
+                .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
+
+        // when
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // then - 재시도한 호출도 실제로 HTTP 를 쏘므로 일일 예산을 2회 소모한다
+        assertThat(result.status()).isEqualTo(RentDataStatus.AVAILABLE);
+        assertThat(result.records()).hasSize(1);
+        assertThat(adapter.callsUsed()).isEqualTo(2);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("총 시도 횟수를 다 쓰면 판정 불가로 남긴다")
+    void givesUpAsUndeterminedAfterEveryAttemptTimesOut() {
+        // given - 총 3회 시도
+        for (int attempt = 0; attempt < 3; attempt++) {
+            server.expect(once(), requestTo(containsString("pageNo=1")))
+                    .andRespond(withException(new SocketTimeoutException("Read timed out")));
+        }
+
+        // when
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // then
+        assertThat(result.status()).isEqualTo(RentDataStatus.UNDETERMINED);
+        assertThat(adapter.callsUsed()).isEqualTo(3);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("예산 소진은 재시도하지 않아 호출 수가 늘지 않는다")
+    void doesNotRetryWhenDailyCallBudgetIsExhausted() {
+        // given - 예산이 없어서 실패한 것을 다시 시도하는 건 무의미하다
+        budget(1);
+        expectPage(1, successBody(1, 1, 1));
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // when
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // then - 추가 요청이 서버로 나가지 않았고 예산 사용량도 그대로다
+        assertThat(result.status()).isEqualTo(RentDataStatus.UNDETERMINED);
+        assertThat(result.failureReason()).contains("예산 소진");
+        assertThat(adapter.callsUsed()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("게이트웨이 오류는 재시도하지 않고 한 번만 호출한다")
+    void doesNotRetryGatewayError() {
+        // given - 다시 불러도 같은 응답이 온다. 보수적으로 재시도 대상을 타임아웃으로 한정한다
+        expectPage(1, """
+                {"OpenAPI_ServiceResponse":{"cmmMsgHeader":{
+                   "errMsg":"SERVICE_KEY_IS_NOT_REGISTERED_ERROR","returnReasonCode":"30"}}}""");
+
+        // when
+        MonthlyRentResult result = adapter.fetchMonth(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // then
+        assertThat(result.status()).isEqualTo(RentDataStatus.UNDETERMINED);
+        assertThat(adapter.callsUsed()).isEqualTo(1);
+        server.verify();
     }
 
     // ------------------------------------------------------------------ 구간 수집

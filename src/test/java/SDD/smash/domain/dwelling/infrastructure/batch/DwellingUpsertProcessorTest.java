@@ -74,8 +74,8 @@ class DwellingUpsertProcessorTest {
     }
 
     @Test
-    @DisplayName("한 유형이 부분 실패하면 그 유형만 빠지고 나머지 유형과 통합값은 정상 적재된다")
-    void isolatesPartialFailureToTheFailedHousingTypeOnly() {
+    @DisplayName("한 유형이 부분 실패하면 통합값을 건너뛰고 성공한 유형의 유형별 행만 적재한다")
+    void skipsCombinedRowButStillWritesSucceededHousingTypes() {
         // given — 연립다세대만 수집 실패한 달이 있다
         provider.success(HousingType.APARTMENT, monthly(50));
         provider.partiallyFailed(HousingType.MULTIPLEX_HOUSE, monthly(1_000));
@@ -84,11 +84,27 @@ class DwellingUpsertProcessorTest {
         // when
         DwellingUpsertBundle bundle = processor.process(workItem());
 
-        // then — 실패한 유형의 레코드는 통합 평균에도 섞이지 않는다
+        // then — 남은 2종만으로 통합값을 덮어쓰면 이전 실행의 3종 값이 조용히 열화되고
+        //        그 값이 DwellingScorePolicy 의 입력이라 추천 점수가 바뀐다. null 이어야 기존 행이 보존된다
         assertThat(bundle).isNotNull();
-        assertThat(bundle.combined().getMonthAvg()).isEqualTo(40.0);
+        assertThat(bundle.combined()).isNull();
         assertThat(bundle.byType()).extracting(DwellingByTypeUpsertRow::getHousingType)
                 .containsExactly("APARTMENT", "DETACHED_HOUSE");
+    }
+
+    @Test
+    @DisplayName("실패한 유형이 있고 성공한 유형에도 값이 없으면 null 을 반환해 건너뛴다")
+    void returnsNullWhenOnlyFailuresAndEmptyTypesRemain() {
+        // given
+        provider.partiallyFailed(HousingType.APARTMENT, monthly(50));
+        provider.success(HousingType.MULTIPLEX_HOUSE, List.of());
+        provider.success(HousingType.DETACHED_HOUSE, List.of());
+
+        // when
+        DwellingUpsertBundle bundle = processor.process(workItem());
+
+        // then
+        assertThat(bundle).isNull();
     }
 
     @Test

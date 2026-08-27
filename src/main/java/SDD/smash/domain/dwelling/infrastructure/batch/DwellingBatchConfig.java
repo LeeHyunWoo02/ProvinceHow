@@ -7,7 +7,6 @@ import SDD.smash.domain.dwelling.infrastructure.batch.dto.DwellingByTypeUpsertRo
 import SDD.smash.domain.dwelling.infrastructure.batch.dto.DwellingUpsertBundle;
 import SDD.smash.domain.dwelling.infrastructure.batch.dto.DwellingUpsertRow;
 import SDD.smash.domain.dwelling.infrastructure.batch.dto.WorkItem;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -26,7 +25,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.retry.backoff.FixedBackOffPolicy;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import javax.sql.DataSource;
@@ -40,7 +38,7 @@ import static SDD.smash.global.exception.ErrorCode.NOT_FOUND_YEARMONTH;
 /**
  * 전월세 적재 배치. As-Is {@code DwellingBatch} 를 옮긴 것이다.
  *
- * <p>Job 이름("dwellingJob")과 빈 이름, chunk 크기, 재시도 설정, Upsert SQL 을 그대로 유지한다.
+ * <p>Job 이름("dwellingJob")과 빈 이름, chunk 크기, Upsert SQL 을 그대로 유지한다.
  * Step 빈 이름("dwellingStep")은 {@code seedMasterJob} 이 {@code @Qualifier} 로 찾고
  * {@code BatchGuard} 가 STEP_NAME 으로 재실행 여부를 판단하므로 바꾸지 않는다.
  *
@@ -53,18 +51,41 @@ import static SDD.smash.global.exception.ErrorCode.NOT_FOUND_YEARMONTH;
  */
 @Configuration
 @Slf4j
-@RequiredArgsConstructor
 public class DwellingBatchConfig {
 
-    /** {@code months} 파라미터가 없을 때 집계할 개월 수. As-Is Runner 가 넘기던 값과 같다. */
-    private static final long DEFAULT_AGGREGATION_MONTHS = 12L;
+    /**
+     * {@code months} 파라미터가 없을 때 집계할 개월 수.
+     * {@code dwelling.months} 운영 기본값(10)과 같아야 한다 — 12개월이면 3종 합계 약 9,900회로
+     * 일일 호출 예산(9,500)을 넘는다.
+     */
+    private static final long DEFAULT_AGGREGATION_MONTHS = 10L;
 
     private final JobRepository jobRepository;
-    private final PlatformTransactionManager platformTransactionManager;
+    private final PlatformTransactionManager dataTransactionManager;
     private final RentRecordProvider rentRecordProvider;
     private final AddressQueryService addressQueryService;
     private final DwellingScoreCacheCleaner dwellingScoreCacheCleaner;
-    private final @Qualifier("dataDBSource") DataSource dataDataSource;
+    private final DataSource dataDataSource;
+
+    /**
+     * 명시적 생성자다. 이 프로젝트에는 {@code lombok.config} 가 없어 {@code @RequiredArgsConstructor} 가
+     * 만드는 생성자에 필드의 {@code @Qualifier} 가 복사되지 않는다 — 필드에만 붙이면 아무 효과가 없고
+     * {@code @Primary} 라는 우연에 원자성이 걸린다. 파라미터에 붙여 못 박는다
+     * ({@code SidoBatchConfig}·{@code SigunguBatchConfig} 와 같은 방식).
+     */
+    public DwellingBatchConfig(JobRepository jobRepository,
+                               @Qualifier("dataTransactionManager") PlatformTransactionManager dataTransactionManager,
+                               RentRecordProvider rentRecordProvider,
+                               AddressQueryService addressQueryService,
+                               DwellingScoreCacheCleaner dwellingScoreCacheCleaner,
+                               @Qualifier("dataDBSource") DataSource dataDataSource) {
+        this.jobRepository = jobRepository;
+        this.dataTransactionManager = dataTransactionManager;
+        this.rentRecordProvider = rentRecordProvider;
+        this.addressQueryService = addressQueryService;
+        this.dwellingScoreCacheCleaner = dwellingScoreCacheCleaner;
+        this.dataDataSource = dataDataSource;
+    }
 
     @Bean
     public Job dwellingJob(Step dwellingStep) {
@@ -78,16 +99,13 @@ public class DwellingBatchConfig {
     public Step dwellingStep(ItemReader<WorkItem> dwellingReader,
                              DwellingUpsertProcessor dwellingProcessor,
                              ItemWriter<DwellingUpsertBundle> dwellingBundleWriter) {
+        // 타임아웃 재시도는 어댑터의 월 단위(MolitRentApiAdapter.fetchMonth)에 있다.
+        // Step 재시도로 두면 청크(10개 시군구)가 통째로 다시 돌아 이미 성공한 항목까지 API 를 다시 부른다.
         return new StepBuilder("dwellingStep", jobRepository)
-                .<WorkItem, DwellingUpsertBundle>chunk(10, platformTransactionManager)
+                .<WorkItem, DwellingUpsertBundle>chunk(10, dataTransactionManager)
                 .reader(dwellingReader)
                 .processor(dwellingProcessor)
                 .writer(dwellingBundleWriter)
-                .faultTolerant()
-                .retry(org.springframework.web.client.ResourceAccessException.class) // Read timed out 포함
-                .retry(java.net.SocketTimeoutException.class)
-                .retryLimit(3)
-                .backOffPolicy(new FixedBackOffPolicy() {{ setBackOffPeriod(1000L); }})
                 .build();
     }
 
@@ -96,7 +114,7 @@ public class DwellingBatchConfig {
      *
      * <p>기준월 파라미터는 {@code baseMonth}(yyyyMM)다. 월 단위로 갱신되는 데이터의 재실행 판정 기준이
      * 기준월이므로 As-Is 의 {@code dealYmd} 대신 이 이름을 쓴다.
-     * {@code months} 는 집계 구간 길이이며 없으면 12개월로 본다(재실행 판정에 쓰이지 않는다).
+     * {@code months} 는 집계 구간 길이이며 없으면 10개월로 본다(재실행 판정에 쓰이지 않는다).
      */
     @Bean
     @StepScope
@@ -176,8 +194,8 @@ public class DwellingBatchConfig {
     }
 
     /**
-     * 번들을 두 테이블로 갈라 쓴다. 두 Writer 가 같은 {@code dataDBSource} 를 쓰므로
-     * 한 청크 트랜잭션 안에서 함께 커밋/롤백된다.
+     * 번들을 두 테이블로 갈라 쓴다. 두 Writer 가 같은 {@code dataDBSource} 를 쓰고 청크 트랜잭션 매니저가
+     * {@code dataTransactionManager} 로 못 박혀 있으므로 한 청크 트랜잭션 안에서 함께 커밋/롤백된다.
      */
     @Bean
     public ItemWriter<DwellingUpsertBundle> dwellingBundleWriter(

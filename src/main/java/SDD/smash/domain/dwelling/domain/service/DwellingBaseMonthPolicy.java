@@ -31,8 +31,8 @@ public class DwellingBaseMonthPolicy {
     /** 신고 기한 30일 + 익일 공개를 감안한 기본 지연 개월 수. */
     public static final int DEFAULT_CONFIRMED_LAG_MONTHS = 2;
 
-    /** 시세 산출에 쓰는 기본 집계 개월 수. */
-    public static final int DEFAULT_LOOKBACK_MONTHS = 12;
+    /** 시세 산출에 쓰는 기본 집계 개월 수. 운영 기본값({@code dwelling.months})과 같게 유지한다. */
+    public static final int DEFAULT_LOOKBACK_MONTHS = 10;
 
     /** 자동 계산이 확정월을 찾지 못했을 때 뒤로 물러날 수 있는 최대 개월 수. */
     public static final int DEFAULT_MAX_FALLBACK_MONTHS = 3;
