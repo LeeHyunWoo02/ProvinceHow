@@ -36,6 +36,9 @@ public class RegionDetailInfo {
     /** 추천 지역의 채용 프로필(연봉 중앙값·신입 비율·업종 Top). 표본이 없으면 null. */
     private RegionJobProfileItem regionJobProfile;
 
+    /** EIS 고용행정통계 요약(최신 기준월, 시군구 합계). 적재된 통계가 없으면 null. */
+    private RegionJobStatisticsSummary jobStatistics;
+
     private Integer totalSupportNum;
     private SupportPolicyListSummary supportList;
 

@@ -21,6 +21,8 @@ final class ErrorCodeHttpMapper {
         // 외부(사람인) 응답의 데이터 무결성 문제 = 서버측 문제이므로 500. 실제로는 어댑터가 잡아 건너뛴다.
         STATUS.put(ErrorCode.JOB_VACANCY_INVALID, HttpStatus.INTERNAL_SERVER_ERROR);
         STATUS.put(ErrorCode.JOB_PROFILE_INVALID, HttpStatus.INTERNAL_SERVER_ERROR);
+        // 고용행정통계 값의 무결성 문제도 적재 소스(CSV)의 문제이므로 서버측 500 이다.
+        STATUS.put(ErrorCode.JOB_STATISTICS_INVALID, HttpStatus.INTERNAL_SERVER_ERROR);
         STATUS.put(ErrorCode.INDUSTRY_CODE_NOT_FOUND, HttpStatus.NOT_FOUND);
         STATUS.put(ErrorCode.NOT_FOUND_YEARMONTH, HttpStatus.NOT_FOUND);
 
