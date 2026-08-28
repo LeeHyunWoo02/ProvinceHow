@@ -16,6 +16,7 @@ import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -36,6 +37,7 @@ import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.client.ExpectedCount.once;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
@@ -144,9 +146,14 @@ class MolitRentApiAdapterTest {
     }
 
     @Test
-    @DisplayName("인코딩되지 않은 인증키는 값을 바꾸지 않고 그대로 실어 보낸다")
+    @DisplayName("현행 동작 기록 - 비인코딩 인증키의 +,/,= 를 인코딩하지 않고 그대로 실어 보낸다 (별도 이슈)")
     void sendsPlainServiceKeyUnchanged() {
-        // given - data.go.kr 의 Decoding 키 모양이다
+        // given - data.go.kr 의 Decoding 키 모양이다.
+        //
+        // 이 단언은 "옳은 동작"이 아니라 현행 동작의 기록이다. buildUrl 의 비인코딩 분기는
+        // build(true) 라 + / = 를 인코딩하지 않는데, 쿼리스트링의 + 는 서버가 공백으로 읽는 것이
+        // 일반적이라 Decoding 키에서는 인증이 깨진다. 인코딩 정책을 고치는 날 이 테스트는
+        // 삭제 대상이 아니라 기대값 갱신 대상이다.
         ReflectionTestUtils.setField(adapter, "serviceKey", "abc+def/ghi");
 
         // when
@@ -164,6 +171,21 @@ class MolitRentApiAdapterTest {
         adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
         server.verify();
         return seen.get();
+    }
+
+    @Test
+    @DisplayName("Accept 로 JSON 과 */* 를 함께 보낸다 - _type=json 이지만 오류는 XML 로 온다")
+    void sendsJsonAndWildcardAcceptHeader() {
+        // given - RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 406/파싱 실패가 된다
+        server.expect(once(), requestTo(startsWith(BASE_URL)))
+                .andExpect(header(HttpHeaders.ACCEPT, "application/json, */*"))
+                .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
+
+        // when
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+
+        // then
+        server.verify();
     }
 
     @Test
