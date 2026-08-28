@@ -63,7 +63,7 @@ import java.util.Set;
  * </ul>
  *
  * <h2>일반구 재분배</h2>
- * LOCALDATA 는 인허가 권한이 있는 시 단위로만 자료를 줘서 수원·성남 등 12개 시는 개방자치단체코드
+ * LOCALDATA 는 인허가 권한이 있는 시 단위로만 자료를 줘서 수원·성남 등 13개 시는 개방자치단체코드
  * 하나가 일반구 시군구코드 여러 개에 대응한다. 이 경우에만 <b>사업장 주소 문자열</b>로 하위 구를
  * 가른다(정책 결정 2026-08-13). 주소 후보 순서와 구 이름 매칭 규칙은
  * {@code InfraFacility.addressCandidates()} 와 {@code RegionCodeMapping.DistrictSplit} 이 정의한다.
