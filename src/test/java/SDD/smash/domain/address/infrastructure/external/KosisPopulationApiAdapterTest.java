@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,13 +39,15 @@ class KosisPopulationApiAdapterTest {
     private static final YearMonth JULY = YearMonth.of(2026, 7);
     private static final YearMonth AUGUST = YearMonth.of(2026, 8);
 
-    private RestTemplate restTemplate;
+    private RestClient restClient;
     private MockRestServiceServer server;
 
     @BeforeEach
     void setUp() {
-        restTemplate = new RestTemplate();
-        server = MockRestServiceServer.bindTo(restTemplate).build();
+        // RestClient 는 빌더에 바인딩한 뒤 build() 한 인스턴스를 어댑터에 넘겨야 목 서버가 붙는다.
+        RestClient.Builder builder = RestClient.builder();
+        server = MockRestServiceServer.bindTo(builder).build();
+        restClient = builder.build();
     }
 
     @Test
@@ -284,7 +286,7 @@ class KosisPopulationApiAdapterTest {
     private KosisPopulationApiAdapter adapter(String apiKey, String jsonVd,
                                               int maxAttempts, long backoffMillis, int fallbackMonths) {
         return new KosisPopulationApiAdapter(
-                restTemplate,
+                restClient,
                 new ObjectMapper(),
                 "https://kosis.kr/openapi",
                 apiKey,

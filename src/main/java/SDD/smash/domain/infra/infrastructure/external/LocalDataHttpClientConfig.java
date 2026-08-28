@@ -5,7 +5,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 
@@ -29,19 +28,12 @@ import java.time.Duration;
  * 있다. 그래서 이 빈들은 {@code defaultCandidate = false} 로 등록한다 — <b>{@code @Qualifier} 로
  * 이름을 지목한 곳(=LocalDataApiAdapter)에만</b> 주입되고, 타입만 보고 주입하는 다른 어댑터의
  * 후보에는 아예 오르지 않는다.
- *
- * <h2>RestTemplate 빈이 아직 남아 있는 이유</h2>
- * RestTemplate → RestClient 이전이 2차로 나뉘어 있다. 남은 어댑터를 옮기기 전까지 두 종류가
- * 공존해야 각 커밋이 컴파일·테스트를 통과한다. 이전이 끝나면 {@code localDataRestTemplate} 을 지운다.
- */
+ * */
 @Configuration
 public class LocalDataHttpClientConfig {
 
     /** 이 빈을 주입받을 때 쓰는 한정자. 어댑터의 {@code @Qualifier} 와 한 쌍이다. */
     public static final String LOCALDATA_REST_CLIENT = "localDataRestClient";
-
-    /** 이전이 끝나면 제거될 구 클라이언트의 한정자. */
-    public static final String LOCALDATA_REST_TEMPLATE = "localDataRestTemplate";
 
     @Bean(name = LOCALDATA_REST_CLIENT, defaultCandidate = false)
     public RestClient localDataRestClient(
@@ -51,14 +43,6 @@ public class LocalDataHttpClientConfig {
         return RestClient.builder()
                 .requestFactory(requestFactory(connectTimeoutMs, readTimeoutMs))
                 .build();
-    }
-
-    @Bean(name = LOCALDATA_REST_TEMPLATE, defaultCandidate = false)
-    public RestTemplate localDataRestTemplate(
-            @Value("${apis.localdata.connect-timeout-ms:5000}") long connectTimeoutMs,
-            @Value("${apis.localdata.read-timeout-ms:60000}") long readTimeoutMs) {
-
-        return new RestTemplate(requestFactory(connectTimeoutMs, readTimeoutMs));
     }
 
     private static SimpleClientHttpRequestFactory requestFactory(long connectTimeoutMs, long readTimeoutMs) {

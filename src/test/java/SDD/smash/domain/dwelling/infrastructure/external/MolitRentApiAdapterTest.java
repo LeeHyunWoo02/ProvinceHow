@@ -20,13 +20,15 @@ import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -53,16 +55,18 @@ class MolitRentApiAdapterTest {
     private static final String RH_PATH = "/RTMSDataSvcRHRent/getRTMSDataSvcRHRent";
     private static final String SH_PATH = "/RTMSDataSvcSHRent/getRTMSDataSvcSHRent";
 
-    private RestTemplate restTemplate;
+    private RestClient restClient;
     private MockRestServiceServer server;
     private MolitRentApiAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        restTemplate = new RestTemplate();
-        server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
+        // RestClient 는 빌더에 바인딩한 뒤 build() 한 인스턴스를 어댑터에 넘겨야 목 서버가 붙는다.
+        RestClient.Builder builder = RestClient.builder();
+        server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(true).build();
+        restClient = builder.build();
         SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-        adapter = new MolitRentApiAdapter(restTemplate, new ObjectMapper(), new XmlMapper(),
+        adapter = new MolitRentApiAdapter(restClient, new ObjectMapper(), new XmlMapper(),
                 new ExternalApiMetrics(meterRegistry), new CallBudgetMetrics(meterRegistry));
 
         // 운영 설정값과 같은 모양이다. apis.molit.paths.* 는 선행 슬래시가 있고 세그먼트가 2개다.
@@ -119,6 +123,47 @@ class MolitRentApiAdapterTest {
 
         // then
         server.verify();
+    }
+
+    /** 인증키를 뺀 공통 URL. 두 인코딩 케이스가 이 뒤에 serviceKey 만 다르게 붙인다. */
+    private static final String URL_WITHOUT_KEY =
+            "http://localhost/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent"
+                    + "?LAWD_CD=11680&DEAL_YMD=202605&pageNo=1&numOfRows=1000&_type=json";
+
+    @Test
+    @DisplayName("이미 인코딩된 인증키를 다시 인코딩하지 않는다")
+    void sendsAlreadyEncodedServiceKeyWithoutReEncoding() {
+        // given - data.go.kr 의 Encoding 키 모양이다. %2B 가 %252B 가 되면 인증이 깨진다
+        ReflectionTestUtils.setField(adapter, "serviceKey", "abc%2Bdef%2Fghi%3D");
+
+        // when
+        URI requested = captureRequestUri();
+
+        // then
+        assertThat(requested.toString()).isEqualTo(URL_WITHOUT_KEY + "&serviceKey=abc%2Bdef%2Fghi%3D");
+    }
+
+    @Test
+    @DisplayName("인코딩되지 않은 인증키는 값을 바꾸지 않고 그대로 실어 보낸다")
+    void sendsPlainServiceKeyUnchanged() {
+        // given - data.go.kr 의 Decoding 키 모양이다
+        ReflectionTestUtils.setField(adapter, "serviceKey", "abc+def/ghi");
+
+        // when
+        URI requested = captureRequestUri();
+
+        // then
+        assertThat(requested.toString()).isEqualTo(URL_WITHOUT_KEY + "&serviceKey=abc+def/ghi");
+    }
+
+    /** 실제로 나간 요청 URI 를 한 건 잡아 돌려준다. */
+    private URI captureRequestUri() {
+        AtomicReference<URI> seen = new AtomicReference<>();
+        server.expect(once(), request -> seen.set(request.getURI()))
+                .andRespond(withSuccess(successBody(1, 1, 1), MediaType.APPLICATION_JSON));
+        adapter.fetch(HousingType.APARTMENT, GANGNAM, MAY_2026);
+        server.verify();
+        return seen.get();
     }
 
     @Test
