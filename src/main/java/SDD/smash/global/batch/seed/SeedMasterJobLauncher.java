@@ -4,6 +4,7 @@ import SDD.smash.global.batch.launch.BatchGuard;
 import SDD.smash.global.batch.launch.BatchLaunchGuard;
 import SDD.smash.global.batch.launch.BatchLaunchResult;
 import SDD.smash.global.batch.listener.SeedMasterJobListener;
+import SDD.smash.global.batch.recovery.StaleJobExecutionRecovery;
 
 import SDD.smash.domain.dwelling.application.DwellingBaseMonthService;
 import SDD.smash.global.config.SeedProperties;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -86,7 +88,13 @@ public class SeedMasterJobLauncher {
         this.enabled = enabled;
     }
 
+    /**
+     * 고아 실행 정리({@link StaleJobExecutionRecovery})가 <b>먼저</b> 끝나야 한다.
+     * 남아 있는 {@code END_TIME IS NULL} 행이 있으면 이 기동이 통째로 건너뛰기가 되기 때문이다.
+     * 순서를 우연에 맡기지 않으려고 양쪽에 {@code @Order} 를 명시한다.
+     */
     @EventListener(ApplicationReadyEvent.class)
+    @Order(StaleJobExecutionRecovery.ORDER + 100)
     public void runSeedMasterJobOnce() {
         if (!enabled) {
             log.info("[seed] seed.master.enabled=false - 기동 시 시드 배치를 실행하지 않는다.");
