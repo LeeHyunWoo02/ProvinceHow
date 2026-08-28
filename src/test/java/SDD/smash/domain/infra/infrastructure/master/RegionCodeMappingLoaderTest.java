@@ -198,19 +198,23 @@ class RegionCodeMappingLoaderTest {
     }
 
     @Test
-    @DisplayName("실제 매핑 파일의 일반구 분해는 12개 시 35개 구다")
+    @DisplayName("실제 매핑 파일의 일반구 분해는 13개 시 39개 구다")
     void loadsBundledDistrictSplits() {
         RegionCodeMapping mapping = bundled();
 
-        assertThat(mapping.districtSplits()).hasSize(12);
+        assertThat(mapping.districtSplits()).hasSize(13);
         assertThat(mapping.districtSplits().stream()
                 .mapToInt(split -> split.districts().size())
-                .sum()).isEqualTo(35);
+                .sum()).isEqualTo(39);
 
         assertThat(mapping.splitOf(SigunguCode.of("41110")))
                 .hasValueSatisfying(split ->
                         assertThat(split.resolve("경기도 수원시 장안구 정자동 1"))
                                 .contains(SigunguCode.of("41111")));
+        assertThat(mapping.splitOf(SigunguCode.of("41590")))
+                .hasValueSatisfying(split ->
+                        assertThat(split.resolve("경기도 화성시 동탄구 반송동 1"))
+                                .contains(SigunguCode.of("41597")));
         assertThat(mapping.splitOf(SigunguCode.of("48120")))
                 .hasValueSatisfying(split -> {
                     assertThat(split.resolve("경상남도 창원시 마산합포구 오동동 1"))
