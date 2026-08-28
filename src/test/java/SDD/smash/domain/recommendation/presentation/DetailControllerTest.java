@@ -6,6 +6,7 @@ import SDD.smash.domain.recommendation.application.dto.DwellingTypeItem;
 import SDD.smash.domain.recommendation.application.dto.JobVacancyItem;
 import SDD.smash.domain.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.domain.recommendation.application.dto.RegionJobProfileItem;
+import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsSummary;
 import SDD.smash.domain.recommendation.application.port.out.RegionSummaryProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -114,5 +115,62 @@ class DetailControllerTest {
         mockMvc.perform(get("/api/detail").param("sigunguCode", "11680"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.dwellingByType.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("상세 응답에 고용행정통계(jobStatistics)가 기준월과 함께 실린다")
+    void detailResponseCarriesJobStatisticsWithMonth() throws Exception {
+        // given
+        RegionDetailInfo info = RegionDetailInfo.builder()
+                .sigunguCode("11680")
+                .jobStatistics(new RegionJobStatisticsSummary(
+                        "2026-07", 500L, 2000L, 0.25, 150L, 600L, 50L))
+                .build();
+        given(regionDetailService.details(any(), any())).willReturn(info);
+
+        // when & then
+        mockMvc.perform(get("/api/detail").param("sigunguCode", "11680"))
+                .andExpect(status().isOk())
+                // 기준월이 빠지면 화면이 낡은 수치를 현재값으로 보여준다
+                .andExpect(jsonPath("$.jobStatistics.statisticsMonth").value("2026-07"))
+                .andExpect(jsonPath("$.jobStatistics.validOpenings").value(500))
+                .andExpect(jsonPath("$.jobStatistics.validSeekers").value(2000))
+                .andExpect(jsonPath("$.jobStatistics.jobOpeningRatio").value(0.25))
+                .andExpect(jsonPath("$.jobStatistics.jobOpenings").value(150))
+                .andExpect(jsonPath("$.jobStatistics.jobSeekers").value(600))
+                .andExpect(jsonPath("$.jobStatistics.placements").value(50));
+    }
+
+    @Test
+    @DisplayName("구인배수가 없으면 jobOpeningRatio 만 null 로 실린다")
+    void detailResponseCarriesNullJobOpeningRatio() throws Exception {
+        // given
+        given(regionDetailService.details(any(), any())).willReturn(RegionDetailInfo.builder()
+                .sigunguCode("11680")
+                .jobStatistics(new RegionJobStatisticsSummary(
+                        "2026-07", 40L, 0L, null, 10L, 0L, 0L))
+                .build());
+
+        // when & then
+        mockMvc.perform(get("/api/detail").param("sigunguCode", "11680"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.jobStatistics.validOpenings").value(40))
+                .andExpect(content().string(containsString("\"jobOpeningRatio\":null")));
+    }
+
+    @Test
+    @DisplayName("고용행정통계가 없으면 200 과 함께 jobStatistics 가 null 로 내려간다")
+    void detailResponseCarriesNullJobStatisticsWhenAbsent() throws Exception {
+        // given - 통계를 채우지 않은 형태
+        given(regionDetailService.details(any(), any()))
+                .willReturn(RegionDetailInfo.builder().sigunguCode("11680").build());
+
+        // when & then
+        mockMvc.perform(get("/api/detail").param("sigunguCode", "11680"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.jobStatistics").doesNotExist())
+                .andExpect(content().string(containsString("\"jobStatistics\":null")))
+                // 공고 목록은 필드에서 사라지지 않고 빈 배열로 유지된다(직행 OpenAPI 대기)
+                .andExpect(jsonPath("$.jobVacancies.length()").value(0));
     }
 }

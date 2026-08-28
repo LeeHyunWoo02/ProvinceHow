@@ -46,7 +46,7 @@ import static SDD.smash.global.util.BatchTextUtil.isBlank;
 import static SDD.smash.global.util.BatchTextUtil.normalize;
 
 /**
- * EIS 고용행정통계 시드 배치. {@code data/generated/eis_job_stats.csv} → {@code region_job_statistics}.
+ * EIS 고용행정통계 시드 배치. {@code data/static/eis_job_stats.csv} → {@code region_job_statistics}.
  *
  * <p>{@code JobCountBatchConfig} 를 본떴다. 다른 점은 두 가지다.
  * <ul>

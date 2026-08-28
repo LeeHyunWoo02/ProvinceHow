@@ -57,7 +57,7 @@ API 로 전국 1개월을 채우려면 272 시군구 × 성별 2 × 연령 13 = 
 | 기간 | 2023-08 ~ 2026-07 (36개월) 확보. 정규화 규칙 3개로 연속(§5-3) |
 | 측정값 | `구인인원(월)` `구직건수(월)` `취업건수(월)` + `유효구인인원(전체)` `유효구직자수(전체)` (리포트 2개, §7-1) |
 | 주 지표 | `valid_openings`(유효구인인원). 구인배수 = `valid_openings / valid_seekers` |
-| 변환 | `scripts/build-eis-job-seed.py` → `data/generated/eis_job_stats.csv` (§9) |
+| 변환 | `scripts/build-eis-job-seed.py` → `data/static/eis_job_stats.csv` (§9) |
 | 미해결 | 기존 `job_count.csv` 3열 스키마와 형태 불일치(§9-6), 전남광주 코드 유지 여부(§5-2) |
 
 > **2026-08-28 결정 번복 주의.** API 대분류가 10종뿐이라 "JobCount 만 EIS 10종 축으로 두고
@@ -376,7 +376,7 @@ https://eis.work24.go.kr/eisps/rpt/reptDtl.do?menuId=020010020
 scripts/build-eis-job-seed.py
   입력  data/raw/eis/eis-job-*.xlsx    (구인인원·구직건수·취업건수)
         data/raw/eis/eis-valid-*.xlsx  (유효구인인원·유효구직자수)
-  출력  data/generated/eis_job_stats.csv
+  출력  data/static/eis_job_stats.csv
   실행  python scripts/build-eis-job-seed.py
 ```
 
