@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.util.List;
@@ -112,6 +112,8 @@ class SaraminJobVacancyAdapterTest {
                 .contains("loc_cd=101000")
                 .contains("count=5")
                 .contains("start=0");
+        // RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 조용히 협상이 바뀐다
+        assertThat(request.getHeader("Accept")).isEqualTo("application/json, */*");
     }
 
     private SaraminApiSpecFile specWithRegionMapping(Map<String, String> saraminToOurs) {
@@ -122,7 +124,7 @@ class SaraminJobVacancyAdapterTest {
     private SaraminJobVacancyAdapter adapter(String accessKey, SaraminApiSpecFile spec) {
         SaraminApiSpecLoader specLoader = new FixedSpecLoader(spec);
         return new SaraminJobVacancyAdapter(
-                new RestTemplate(),
+                RestClient.create(),
                 new SaraminJobVacancyParser(new ObjectMapper()),
                 specLoader,
                 new SaraminLocCodeResolver(specLoader),

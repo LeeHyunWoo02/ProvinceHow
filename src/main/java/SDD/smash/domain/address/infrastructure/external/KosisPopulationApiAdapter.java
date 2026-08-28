@@ -10,10 +10,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
@@ -68,7 +69,7 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
     private static final String ERR_FIELD = "err";
     private static final String ERR_MSG_FIELD = "errMsg";
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final ObjectMapper objectMapper;
 
     private final String baseUrl;
@@ -89,7 +90,7 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
     private static final String API_NAME = "kosis";
 
     public KosisPopulationApiAdapter(
-            RestTemplate restTemplate,
+            RestClient restClient,
             ObjectMapper objectMapper,
             @Value("${apis.kosis.base-url:}") String baseUrl,
             @Value("${apis.kosis.api-key:}") String apiKey,
@@ -103,7 +104,7 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
             @Value("${apis.kosis.fallback-months:3}") int fallbackMonths,
             ExternalApiMetrics externalApiMetrics) {
         this.externalApiMetrics = externalApiMetrics;
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.objectMapper = objectMapper;
         this.baseUrl = baseUrl;
         this.apiKey = apiKey;
@@ -201,7 +202,14 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                String body = restTemplate.getForObject(uri, String.class);
+                // uri 는 build() 가 완성한 URI 다. String 오버로드로 넘기면 URI 템플릿으로 재해석돼
+                // 이미 인코딩된 apiKey 의 %2B 가 %252B 로 재인코딩된다. URI 오버로드를 유지한다.
+                String body = restClient.get()
+                        .uri(uri)
+                        // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
+                        .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
+                        .retrieve()
+                        .body(String.class);
                 List<PopulationSnapshot> snapshots = toSnapshots(body, period);
                 externalApiMetrics.success(API_NAME);
                 return snapshots;
@@ -217,7 +225,7 @@ public class KosisPopulationApiAdapter implements PopulationSnapshotProvider {
                 }
                 last = e;
             } catch (ResourceAccessException e) {
-                // 커넥션/읽기 타임아웃(SocketTimeoutException)은 RestTemplate 이 여기로 감싸 던진다.
+                // 커넥션/읽기 타임아웃(SocketTimeoutException)은 RestClient 가 여기로 감싸 던진다.
                 last = new KosisApiException("KOSIS 연결 실패 period=" + period, e);
             } catch (RestClientException e) {
                 last = new KosisApiException("KOSIS 호출 실패 period=" + period, e);

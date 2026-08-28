@@ -7,9 +7,10 @@ import SDD.smash.global.metrics.ExternalApiMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 
@@ -51,7 +52,7 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
     /** 사람인 채용검색 경로. */
     private static final String DEFAULT_PATH = "/job-search";
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final SaraminJobPostingParser parser;
     private final SaraminCodeMapper codeMapper;
     private final SaraminApiSpecLoader specLoader;
@@ -69,7 +70,7 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
     private static final String API_NAME = "saramin";
 
     public SaraminJobPostingApiAdapter(
-            RestTemplate restTemplate,
+            RestClient restClient,
             SaraminJobPostingParser parser,
             SaraminCodeMapper codeMapper,
             SaraminApiSpecLoader specLoader,
@@ -80,7 +81,7 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
             @Value("${apis.saramin.retry-delay-ms:1000}") long retryDelayMillis,
             ExternalApiMetrics externalApiMetrics) {
         this.externalApiMetrics = externalApiMetrics;
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.parser = parser;
         this.codeMapper = codeMapper;
         this.specLoader = specLoader;
@@ -150,7 +151,14 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
         RuntimeException last = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
+                // uri 는 이미 인코딩된 URI 객체다. String 오버로드로 넘기면 URI 템플릿으로 재해석돼
+                // access-key 의 %2B 가 %252B 로 재인코딩된다. URI 오버로드를 유지한다.
+                ResponseEntity<String> response = restClient.get()
+                        .uri(uri)
+                        // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
+                        .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
+                        .retrieve()
+                        .toEntity(String.class);
                 externalApiMetrics.success(API_NAME);
                 return response.getBody();
             } catch (RuntimeException e) {
