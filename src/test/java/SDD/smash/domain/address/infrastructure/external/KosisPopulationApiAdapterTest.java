@@ -8,6 +8,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.allOf;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -65,6 +67,21 @@ class KosisPopulationApiAdapterTest {
                 PopulationSnapshot.of(SigunguCode.of("11110"), 140_000, JUNE),
                 PopulationSnapshot.of(SigunguCode.of("11140"), 120_000, JUNE),
                 PopulationSnapshot.of(SigunguCode.of("99999"), 30_000, JUNE));
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("Accept 로 JSON 과 */* 를 함께 보낸다")
+    void sendsJsonAndWildcardAcceptHeader() {
+        // given - RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 응답 협상이 바뀐다
+        server.expect(requestTo(containsString("startPrdDe=202606")))
+                .andExpect(header(HttpHeaders.ACCEPT, "application/json, */*"))
+                .andRespond(withSuccess(fixture("population-202606.json"), MediaType.APPLICATION_JSON));
+
+        // when
+        adapter().fetch(JUNE);
+
+        // then
         server.verify();
     }
 

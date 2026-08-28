@@ -2,6 +2,7 @@ package SDD.smash.global.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
@@ -18,7 +19,10 @@ import java.time.Duration;
 @Configuration
 public class RestClientConfig {
 
+    // @Primary: 전용 RestClient 빈이 늘어날 때 defaultCandidate=false 를 빠뜨려도
+    // 타입 주입하는 어댑터 8개가 한꺼번에 부팅 실패하지 않게 하는 안전판이다.
     @Bean
+    @Primary
     public RestClient restClient() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(5));

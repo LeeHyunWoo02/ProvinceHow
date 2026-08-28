@@ -81,6 +81,8 @@ class SaraminJobPostingApiAdapterTest {
                 .contains("access-key=" + ACCESS_KEY)
                 .contains("start=2")
                 .contains("count=50");
+        // RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 조용히 협상이 바뀐다
+        assertThat(request.getHeader("Accept")).isEqualTo("application/json, */*");
     }
 
     @Test

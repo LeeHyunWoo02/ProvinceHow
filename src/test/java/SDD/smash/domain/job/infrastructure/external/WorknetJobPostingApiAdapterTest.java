@@ -83,6 +83,20 @@ class WorknetJobPostingApiAdapterTest {
     }
 
     @Test
+    @DisplayName("Accept 로 XML 두 종과 */* 를 함께 보낸다 - 워크넷은 XML 로 답한다")
+    void sendsXmlAcceptHeader() throws InterruptedException {
+        // given - RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 파싱 경로가 흔들린다
+        server.enqueue(xml("<wantedRoot><total>0</total></wantedRoot>"));
+
+        // when
+        adapter(AUTH_KEY, 1).fetchPage(1, 100);
+
+        // then
+        assertThat(server.takeRequest().getHeader("Accept"))
+                .isEqualTo("application/xml, text/xml, */*");
+    }
+
+    @Test
     @DisplayName("출력건수는 API 상한(100건)을 넘지 않는다")
     void clampsDisplayToApiMaximum() throws InterruptedException {
         // given

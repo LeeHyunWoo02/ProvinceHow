@@ -15,6 +15,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -28,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
@@ -106,6 +108,21 @@ class LocalDataApiAdapterTest {
         assertThat(collection.readCount()).isEqualTo(2);
         assertThat(collection.operatingCount()).isEqualTo(2);
         assertThat(collection.apiCalls()).isEqualTo(1);
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("Accept 로 JSON 과 */* 를 함께 보낸다")
+    void sendsJsonAndWildcardAcceptHeader() {
+        // given - RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 응답 협상이 바뀐다
+        server.expect(requestTo(url(1, 100)))
+                .andExpect(header(HttpHeaders.ACCEPT, "application/json, */*"))
+                .andRespond(withSuccess(body(0), MediaType.APPLICATION_JSON));
+
+        // when
+        adapter("test-key", 100).collect(RESTAURANT, JONGNO);
+
+        // then
         server.verify();
     }
 

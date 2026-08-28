@@ -112,6 +112,8 @@ class SaraminJobVacancyAdapterTest {
                 .contains("loc_cd=101000")
                 .contains("count=5")
                 .contains("start=0");
+        // RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 조용히 협상이 바뀐다
+        assertThat(request.getHeader("Accept")).isEqualTo("application/json, */*");
     }
 
     private SaraminApiSpecFile specWithRegionMapping(Map<String, String> saraminToOurs) {

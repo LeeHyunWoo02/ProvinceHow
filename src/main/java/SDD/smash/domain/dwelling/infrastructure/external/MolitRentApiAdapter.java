@@ -472,6 +472,11 @@ public class MolitRentApiAdapter implements RentRecordProvider {
     /**
      * 호출 URL. <b>{@code URI} 로 완성해 돌려준다</b> — {@code RestClient} 의 {@code String} 오버로드는
      * 이 문자열을 URI 템플릿으로 재해석해 이미 인코딩된 인증키를 다시 인코딩한다.
+     *
+     * <p><b>잠복 결함</b>: 비인코딩 분기의 {@code build(true)} 는 값을 이미 인코딩된 것으로 보아
+     * {@code +}·{@code /}·{@code =} 를 그대로 내보낸다. data.go.kr 의 Decoding 키에 이 문자가 있으면
+     * 서버가 {@code +} 를 공백으로 읽어 인증이 깨진다. 인코딩 정책 변경은 별도 판단이라 여기서는
+     * 현행 동작을 유지한다.
      */
     private URI buildUrl(HousingType housingType, SigunguCode code, YearMonth yearMonth, int page) {
         String key = (serviceKey == null) ? "" : serviceKey.trim();
