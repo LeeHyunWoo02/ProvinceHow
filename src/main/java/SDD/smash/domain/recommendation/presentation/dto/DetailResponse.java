@@ -39,6 +39,9 @@ public class DetailResponse {
 
     private RegionJobProfileEntry regionJobProfile;
 
+    /** EIS 고용행정통계 요약. 적재된 통계가 없으면 null. */
+    private RegionJobStatisticsEntry jobStatistics;
+
     private Integer totalSupportNum;
     private SupportPolicyListSummary supportList;
 

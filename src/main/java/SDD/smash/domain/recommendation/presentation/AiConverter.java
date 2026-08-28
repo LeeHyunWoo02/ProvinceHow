@@ -9,6 +9,7 @@ import SDD.smash.domain.recommendation.presentation.dto.DwellingTypeEntry;
 import SDD.smash.domain.recommendation.presentation.dto.JobVacancyEntry;
 import SDD.smash.domain.recommendation.presentation.dto.RecommendAggregateResponse;
 import SDD.smash.domain.recommendation.presentation.dto.RegionJobProfileEntry;
+import SDD.smash.domain.recommendation.presentation.dto.RegionJobStatisticsEntry;
 import org.springframework.lang.Nullable;
 
 import java.util.List;
@@ -40,6 +41,7 @@ public class AiConverter {
                 .jobVacancies(dto.getJobVacancies() == null ? List.of()
                         : dto.getJobVacancies().stream().map(JobVacancyEntry::from).toList())
                 .regionJobProfile(RegionJobProfileEntry.from(dto.getRegionJobProfile()))
+                .jobStatistics(RegionJobStatisticsEntry.from(dto.getJobStatistics()))
                 .totalSupportNum(dto.getTotalSupportNum())
                 .supportList(dto.getSupportList())
                 .dwellingInfo(dto.getDwellingInfo())
