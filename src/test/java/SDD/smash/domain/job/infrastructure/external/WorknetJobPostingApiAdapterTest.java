@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.net.URI;
@@ -221,7 +221,7 @@ class WorknetJobPostingApiAdapterTest {
         WorknetApiSpecLoader specLoader = new WorknetApiSpecLoader(
                 new ObjectMapper(), new DefaultResourceLoader(), "classpath:worknet/worknet-job-api.json");
         return new WorknetJobPostingApiAdapter(
-                new RestTemplate(),
+                RestClient.create(),
                 new WorknetJobPostingParser(new XmlMapper()),
                 new WorknetCodeMapper(specLoader),
                 specLoader,
