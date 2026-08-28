@@ -9,9 +9,10 @@ import SDD.smash.domain.job.infrastructure.external.dto.SaraminApiSpecFile;
 import SDD.smash.domain.job.infrastructure.external.dto.SaraminJobSampleRaw;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 
@@ -59,7 +60,7 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
     private static final String MANWON_MARKER = "만";
     private static final int EOK_IN_MANWON = 10_000;
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final SaraminJobSampleParser parser;
     private final SaraminApiSpecLoader specLoader;
     private final SaraminLocCodeResolver locCodeResolver;
@@ -75,7 +76,7 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
     private static final String API_NAME = "saramin";
 
     public SaraminRegionProfileAdapter(
-            RestTemplate restTemplate,
+            RestClient restClient,
             SaraminJobSampleParser parser,
             SaraminApiSpecLoader specLoader,
             SaraminLocCodeResolver locCodeResolver,
@@ -84,7 +85,7 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
             @Value("${apis.saramin.access-key:}") String accessKey,
             ExternalApiMetrics externalApiMetrics) {
         this.externalApiMetrics = externalApiMetrics;
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.parser = parser;
         this.specLoader = specLoader;
         this.locCodeResolver = locCodeResolver;
@@ -114,7 +115,14 @@ public class SaraminRegionProfileAdapter implements RegionJobProfileProvider {
         URI uri = buildUri(spec.request(), locCd, count);
 
         try {
-            ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
+            // uri 는 이미 인코딩된 URI 객체다. String 오버로드로 넘기면 URI 템플릿으로 재해석돼
+            // access-key 의 %2B 가 %252B 로 재인코딩된다. URI 오버로드를 유지한다.
+            ResponseEntity<String> response = restClient.get()
+                    .uri(uri)
+                    // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
+                    .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
+                    .retrieve()
+                    .toEntity(String.class);
             List<SaraminJobSampleRaw> raws = parser.parse(response.getBody(), spec.response());
             List<JobPostingSample> samples = raws.stream().map(this::toSample).toList();
             log.debug("[saramin] 프로필 표본 조회 region={}, locCd={}, 표본={}건", region.value(), locCd, samples.size());

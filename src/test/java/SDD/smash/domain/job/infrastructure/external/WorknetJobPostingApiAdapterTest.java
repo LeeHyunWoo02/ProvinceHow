@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.net.URI;
@@ -80,6 +80,20 @@ class WorknetJobPostingApiAdapterTest {
                 .contains("returnType=XML")
                 .contains("startPage=3")
                 .contains("display=50");
+    }
+
+    @Test
+    @DisplayName("Accept 로 XML 두 종과 */* 를 함께 보낸다 - 워크넷은 XML 로 답한다")
+    void sendsXmlAcceptHeader() throws InterruptedException {
+        // given - RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 파싱 경로가 흔들린다
+        server.enqueue(xml("<wantedRoot><total>0</total></wantedRoot>"));
+
+        // when
+        adapter(AUTH_KEY, 1).fetchPage(1, 100);
+
+        // then
+        assertThat(server.takeRequest().getHeader("Accept"))
+                .isEqualTo("application/xml, text/xml, */*");
     }
 
     @Test
@@ -221,7 +235,7 @@ class WorknetJobPostingApiAdapterTest {
         WorknetApiSpecLoader specLoader = new WorknetApiSpecLoader(
                 new ObjectMapper(), new DefaultResourceLoader(), "classpath:worknet/worknet-job-api.json");
         return new WorknetJobPostingApiAdapter(
-                new RestTemplate(),
+                RestClient.create(),
                 new WorknetJobPostingParser(new XmlMapper()),
                 new WorknetCodeMapper(specLoader),
                 specLoader,

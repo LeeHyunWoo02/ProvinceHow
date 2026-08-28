@@ -16,10 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -57,7 +58,7 @@ import java.util.Set;
  * </ul>
  *
  * <h2>타임아웃과 재시도</h2>
- * HTTP 클라이언트는 {@link LocalDataRestTemplateConfig} 의 <b>전용</b> {@code RestTemplate} 이다
+ * HTTP 클라이언트는 {@link LocalDataHttpClientConfig} 의 <b>전용</b> {@code RestClient} 다
  * (공유 빈보다 읽기 타임아웃이 길다). 재시도 지연은 <b>지수 백오프</b>다 — 기본값 기준
  * 1초 → 2초 → 4초이며 {@code apis.localdata.max-retry-after-ms} 를 상한으로 쓴다. 서버가
  * {@code Retry-After} 를 명시하면 그 값을 우선한다(서버 추정이 우리 추정보다 정확하다).
@@ -93,7 +94,7 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
      */
     private static final Set<String> SUCCESS_RESULT_CODES = Set.of("0", "00", "000");
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final InfraMasterCatalog masterCatalog;
 
@@ -128,7 +129,7 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
     private long nextAllowedAtMillis;
 
     public LocalDataApiAdapter(
-            @Qualifier(LocalDataRestTemplateConfig.LOCALDATA_REST_TEMPLATE) RestTemplate restTemplate,
+            @Qualifier(LocalDataHttpClientConfig.LOCALDATA_REST_CLIENT) RestClient restClient,
             ObjectMapper objectMapper,
             InfraMasterCatalog masterCatalog,
             @Value("${apis.localdata.base-url:https://apis.data.go.kr}") String baseUrl,
@@ -144,7 +145,7 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             ExternalApiMetrics externalApiMetrics,
             CallBudgetMetrics callBudgetMetrics) {
 
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.objectMapper = objectMapper;
         this.masterCatalog = masterCatalog;
         this.baseUrl = baseUrl;
@@ -267,7 +268,14 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
             final int attempt = i;
             acquireSlot();
             try {
-                ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
+                // uri 는 buildUri 가 직접 조립한 이미 인코딩된 URI 다. String 오버로드로 넘기면
+                // URI 템플릿으로 재해석돼 serviceKey 의 %2B 가 %252B 로 재인코딩되고 인증이 깨진다.
+                ResponseEntity<String> response = restClient.get()
+                        .uri(uri)
+                        // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
+                        .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
+                        .retrieve()
+                        .toEntity(String.class);
                 JsonNode parsed = parse(response.getBody());
                 externalApiMetrics.success(API_NAME);
                 return parsed;

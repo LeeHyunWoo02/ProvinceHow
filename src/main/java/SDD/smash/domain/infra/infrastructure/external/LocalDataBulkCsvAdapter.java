@@ -10,12 +10,11 @@ import SDD.smash.domain.infra.infrastructure.master.IndustryMasterEntry;
 import SDD.smash.domain.infra.infrastructure.master.InfraMasterCatalog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.net.URI;
 import java.nio.charset.Charset;
@@ -62,7 +61,7 @@ public class LocalDataBulkCsvAdapter implements InfraFacilityProvider {
 
     private static final Charset CP949 = Charset.forName("MS949");
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final InfraMasterCatalog masterCatalog;
 
     private final String baseUrl;
@@ -73,12 +72,12 @@ public class LocalDataBulkCsvAdapter implements InfraFacilityProvider {
     private long nextAllowedAtMillis;
 
     public LocalDataBulkCsvAdapter(
-            RestTemplate restTemplate,
+            RestClient restClient,
             InfraMasterCatalog masterCatalog,
             @Value("${apis.localdata.bulk-base-url:https://file.localdata.go.kr/file/download}") String baseUrl,
             @Value("${apis.localdata.bulk-referer:https://www.data.go.kr/}") String referer,
             @Value("${apis.localdata.bulk-request-interval-ms:500}") long requestIntervalMs) {
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.masterCatalog = masterCatalog;
         this.baseUrl = baseUrl;
         this.referer = referer;
@@ -112,13 +111,18 @@ public class LocalDataBulkCsvAdapter implements InfraFacilityProvider {
         String slug = slugOf(industryCode);
         URI uri = URI.create(trimTrailingSlash(baseUrl) + "/" + slug + "/info?orgCode=" + regionCode.value());
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.set(HttpHeaders.REFERER, referer);
-
         waitForInterval();
         ResponseEntity<byte[]> response;
         try {
-            response = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
+            // uri 는 이미 조립된 URI 객체다. String 오버로드로 넘기면 URI 템플릿으로 재해석된다.
+            // Referer 가 빠지면 302 로 튕기므로 헤더는 반드시 함께 보낸다.
+            response = restClient.get()
+                    .uri(uri)
+                    .header(HttpHeaders.REFERER, referer)
+                    // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
+                    .accept(MediaType.APPLICATION_OCTET_STREAM, MediaType.ALL)
+                    .retrieve()
+                    .toEntity(byte[].class);
         } catch (RuntimeException e) {
             throw new LocalDataApiException(String.format(
                     "[localdata-bulk] 다운로드 실패 slug=%s, org=%s", slug, regionCode.value()), e);

@@ -6,9 +6,10 @@ import SDD.smash.domain.job.infrastructure.external.dto.WorknetApiSpecFile;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 
@@ -45,7 +46,7 @@ public class WorknetJobPostingApiAdapter implements JobPostingProvider {
     /** 워크넷 채용목록 조회 경로. 공식 엔드포인트다(2026-08-13 실측 200 응답 확인). */
     private static final String DEFAULT_PATH = "/opi/opi/opia/wantedApi.do";
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final WorknetJobPostingParser parser;
     private final WorknetCodeMapper codeMapper;
     private final WorknetApiSpecLoader specLoader;
@@ -57,7 +58,7 @@ public class WorknetJobPostingApiAdapter implements JobPostingProvider {
     private final long retryDelayMillis;
 
     public WorknetJobPostingApiAdapter(
-            RestTemplate restTemplate,
+            RestClient restClient,
             WorknetJobPostingParser parser,
             WorknetCodeMapper codeMapper,
             WorknetApiSpecLoader specLoader,
@@ -66,7 +67,7 @@ public class WorknetJobPostingApiAdapter implements JobPostingProvider {
             @Value("${apis.datagokr.service-key:}") String authKey,
             @Value("${worknet.api.max-attempts:3}") int maxAttempts,
             @Value("${worknet.api.retry-delay-ms:1000}") long retryDelayMillis) {
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.parser = parser;
         this.codeMapper = codeMapper;
         this.specLoader = specLoader;
@@ -136,7 +137,14 @@ public class WorknetJobPostingApiAdapter implements JobPostingProvider {
         RuntimeException last = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                ResponseEntity<String> response = restTemplate.getForEntity(uri, String.class);
+                // uri 는 이미 인코딩된 URI 객체다. String 오버로드로 넘기면 URI 템플릿으로 재해석돼
+                // authKey 의 %2B 가 %252B 로 재인코딩된다. URI 오버로드를 유지한다.
+                ResponseEntity<String> response = restClient.get()
+                        .uri(uri)
+                        // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다. 워크넷은 XML 만 준다.
+                        .accept(MediaType.APPLICATION_XML, MediaType.TEXT_XML, MediaType.ALL)
+                        .retrieve()
+                        .toEntity(String.class);
                 return response.getBody();
             } catch (RuntimeException e) {
                 last = e;
