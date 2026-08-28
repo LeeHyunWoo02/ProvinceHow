@@ -33,9 +33,9 @@ import static SDD.smash.global.batch.seed.SeedStepSpec.SEED_VERSION;
 /**
  * 기동 시 도는 <b>단일</b> 시드 Job. 9개의 {@code ApplicationReadyEvent} 리스너와 {@code @Order} 를 대체한다.
  *
- * <p>인프라만 Step 이 둘이다({@code infraCollectStep} → {@code infraStep}). LOCALDATA 는 하루
- * 호출 예산으로 전국을 다 받을 수 없어 <b>수집</b>과 <b>반영</b>이 분리돼 있고, 수집이 미완성이면
- * 반영 Step 이 스스로 건너뛴다. 관문 구조는 그대로라 Step 이 하나 늘었을 뿐이다.
+ * <p>인프라는 <b>수집</b>({@code infraCollectStep})과 <b>반영</b>({@code infraStep})이 분리돼 있다.
+ * LOCALDATA 는 하루 호출 예산으로 전국을 다 받을 수 없기 때문이다. 기동 Job 에는 반영만 넣고
+ * 수집은 정기 {@code infraJob} 에 맡긴다({@code seed.jobs.infra-collect.enabled} 로 되돌릴 수 있다).
  *
  * <h2>왜 {@code global/batch} 인가</h2>
  * FK 선후관계는 특정 컨텍스트의 관심사가 아니라 <b>애플리케이션 부트스트랩</b>의 관심사다.
@@ -52,7 +52,7 @@ import static SDD.smash.global.batch.seed.SeedStepSpec.SEED_VERSION;
  * <pre>
  * [필수] SidoStep → SigunguStep → jcTopStep → jcMiddleStep
  *          ↳ 하나라도 FAILED 면 Job 을 FAILED 로 끝낸다(뒤 Step 은 돌지 않는다)
- * [외부] populationStep → industryStep → infraCollectStep → infraStep → jobCountStep → dwellingStep
+ * [외부] populationStep → industryStep → infraStep → jobCountStep → dwellingStep
  *          ↳ 각 Step 앞에 {@link SeedStepGate} 가 서서 조건을 못 채우면 건너뛰고 사유를 남긴다
  *          ↳ 실패해도 다음 Step 으로 넘어가고, Job 은 COMPLETED_WITH_EXTERNAL_FAILURES 로 끝난다
  * </pre>
@@ -87,6 +87,8 @@ public class SeedMasterJobConfig {
     @Value("${seed.jobs.population.enabled:true}")       private boolean populationEnabled;
     @Value("${seed.jobs.industry.enabled:true}")         private boolean industryEnabled;
     @Value("${seed.jobs.infra.enabled:true}")            private boolean infraEnabled;
+    // 기동 Job 에서 인프라 "수집" 을 뺀다. 기본값 false 인 이유는 seedStepSpecs() 주석에 있다.
+    @Value("${seed.jobs.infra-collect.enabled:false}")   private boolean infraCollectEnabled;
     @Value("${seed.jobs.job-count.enabled:true}")        private boolean jobCountEnabled;
     @Value("${seed.jobs.dwelling.enabled:true}")         private boolean dwellingEnabled;
 
@@ -123,10 +125,15 @@ public class SeedMasterJobConfig {
         specs.add(new SeedStepSpec("industryStep", SeedGroup.EXTERNAL, industryEnabled, BASE_DATE,
                 configs("infra.industry-master.location", industryMasterLocation), List.of(), null));
 
-        // 인프라는 2-Step 이다. 수집(체크포인트 적립) → 집계·반영 순서를 지킨다.
-        // 수집이 하루 예산에 걸려 미완성으로 끝나도 정상 종료이며, 반영 Step 이 스스로 건너뛴다.
-        specs.add(new SeedStepSpec("infraCollectStep", SeedGroup.EXTERNAL, infraEnabled, BASE_DATE,
-                configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, INDUSTRY), null));
+        // 인프라 수집은 기본적으로 기동 Job 에서 뺀다(seed.jobs.infra-collect.enabled=false).
+        // 수집은 수 시간짜리라 그 사이 재배포가 오면 END_TIME 없는 고아 실행이 반드시 생기고,
+        // 그 행 하나가 이후 seedMasterJob 기동을 전부 막는다 - 좀비의 근본 원인이다.
+        // 매일 03:20 infraJob 이 infraCollectStep → infraStep 을 돌리고 staging 체크포인트가
+        // 여러 날 이어받으므로, 기동에서 수집이 빠져도 데이터는 유실되지 않는다.
+        if (infraCollectEnabled) {
+            specs.add(new SeedStepSpec("infraCollectStep", SeedGroup.EXTERNAL, infraEnabled, BASE_DATE,
+                    configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, INDUSTRY), null));
+        }
 
         specs.add(new SeedStepSpec("infraStep", SeedGroup.EXTERNAL, infraEnabled, BASE_DATE,
                 configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, INDUSTRY), null));

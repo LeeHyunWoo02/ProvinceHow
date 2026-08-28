@@ -1,6 +1,10 @@
 package SDD.smash.global.batch.launch;
 
 import SDD.smash.global.batch.seed.SeedStepSpec;
+import SDD.smash.global.metrics.BatchExecutionMetrics;
+
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,9 +41,26 @@ class BatchLaunchGuardTest {
     @Mock
     Job job;
 
+    @Mock
+    BatchGuard batchGuard;
+
+    private final MeterRegistry registry = new SimpleMeterRegistry();
+
     private final JobParameters parameters = new JobParametersBuilder()
             .addString(SeedStepSpec.BASE_DATE, "2026-08-13")
             .toJobParameters();
+
+    private BatchLaunchGuard guard() {
+        BatchExecutionMetrics metrics = new BatchExecutionMetrics(
+                registry, batchGuard, java.time.Clock.systemDefaultZone(), java.util.List.of());
+        return new BatchLaunchGuard(jobLauncher, jobExplorer, metrics);
+    }
+
+    private double skipped(String reason) {
+        io.micrometer.core.instrument.Counter counter = registry.find("smash.batch.launch.skipped")
+                .tag("job", "dwellingJob").tag("reason", reason).counter();
+        return counter == null ? 0.0d : counter.count();
+    }
 
     @Test
     @DisplayName("이전 실행이 진행 중이면 기동하지 않는다")
@@ -48,10 +69,12 @@ class BatchLaunchGuardTest {
         given(jobExplorer.findRunningJobExecutions("dwellingJob"))
                 .willReturn(Set.of(new JobExecution(1L, parameters)));
 
-        BatchLaunchResult result = new BatchLaunchGuard(jobLauncher, jobExplorer).launch(job, parameters);
+        BatchLaunchResult result = guard().launch(job, parameters);
 
         assertThat(result.status()).isEqualTo(BatchLaunchResult.Status.SKIPPED_RUNNING);
         then(jobLauncher).should(org.mockito.Mockito.never()).run(any(), any());
+        // 건너뜀이 로그 한 줄로만 남아 아무도 몰랐던 것이 사고의 본질이라 카운터로도 남긴다.
+        assertThat(skipped("running")).isEqualTo(1.0d);
     }
 
     @Test
@@ -62,7 +85,7 @@ class BatchLaunchGuardTest {
         willThrow(new JobExecutionAlreadyRunningException("running"))
                 .given(jobLauncher).run(job, parameters);
 
-        BatchLaunchResult result = new BatchLaunchGuard(jobLauncher, jobExplorer).launch(job, parameters);
+        BatchLaunchResult result = guard().launch(job, parameters);
 
         assertThat(result.status()).isEqualTo(BatchLaunchResult.Status.SKIPPED_RUNNING);
     }
@@ -75,7 +98,7 @@ class BatchLaunchGuardTest {
         willThrow(new JobInstanceAlreadyCompleteException("done"))
                 .given(jobLauncher).run(job, parameters);
 
-        BatchLaunchResult result = new BatchLaunchGuard(jobLauncher, jobExplorer).launch(job, parameters);
+        BatchLaunchResult result = guard().launch(job, parameters);
 
         assertThat(result.status()).isEqualTo(BatchLaunchResult.Status.SKIPPED_ALREADY_COMPLETE);
     }
@@ -87,10 +110,11 @@ class BatchLaunchGuardTest {
         given(jobExplorer.findRunningJobExecutions("dwellingJob")).willReturn(Set.of());
         willThrow(new IllegalStateException("boom")).given(jobLauncher).run(job, parameters);
 
-        BatchLaunchResult result = new BatchLaunchGuard(jobLauncher, jobExplorer).launch(job, parameters);
+        BatchLaunchResult result = guard().launch(job, parameters);
 
         assertThat(result.status()).isEqualTo(BatchLaunchResult.Status.FAILED);
         assertThat(result.reason()).isEqualTo("boom");
+        assertThat(skipped("launch_failed")).isEqualTo(1.0d);
     }
 
     @Test
@@ -101,7 +125,7 @@ class BatchLaunchGuardTest {
         given(jobExplorer.findRunningJobExecutions("dwellingJob")).willReturn(Set.of());
         given(jobLauncher.run(job, parameters)).willReturn(execution);
 
-        BatchLaunchResult result = new BatchLaunchGuard(jobLauncher, jobExplorer).launch(job, parameters);
+        BatchLaunchResult result = guard().launch(job, parameters);
 
         assertThat(result.isLaunched()).isTrue();
         assertThat(result.jobExecution()).contains(execution);

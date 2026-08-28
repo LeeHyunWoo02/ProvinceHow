@@ -9,6 +9,8 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -131,6 +133,46 @@ public class BatchGuard {
         params.put("parameterValue", parameterValue);
 
         return count(sql, new MapSqlParameterSource(params)) > 0;
+    }
+
+    /**
+     * 아직 끝나지 않은({@code END_TIME IS NULL}) 실행 전부.
+     *
+     * <p>하트비트로 {@code MAX(STEP_EXECUTION.LAST_UPDATED)} 를 함께 가져온다. Job 행의
+     * {@code LAST_UPDATED} 는 시작/종료 때만 갱신되므로 그것으로 나이를 재면 정상적으로 몇 시간
+     * 도는 배치가 고아로 오판된다. 스텝이 아직 하나도 없으면 {@code CREATE_TIME} 이 기준이다.
+     *
+     * <p>조회 실패는 다른 판정과 같은 fail-open 이다 — 빈 목록을 돌려주고 아무것도 정리하지 않는다.
+     */
+    public List<RunningJobExecution> findRunningExecutions() {
+        String sql = """
+                SELECT je.JOB_EXECUTION_ID AS JOB_EXECUTION_ID,
+                       ji.JOB_NAME AS JOB_NAME,
+                       COALESCE(je.START_TIME, je.CREATE_TIME) AS STARTED_AT,
+                       COALESCE((SELECT MAX(se.LAST_UPDATED)
+                                   FROM %sSTEP_EXECUTION se
+                                  WHERE se.JOB_EXECUTION_ID = je.JOB_EXECUTION_ID),
+                                je.CREATE_TIME) AS HEARTBEAT_AT
+                  FROM %sJOB_EXECUTION je
+                  JOIN %sJOB_INSTANCE ji ON ji.JOB_INSTANCE_ID = je.JOB_INSTANCE_ID
+                 WHERE je.END_TIME IS NULL
+                """.formatted(tablePrefix, tablePrefix, tablePrefix);
+
+        try {
+            return metaJdbcTemplate.query(sql, new MapSqlParameterSource(), (rs, rowNum) ->
+                    new RunningJobExecution(
+                            rs.getLong("JOB_EXECUTION_ID"),
+                            rs.getString("JOB_NAME"),
+                            toLocalDateTime(rs.getTimestamp("STARTED_AT")),
+                            toLocalDateTime(rs.getTimestamp("HEARTBEAT_AT"))));
+        } catch (DataAccessException e) {
+            log.warn("[batch] 진행 중 실행 조회 실패 - 정리 대상이 없는 것으로 간주한다. reason={}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private LocalDateTime toLocalDateTime(Timestamp timestamp) {
+        return timestamp == null ? null : timestamp.toLocalDateTime();
     }
 
     private long count(String sql, MapSqlParameterSource params) {
