@@ -36,6 +36,12 @@ public class RegionJobStatisticsRepositoryAdapter implements RegionJobStatistics
     }
 
     @Override
+    public List<RegionJobStatistics> findAllByMonthAndSigunguCode(StatisticsMonth month, SigunguCode sigunguCode) {
+        return toDomain(regionJobStatisticsJpaRepository
+                .findAllByStatMonthAndSigunguCode(month.text(), sigunguCode.value()));
+    }
+
+    @Override
     public Optional<RegionJobStatistics> findOne(RegionJobStatisticsKey key) {
         return regionJobStatisticsJpaRepository
                 .findBySigunguCodeAndJobTopCodeAndStatMonth(

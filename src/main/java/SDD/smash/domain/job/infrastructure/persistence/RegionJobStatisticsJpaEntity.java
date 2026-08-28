@@ -17,13 +17,13 @@ import lombok.NoArgsConstructor;
 /**
  * {@code region_job_statistics} 테이블 매핑. 시군구 × 직종 대분류 × 기준월의 EIS 고용행정통계.
  *
- * <p><b>인덱스를 하나만 선언한다</b>(persistence-conventions §2.5 — 중복 인덱스는 쓰기 비용만 늘린다).
+ * <p>인덱스는 조회 경로마다 하나씩 둔다(중복 인덱스는 쓰기 비용만 늘린다 — persistence-conventions §2.5).
  * <ul>
- *   <li>{@code (stat_month, job_top_code)} 하나가 최신월 탐색({@code MAX(stat_month)}),
- *       월 전체 조회, 월+직종 조회를 모두 커버한다. {@code stat_month} 단독 인덱스는
- *       이 인덱스의 leftmost prefix 라 중복이므로 붙이지 않는다.</li>
- *   <li>시계열 조회({@code WHERE sigungu_code = ? AND job_top_code = ?})는 유니크 제약
- *       {@code (sigungu_code, job_top_code, stat_month)} 의 prefix 로 커버된다.</li>
+ *   <li>{@code (stat_month, job_top_code)} — 최신월 탐색({@code MAX(stat_month)}), 월 전체·월+직종 조회.</li>
+ *   <li>{@code (stat_month, sigungu_code)} — 지역 상세 전용. 없으면 유니크 제약이 {@code sigungu_code}
+ *       prefix 로만 걸려 그 시군구의 전 기간 468행을 훑는다. MySQL 8.0 실측(123,552행)으로
+ *       스캔 468 → 13 엔트리, cost 118 → 4.55. 월 1회 3,432행 적재의 쓰기 비용 증가는 측정 오차 이하.</li>
+ *   <li>시계열 조회({@code sigungu_code + job_top_code})는 유니크 제약의 prefix 로 커버된다.</li>
  * </ul>
  */
 @Entity
@@ -34,7 +34,8 @@ import lombok.NoArgsConstructor;
                         columnNames = {"sigungu_code", "job_top_code", "stat_month"})
         },
         indexes = {
-                @Index(name = "idx_region_job_stat_month_job", columnList = "stat_month, job_top_code")
+                @Index(name = "idx_region_job_stat_month_job", columnList = "stat_month, job_top_code"),
+                @Index(name = "idx_region_job_stat_month_sigungu", columnList = "stat_month, sigungu_code")
         }
 )
 @Getter

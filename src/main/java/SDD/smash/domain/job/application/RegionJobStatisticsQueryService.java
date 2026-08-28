@@ -52,6 +52,22 @@ public class RegionJobStatisticsQueryService {
                 .map(RegionJobStatisticsView::from);
     }
 
+    /**
+     * 최신월 한 시군구의 전 직종 대분류 통계. 적재 전이면 빈 리스트다.
+     *
+     * <p>지역 상세가 쓰는 경로다. 전국을 읽어 메모리에서 거르면 13행을 얻으려고 3,432행을
+     * 읽게 되므로 조건을 쿼리로 내린다.
+     */
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    public List<RegionJobStatisticsView> getLatestStatisticsOfRegion(SigunguCode sigunguCode) {
+        return regionJobStatisticsRepository.findLatestMonth()
+                .map(month -> regionJobStatisticsRepository.findAllByMonthAndSigunguCode(month, sigunguCode))
+                .orElseGet(List::of)
+                .stream()
+                .map(RegionJobStatisticsView::from)
+                .toList();
+    }
+
     /** 시군구 하나의 월별 시계열. 오래된 월이 앞에 온다. */
     @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
     public List<RegionJobStatisticsView> getSeriesOf(SigunguCode sigunguCode, JobCode jobCode) {
