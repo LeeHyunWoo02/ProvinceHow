@@ -21,6 +21,9 @@ public interface RegionJobStatisticsRepository {
     /** 해당 월의 특정 직종 통계 */
     List<RegionJobStatistics> findAllByMonthAndJobCode(StatisticsMonth month, JobCode jobCode);
 
+    /** 해당 월의 특정 시군구 통계(전 직종 대분류). 지역 상세가 쓰는 경로다. */
+    List<RegionJobStatistics> findAllByMonthAndSigunguCode(StatisticsMonth month, SigunguCode sigunguCode);
+
     /** 단건 조회 */
     Optional<RegionJobStatistics> findOne(RegionJobStatisticsKey key);
 

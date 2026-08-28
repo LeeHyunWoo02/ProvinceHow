@@ -16,6 +16,8 @@ public interface RegionJobStatisticsJpaRepository extends JpaRepository<RegionJo
 
     List<RegionJobStatisticsJpaEntity> findAllByStatMonthAndJobTopCode(String statMonth, String jobTopCode);
 
+    List<RegionJobStatisticsJpaEntity> findAllByStatMonthAndSigunguCode(String statMonth, String sigunguCode);
+
     Optional<RegionJobStatisticsJpaEntity> findBySigunguCodeAndJobTopCodeAndStatMonth(
             String sigunguCode, String jobTopCode, String statMonth);
 

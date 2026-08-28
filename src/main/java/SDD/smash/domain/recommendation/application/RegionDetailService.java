@@ -100,13 +100,10 @@ public class RegionDetailService {
      * 최신 기준월의 고용행정통계를 시군구 단위로 접는다. 적재 전이면 {@code null} 이다
      * ({@code regionJobProfile} 과 같은 규칙 — 없는 값을 0 으로 채우지 않는다).
      *
-     * <p>job 이 여는 조회는 "최신월 전 시군구" 단위라 여기서 해당 시군구만 걸러 쓴다.
+     * <p>job 이 시군구 단위 조회를 열어 준다. 전국을 읽어 메모리에서 거르지 않는다.
      */
     private RegionJobStatisticsSummary jobStatisticsOf(SigunguCode sigunguCode) {
         return RegionJobStatisticsSummary.from(
-                regionJobStatisticsQueryService.getLatestStatistics(null)   // null = 직종 전체
-                        .stream()
-                        .filter(view -> sigunguCode.equals(view.sigunguCode()))
-                        .toList());
+                regionJobStatisticsQueryService.getLatestStatisticsOfRegion(sigunguCode));
     }
 }

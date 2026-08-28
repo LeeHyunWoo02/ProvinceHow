@@ -99,6 +99,35 @@ class RegionJobStatisticsQueryServiceTest {
         assertThat(view.get().validOpenings()).isEqualTo(200L);
     }
 
+    @Test
+    @DisplayName("시군구 전 직종 조회는 최신월을 찾아 그 시군구 조건으로만 읽는다")
+    void readsEveryJobCodeOfSingleRegionOnLatestMonth() {
+        given(regionJobStatisticsRepository.findLatestMonth()).willReturn(Optional.of(LATEST));
+        given(regionJobStatisticsRepository.findAllByMonthAndSigunguCode(LATEST, SigunguCode.of("11110")))
+                .willReturn(List.of(
+                        statistics("11110", "01", 200, 1_000),
+                        statistics("11110", "02", 50, 400)));
+
+        List<RegionJobStatisticsView> views = service.getLatestStatisticsOfRegion(SigunguCode.of("11110"));
+
+        assertThat(views).hasSize(2);
+        assertThat(views).allSatisfy(view -> assertThat(view.statisticsMonth()).isEqualTo("2026-07"));
+        // 전국을 읽어 메모리에서 거르지 않는다
+        then(regionJobStatisticsRepository).should(org.mockito.Mockito.never())
+                .findAllByMonth(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    @DisplayName("적재 전이면 시군구 전 직종 조회도 저장소를 건드리지 않고 빈 결과를 준다")
+    void returnsEmptyRegionStatisticsWhenNothingLoaded() {
+        given(regionJobStatisticsRepository.findLatestMonth()).willReturn(Optional.empty());
+
+        assertThat(service.getLatestStatisticsOfRegion(SigunguCode.of("11110"))).isEmpty();
+        then(regionJobStatisticsRepository).should(org.mockito.Mockito.never())
+                .findAllByMonthAndSigunguCode(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any());
+    }
+
     private RegionJobStatistics statistics(String sigunguCode, String jobCode,
                                            long validOpenings, long validSeekers) {
         return RegionJobStatistics.reconstitute(

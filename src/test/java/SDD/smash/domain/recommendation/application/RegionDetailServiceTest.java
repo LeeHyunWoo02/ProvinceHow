@@ -27,6 +27,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 /**
  * 고용행정통계가 지역 상세에 실리는 경로를 확인한다. 다른 컨텍스트 Service 는 전부 목이고
@@ -52,12 +54,11 @@ class RegionDetailServiceTest {
     @Test
     @DisplayName("고용행정통계가 있으면 기준월과 함께 시군구 합계로 접혀 실린다")
     void carriesJobStatisticsFoldedIntoSigunguTotals() {
-        // given - 같은 시군구의 직종 대분류 2행 + 다른 시군구 1행
+        // given - 그 시군구의 직종 대분류 2행
         givenRegionCode();
-        given(regionJobStatisticsQueryService.getLatestStatistics(null)).willReturn(List.of(
+        given(regionJobStatisticsQueryService.getLatestStatisticsOfRegion(GANGNAM)).willReturn(List.of(
                 view(GANGNAM, "01", 100L, 400L, 30L, 300L, 1_000L),
-                view(GANGNAM, "02", 50L, 200L, 20L, 200L, 1_000L),
-                view(SigunguCode.of("11110"), "01", 9L, 9L, 9L, 9L, 9L)));
+                view(GANGNAM, "02", 50L, 200L, 20L, 200L, 1_000L)));
 
         // when
         RegionDetailInfo detail = regionDetailService.details(GANGNAM, null);
@@ -79,7 +80,7 @@ class RegionDetailServiceTest {
     void leavesJobOpeningRatioNullWhenNoSeekers() {
         // given
         givenRegionCode();
-        given(regionJobStatisticsQueryService.getLatestStatistics(null))
+        given(regionJobStatisticsQueryService.getLatestStatisticsOfRegion(GANGNAM))
                 .willReturn(List.of(view(GANGNAM, "01", 10L, 0L, 0L, 40L, 0L)));
 
         // when
@@ -95,7 +96,7 @@ class RegionDetailServiceTest {
     void leavesJobStatisticsNullWhenNotLoaded() {
         // given
         givenRegionCode();
-        given(regionJobStatisticsQueryService.getLatestStatistics(null)).willReturn(List.of());
+        given(regionJobStatisticsQueryService.getLatestStatisticsOfRegion(GANGNAM)).willReturn(List.of());
 
         // when
         RegionDetailInfo detail = regionDetailService.details(GANGNAM, null);
@@ -106,18 +107,18 @@ class RegionDetailServiceTest {
     }
 
     @Test
-    @DisplayName("다른 시군구 통계만 있으면 jobStatistics 가 null 이다")
-    void leavesJobStatisticsNullWhenOtherRegionsOnly() {
+    @DisplayName("요청한 시군구만 조회하고 전국 통계는 읽지 않는다")
+    void queriesOnlyRequestedRegionInsteadOfNationwide() {
         // given
         givenRegionCode();
-        given(regionJobStatisticsQueryService.getLatestStatistics(null))
-                .willReturn(List.of(view(SigunguCode.of("11110"), "01", 9L, 9L, 9L, 9L, 9L)));
+        given(regionJobStatisticsQueryService.getLatestStatisticsOfRegion(GANGNAM)).willReturn(List.of());
 
         // when
-        RegionDetailInfo detail = regionDetailService.details(GANGNAM, null);
+        regionDetailService.details(GANGNAM, null);
 
-        // then
-        assertThat(detail.getJobStatistics()).isNull();
+        // then - 전국 3,432행을 받아 메모리에서 거르지 않는다
+        then(regionJobStatisticsQueryService).should().getLatestStatisticsOfRegion(GANGNAM);
+        then(regionJobStatisticsQueryService).should(never()).getLatestStatistics(null);
     }
 
     @Test
@@ -125,7 +126,7 @@ class RegionDetailServiceTest {
     void keepsJobVacanciesAsEmptyList() {
         // given
         givenRegionCode();
-        given(regionJobStatisticsQueryService.getLatestStatistics(null)).willReturn(List.of());
+        given(regionJobStatisticsQueryService.getLatestStatisticsOfRegion(GANGNAM)).willReturn(List.of());
 
         // when
         RegionDetailInfo detail = regionDetailService.details(GANGNAM, null);
