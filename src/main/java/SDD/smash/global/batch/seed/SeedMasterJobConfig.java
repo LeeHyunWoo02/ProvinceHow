@@ -52,7 +52,7 @@ import static SDD.smash.global.batch.seed.SeedStepSpec.SEED_VERSION;
  * <pre>
  * [필수] SidoStep → SigunguStep → jcTopStep → jcMiddleStep
  *          ↳ 하나라도 FAILED 면 Job 을 FAILED 로 끝낸다(뒤 Step 은 돌지 않는다)
- * [외부] populationStep → industryStep → infraStep → jobCountStep → dwellingStep
+ * [외부] populationStep → industryStep → infraStep → jobCountStep → regionJobStatisticsStep → dwellingStep
  *          ↳ 각 Step 앞에 {@link SeedStepGate} 가 서서 조건을 못 채우면 건너뛰고 사유를 남긴다
  *          ↳ 실패해도 다음 Step 으로 넘어가고, Job 은 COMPLETED_WITH_EXTERNAL_FAILURES 로 끝난다
  * </pre>
@@ -79,6 +79,7 @@ public class SeedMasterJobConfig {
     private String industryMasterLocation;
     @Value("${apis.datagokr.service-key:}") private String dataGoKrServiceKey;
     @Value("${apis.molit.service-key:}")  private String molitServiceKey;
+    @Value("${regionJobStatistics.filePath:}") private String regionJobStatisticsFilePath;
 
     @Value("${seed.jobs.sido.enabled:true}")             private boolean sidoEnabled;
     @Value("${seed.jobs.sigungu.enabled:true}")          private boolean sigunguEnabled;
@@ -90,6 +91,7 @@ public class SeedMasterJobConfig {
     // 기동 Job 에서 인프라 "수집" 을 뺀다. 기본값 false 인 이유는 seedStepSpecs() 주석에 있다.
     @Value("${seed.jobs.infra-collect.enabled:false}")   private boolean infraCollectEnabled;
     @Value("${seed.jobs.job-count.enabled:true}")        private boolean jobCountEnabled;
+    @Value("${seed.jobs.region-job-statistics.enabled:true}") private boolean regionJobStatisticsEnabled;
     @Value("${seed.jobs.dwelling.enabled:true}")         private boolean dwellingEnabled;
 
     public SeedMasterJobConfig(JobRepository jobRepository, BatchGuard batchGuard,
@@ -141,6 +143,11 @@ public class SeedMasterJobConfig {
         specs.add(new SeedStepSpec("jobCountStep", SeedGroup.EXTERNAL, jobCountEnabled, BASE_DATE,
                 configs("apis.datagokr.service-key", dataGoKrServiceKey), List.of(SIGUNGU, JOB_CODE_MIDDLE), null));
 
+        // 직종 대분류(jcTopStep) 뒤에 와야 한다 - Processor 가 job_code_top 에 없는 코드를 건너뛴다.
+        specs.add(new SeedStepSpec("regionJobStatisticsStep", SeedGroup.EXTERNAL, regionJobStatisticsEnabled,
+                SEED_VERSION, configs("regionJobStatistics.filePath", regionJobStatisticsFilePath),
+                List.of(SIGUNGU, JOB_CODE_TOP), null));
+
         specs.add(new SeedStepSpec("dwellingStep", SeedGroup.EXTERNAL, dwellingEnabled, BASE_MONTH,
                 configs("apis.molit.service-key", molitServiceKey), List.of(SIGUNGU), null));
 
@@ -170,6 +177,7 @@ public class SeedMasterJobConfig {
                              @Qualifier("infraCollectStep") Step infraCollectStep,
                              @Qualifier("infraStep") Step infraStep,
                              @Qualifier("jobCountStep") Step jobCountStep,
+                             @Qualifier("regionJobStatisticsStep") Step regionJobStatisticsStep,
                              @Qualifier("dwellingStep") Step dwellingStep) {
 
         Map<String, Step> stepsByName = new LinkedHashMap<>();
@@ -182,6 +190,7 @@ public class SeedMasterJobConfig {
         stepsByName.put("infraCollectStep", infraCollectStep);
         stepsByName.put("infraStep", infraStep);
         stepsByName.put("jobCountStep", jobCountStep);
+        stepsByName.put("regionJobStatisticsStep", regionJobStatisticsStep);
         stepsByName.put("dwellingStep", dwellingStep);
 
         JobBuilder builder = new JobBuilder(SEED_MASTER_JOB, jobRepository);
