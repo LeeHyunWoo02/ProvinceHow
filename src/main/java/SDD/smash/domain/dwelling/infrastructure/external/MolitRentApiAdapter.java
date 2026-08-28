@@ -20,10 +20,11 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.SocketTimeoutException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -83,7 +84,7 @@ public class MolitRentApiAdapter implements RentRecordProvider {
     /** 예산 리셋 기준 시간대. 공공데이터포털의 일일 트래픽이 한국 시간 자정에 리셋된다. */
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
-    private final RestTemplate restTemplate;
+    private final RestClient restClient;
     private final ObjectMapper objectMapper;
     private final XmlMapper xmlMapper;
 
@@ -149,11 +150,11 @@ public class MolitRentApiAdapter implements RentRecordProvider {
     /** 메트릭의 api 태그 값. */
     private static final String API_NAME = "molit";
 
-    public MolitRentApiAdapter(RestTemplate restTemplate,
+    public MolitRentApiAdapter(RestClient restClient,
                                ObjectMapper objectMapper, XmlMapper xmlMapper,
                                ExternalApiMetrics externalApiMetrics,
                                CallBudgetMetrics callBudgetMetrics) {
-        this.restTemplate = restTemplate;
+        this.restClient = restClient;
         this.objectMapper = objectMapper;
         this.xmlMapper = xmlMapper;
         this.externalApiMetrics = externalApiMetrics;
@@ -441,10 +442,19 @@ public class MolitRentApiAdapter implements RentRecordProvider {
     // ------------------------------------------------------------------ HTTP
 
     private MolitApiResponse call(HousingType housingType, SigunguCode code, YearMonth yearMonth, int page) {
-        String url = buildUrl(housingType, code, yearMonth, page);
+        URI url = buildUrl(housingType, code, yearMonth, page);
         acquireSlot();
         try {
-            ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+            // url 은 buildUrl 이 완성한 URI 다. String 오버로드로 넘기면 URI 템플릿으로 재해석돼
+            // 이미 인코딩된 serviceKey 의 %2B 가 %252B 로 재인코딩된다. URI 오버로드를 유지한다.
+            ResponseEntity<String> response = restClient.get()
+                    .uri(url)
+                    // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
+                    // _type=json 으로 JSON 을 요청하지만 오류는 XML 로 오므로 */* 를 함께 보낸다.
+                    .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
+                    .retrieve()
+                    .toEntity(String.class);
+            // JSON/XML 폴백 판정에 응답 헤더가 필요하다. toEntity 가 헤더를 그대로 보존한다.
             JsonNode root = parseJsonWithXmlFallback(response.getHeaders().getContentType(), response.getBody());
             MolitApiResponse parsed = MolitApiResponse.of(root);
             externalApiMetrics.success(API_NAME);
@@ -452,14 +462,23 @@ public class MolitRentApiAdapter implements RentRecordProvider {
         } catch (RuntimeException e) {
             externalApiMetrics.failure(API_NAME);
             log.error("[MOLIT] 호출 실패 housingType={}, sigungu={}, ym={}, page={}, url={}",
-                    housingType, code.value(), yearMonth, page, mask(url), e);
+                    housingType, code.value(), yearMonth, page, mask(url.toString()), e);
             throw e;
         } finally {
             concurrencyPermits.release();
         }
     }
 
-    private String buildUrl(HousingType housingType, SigunguCode code, YearMonth yearMonth, int page) {
+    /**
+     * 호출 URL. <b>{@code URI} 로 완성해 돌려준다</b> — {@code RestClient} 의 {@code String} 오버로드는
+     * 이 문자열을 URI 템플릿으로 재해석해 이미 인코딩된 인증키를 다시 인코딩한다.
+     *
+     * <p><b>잠복 결함</b>: 비인코딩 분기의 {@code build(true)} 는 값을 이미 인코딩된 것으로 보아
+     * {@code +}·{@code /}·{@code =} 를 그대로 내보낸다. data.go.kr 의 Decoding 키에 이 문자가 있으면
+     * 서버가 {@code +} 를 공백으로 읽어 인증이 깨진다. 인코딩 정책 변경은 별도 판단이라 여기서는
+     * 현행 동작을 유지한다.
+     */
+    private URI buildUrl(HousingType housingType, SigunguCode code, YearMonth yearMonth, int page) {
         String key = (serviceKey == null) ? "" : serviceKey.trim();
 
         UriComponentsBuilder builder = UriComponentsBuilder
@@ -475,9 +494,10 @@ public class MolitRentApiAdapter implements RentRecordProvider {
         if (looksEncoded(key)) {
             // 이미 인코딩된 키를 다시 인코딩하면 %2B 가 %252B 가 되어 인증이 깨진다.
             String template = builder.queryParam(SERVICE_KEY_PARAM, "{sk}").build(false).toUriString();
-            return template.replace("{sk}", key);
+            // URI.create 는 파싱만 한다. 문자열이 그대로 wire 로 나간다.
+            return URI.create(template.replace("{sk}", key));
         }
-        return builder.queryParam(SERVICE_KEY_PARAM, key).build(true).toUriString();
+        return URI.create(builder.queryParam(SERVICE_KEY_PARAM, key).build(true).toUriString());
     }
 
     /**

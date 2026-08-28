@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.net.URI;
@@ -81,6 +81,8 @@ class SaraminJobPostingApiAdapterTest {
                 .contains("access-key=" + ACCESS_KEY)
                 .contains("start=2")
                 .contains("count=50");
+        // RestClient 는 Accept 를 자동으로 채우지 않는다. 지우면 조용히 협상이 바뀐다
+        assertThat(request.getHeader("Accept")).isEqualTo("application/json, */*");
     }
 
     @Test
@@ -170,7 +172,7 @@ class SaraminJobPostingApiAdapterTest {
         SaraminApiSpecLoader specLoader = new SaraminApiSpecLoader(
                 new ObjectMapper(), new DefaultResourceLoader(), "classpath:saramin/saramin-job-api.json");
         return new SaraminJobPostingApiAdapter(
-                new RestTemplate(),
+                RestClient.create(),
                 new SaraminJobPostingParser(new ObjectMapper()),
                 new SaraminCodeMapper(specLoader),
                 specLoader,
