@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.net.URI;
@@ -170,7 +170,7 @@ class SaraminJobPostingApiAdapterTest {
         SaraminApiSpecLoader specLoader = new SaraminApiSpecLoader(
                 new ObjectMapper(), new DefaultResourceLoader(), "classpath:saramin/saramin-job-api.json");
         return new SaraminJobPostingApiAdapter(
-                new RestTemplate(),
+                RestClient.create(),
                 new SaraminJobPostingParser(new ObjectMapper()),
                 new SaraminCodeMapper(specLoader),
                 specLoader,

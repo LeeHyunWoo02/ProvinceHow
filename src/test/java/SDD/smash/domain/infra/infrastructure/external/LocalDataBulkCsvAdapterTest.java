@@ -6,7 +6,7 @@ import SDD.smash.domain.infra.domain.model.LocalDataRegionCode;
 import SDD.smash.domain.infra.infrastructure.master.InfraMasterCatalog;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.util.List;
 
@@ -19,7 +19,7 @@ class LocalDataBulkCsvAdapterTest {
     private static final LocalDataRegionCode JONGNO = LocalDataRegionCode.of("3000000");
 
     private final LocalDataBulkCsvAdapter adapter = new LocalDataBulkCsvAdapter(
-            new RestTemplate(), mock(InfraMasterCatalog.class),
+            RestClient.create(), mock(InfraMasterCatalog.class),
             "https://file.localdata.go.kr/file/download", "https://www.data.go.kr/", 0);
 
     /** 실측 헤더(일반음식점 39컬럼)의 앞부분 순서를 그대로 쓴다. */
@@ -115,7 +115,7 @@ class LocalDataBulkCsvAdapterTest {
         assertThat(adapter.isReady()).isTrue();
 
         LocalDataBulkCsvAdapter withoutReferer = new LocalDataBulkCsvAdapter(
-                new RestTemplate(), mock(InfraMasterCatalog.class),
+                RestClient.create(), mock(InfraMasterCatalog.class),
                 "https://file.localdata.go.kr/file/download", "  ", 0);
 
         assertThat(withoutReferer.isReady()).isFalse();

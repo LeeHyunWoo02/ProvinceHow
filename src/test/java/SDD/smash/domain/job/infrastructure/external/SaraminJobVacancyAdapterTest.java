@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.util.List;
@@ -122,7 +122,7 @@ class SaraminJobVacancyAdapterTest {
     private SaraminJobVacancyAdapter adapter(String accessKey, SaraminApiSpecFile spec) {
         SaraminApiSpecLoader specLoader = new FixedSpecLoader(spec);
         return new SaraminJobVacancyAdapter(
-                new RestTemplate(),
+                RestClient.create(),
                 new SaraminJobVacancyParser(new ObjectMapper()),
                 specLoader,
                 new SaraminLocCodeResolver(specLoader),

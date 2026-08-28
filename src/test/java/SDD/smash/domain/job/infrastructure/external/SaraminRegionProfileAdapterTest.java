@@ -15,7 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.DefaultResourceLoader;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.io.IOException;
 import java.util.List;
@@ -141,7 +141,7 @@ class SaraminRegionProfileAdapterTest {
     private SaraminRegionProfileAdapter adapter(String accessKey, SaraminApiSpecFile spec) {
         SaraminApiSpecLoader specLoader = new FixedSpecLoader(spec);
         return new SaraminRegionProfileAdapter(
-                new RestTemplate(),
+                RestClient.create(),
                 new SaraminJobSampleParser(new ObjectMapper()),
                 specLoader,
                 new SaraminLocCodeResolver(specLoader),

@@ -17,7 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.RestClient;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -46,14 +46,16 @@ class LocalDataApiAdapterTest {
     private static final IndustryCode RESTAURANT = IndustryCode.of("RESTAURANT");
     private static final LocalDataRegionCode JONGNO = LocalDataRegionCode.of("3000000");
 
-    private RestTemplate restTemplate;
+    private RestClient restClient;
     private MockRestServiceServer server;
     private InfraMasterCatalog masterCatalog;
 
     @BeforeEach
     void setUp() {
-        restTemplate = new RestTemplate();
-        server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(false).build();
+        // RestClient 는 빌더에 바인딩한 뒤 build() 한 인스턴스를 어댑터에 넘겨야 목 서버가 붙는다.
+        RestClient.Builder builder = RestClient.builder();
+        server = MockRestServiceServer.bindTo(builder).ignoreExpectOrder(false).build();
+        restClient = builder.build();
 
         masterCatalog = mock(InfraMasterCatalog.class);
         IndustryMasterEntry entry = new IndustryMasterEntry(RESTAURANT, "일반음식점", Major.FOOD,
@@ -63,7 +65,7 @@ class LocalDataApiAdapterTest {
     }
 
     private LocalDataApiAdapter adapter(String serviceKey, int pageSize) {
-        return new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
+        return new LocalDataApiAdapter(restClient, new ObjectMapper(), masterCatalog,
                 BASE_URL, serviceKey, pageSize, 10, 0, 9000, 1, 0, 2, 0,
                 new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
     }
@@ -322,7 +324,7 @@ class LocalDataApiAdapterTest {
         server.expect(requestTo(url(1, 100))).andRespond(withServerError());
         server.expect(requestTo(url(1, 100))).andRespond(withServerError());
 
-        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
+        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restClient, new ObjectMapper(), masterCatalog,
                 BASE_URL, "test-key", 100, 10, 0, 9000, 2, 0, 2, 0,
                 new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
 
@@ -338,7 +340,7 @@ class LocalDataApiAdapterTest {
                 .andRespond(withSuccess(body(0), MediaType.APPLICATION_JSON));
 
         // 예산 1회. 첫 수집은 통과하고 두 번째는 호출 전에 막힌다.
-        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
+        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restClient, new ObjectMapper(), masterCatalog,
                 BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0,
                 new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
 
@@ -356,7 +358,7 @@ class LocalDataApiAdapterTest {
     @DisplayName("호출 예산은 날짜가 바뀌면 리셋돼 다음 날 수집이 이어진다")
     void resetsCallBudgetWhenDayChanges() {
         // given — 예산 1회짜리 어댑터가 오늘 예산을 다 썼다
-        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
+        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restClient, new ObjectMapper(), masterCatalog,
                 BASE_URL, "test-key", 100, 10, 0, 1, 1, 0, 2, 0,
                 new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
         LocalDate day1 = LocalDate.of(2026, 8, 19);
@@ -393,6 +395,32 @@ class LocalDataApiAdapterTest {
         assertThat(masked).doesNotContain("SUPER-SECRET");
         assertThat(masked).contains("serviceKey=****");
         assertThat(masked).contains("pageNo=1");
+    }
+
+    @Test
+    @DisplayName("429 응답의 Retry-After 를 실제 응답에서 읽어 그만큼 기다린 뒤 재시도한다")
+    void waitsForRetryAfterHeaderFromActualResponseBeforeRetrying() {
+        // given - 첫 호출은 Retry-After: 1 을 단 429, 두 번째는 정상
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withStatus(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
+                        .header(org.springframework.http.HttpHeaders.RETRY_AFTER, "1"));
+        server.expect(requestTo(url(1, 100)))
+                .andRespond(withSuccess(body(1, item("R-1", "01", "3000000")), MediaType.APPLICATION_JSON));
+
+        // 백오프 기본 지연은 0이다. 그래도 1초를 기다렸다면 대기값의 출처는 응답 헤더뿐이다.
+        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restClient, new ObjectMapper(), masterCatalog,
+                BASE_URL, "test-key", 100, 10, 0, 9000, 2, 0, 2, 60_000,
+                new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
+
+        // when
+        long startedAt = System.nanoTime();
+        FacilityCollection collection = adapter.collect(RESTAURANT, JONGNO);
+        long elapsedMs = (System.nanoTime() - startedAt) / 1_000_000L;
+
+        // then
+        assertThat(collection.readCount()).isEqualTo(1);
+        assertThat(elapsedMs).isGreaterThanOrEqualTo(900L);
+        server.verify();
     }
 
     @Test
@@ -434,7 +462,7 @@ class LocalDataApiAdapterTest {
     @Test
     @DisplayName("어댑터 설정값으로 계산한 지연도 같은 규칙을 따른다")
     void computesBackoffFromAdapterConfiguration() {
-        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restTemplate, new ObjectMapper(), masterCatalog,
+        LocalDataApiAdapter adapter = new LocalDataApiAdapter(restClient, new ObjectMapper(), masterCatalog,
                 BASE_URL, "test-key", 100, 10, 0, 9000, 3, 1000, 2, 60_000,
                 new ExternalApiMetrics(METER_REGISTRY), new CallBudgetMetrics(METER_REGISTRY));
 
