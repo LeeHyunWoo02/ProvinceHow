@@ -48,10 +48,10 @@ class SeedMasterJobIntegrationTest extends IntegrationTestSupport {
 
     private static final List<String> ESSENTIAL_STEPS =
             List.of("SidoStep", "SigunguStep", "jcTopStep", "jcMiddleStep");
-    // 인프라는 수집(infraCollectStep) → 반영(infraStep) 2-Step 이라 관문도 둘이다.
+    // infraCollectStep 은 seed.jobs.infra-collect.enabled=false(기본) 라 기동 Job 의 관문에 없다.
+    // 수 시간짜리 수집이 기동 Job 에 있으면 재배포 때마다 고아 실행이 생기기 때문이다.
     private static final List<String> EXTERNAL_STEPS =
-            List.of("populationStep", "industryStep", "infraCollectStep", "infraStep",
-                    "jobCountStep", "dwellingStep");
+            List.of("populationStep", "industryStep", "infraStep", "jobCountStep", "dwellingStep");
 
     @Autowired
     @Qualifier(SeedMasterJobConfig.SEED_MASTER_JOB)
