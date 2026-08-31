@@ -7,6 +7,7 @@ import SDD.smash.domain.dwelling.application.DwellingQueryService;
 import SDD.smash.domain.infra.application.InfraQueryService;
 import SDD.smash.domain.job.application.JobQueryService;
 import SDD.smash.domain.job.application.JobVacancyQueryService;
+import SDD.smash.domain.job.application.NonCapitalJobRankingService;
 import SDD.smash.domain.job.application.RegionJobProfileQueryService;
 import SDD.smash.domain.job.application.RegionJobStatisticsQueryService;
 import SDD.smash.domain.job.domain.model.JobCode;
@@ -15,6 +16,7 @@ import SDD.smash.domain.recommendation.application.dto.DwellingTypeItem;
 import SDD.smash.domain.recommendation.application.dto.IndustryDetailItem;
 import SDD.smash.domain.recommendation.application.dto.JobInfoSummary;
 import SDD.smash.domain.recommendation.application.dto.JobVacancyItem;
+import SDD.smash.domain.recommendation.application.dto.NonCapitalRankSummary;
 import SDD.smash.domain.recommendation.application.dto.RegionJobProfileItem;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsSummary;
 import SDD.smash.domain.recommendation.application.dto.MajorInfraSummaryItem;
@@ -42,6 +44,7 @@ public class RegionDetailService {
     private final JobVacancyQueryService jobVacancyQueryService;
     private final RegionJobProfileQueryService regionJobProfileQueryService;
     private final RegionJobStatisticsQueryService regionJobStatisticsQueryService;
+    private final NonCapitalJobRankingService nonCapitalJobRankingService;
     private final SupportQueryService supportQueryService;
     private final DwellingQueryService dwellingQueryService;
     private final InfraQueryService infraQueryService;
@@ -101,9 +104,12 @@ public class RegionDetailService {
      * ({@code regionJobProfile} 과 같은 규칙 — 없는 값을 0 으로 채우지 않는다).
      *
      * <p>job 이 시군구 단위 조회를 열어 준다. 전국을 읽어 메모리에서 거르지 않는다.
+     * 비수도권 백분위도 job 이 캐시해 둔 분포에서 꺼내므로 요청마다 전국을 훑지 않는다.
      */
     private RegionJobStatisticsSummary jobStatisticsOf(SigunguCode sigunguCode) {
         return RegionJobStatisticsSummary.from(
-                regionJobStatisticsQueryService.getLatestStatisticsOfRegion(sigunguCode));
+                regionJobStatisticsQueryService.getLatestStatisticsOfRegion(sigunguCode),
+                NonCapitalRankSummary.from(
+                        nonCapitalJobRankingService.getRegionRank(sigunguCode).orElse(null)));
     }
 }
