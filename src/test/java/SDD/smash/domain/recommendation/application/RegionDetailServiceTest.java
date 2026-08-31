@@ -7,8 +7,10 @@ import SDD.smash.domain.dwelling.application.DwellingQueryService;
 import SDD.smash.domain.infra.application.InfraQueryService;
 import SDD.smash.domain.job.application.JobQueryService;
 import SDD.smash.domain.job.application.JobVacancyQueryService;
+import SDD.smash.domain.job.application.NonCapitalJobRankingService;
 import SDD.smash.domain.job.application.RegionJobProfileQueryService;
 import SDD.smash.domain.job.application.RegionJobStatisticsQueryService;
+import SDD.smash.domain.job.application.dto.NonCapitalRankView;
 import SDD.smash.domain.job.application.dto.RegionJobStatisticsView;
 import SDD.smash.domain.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsSummary;
@@ -45,6 +47,7 @@ class RegionDetailServiceTest {
     @Mock JobVacancyQueryService jobVacancyQueryService;
     @Mock RegionJobProfileQueryService regionJobProfileQueryService;
     @Mock RegionJobStatisticsQueryService regionJobStatisticsQueryService;
+    @Mock NonCapitalJobRankingService nonCapitalJobRankingService;
     @Mock SupportQueryService supportQueryService;
     @Mock DwellingQueryService dwellingQueryService;
     @Mock InfraQueryService infraQueryService;
@@ -133,6 +136,44 @@ class RegionDetailServiceTest {
 
         // then
         assertThat(detail.getJobVacancies()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("비수도권 지역이면 구인배수의 비수도권 백분위가 함께 실린다")
+    void carriesNonCapitalRankForNonCapitalRegion() {
+        // given
+        SigunguCode mokpo = SigunguCode.of("46110");
+        given(addressQueryService.getRegionCode(mokpo)).willReturn(Optional.of(
+                new RegionCodeView(SidoCode.of("46"), "전라남도", mokpo, "목포시")));
+        given(regionJobStatisticsQueryService.getLatestStatisticsOfRegion(mokpo))
+                .willReturn(List.of(view(mokpo, "01", 100L, 400L, 30L, 300L, 1_000L)));
+        given(nonCapitalJobRankingService.getRegionRank(mokpo))
+                .willReturn(Optional.of(new NonCapitalRankView(72, 28, 49, 173)));
+
+        // when
+        RegionDetailInfo detail = regionDetailService.details(mokpo, null);
+
+        // then
+        assertThat(detail.getJobStatistics().nonCapitalRank().percentile()).isEqualTo(72);
+        assertThat(detail.getJobStatistics().nonCapitalRank().topPercent()).isEqualTo(28);
+        assertThat(detail.getJobStatistics().nonCapitalRank().total()).isEqualTo(173);
+    }
+
+    @Test
+    @DisplayName("수도권 지역이면 백분위가 null 이다 - 비수도권 안의 비교라는 정의를 벗어난다")
+    void leavesNonCapitalRankNullForCapitalAreaRegion() {
+        // given
+        givenRegionCode();
+        given(regionJobStatisticsQueryService.getLatestStatisticsOfRegion(GANGNAM))
+                .willReturn(List.of(view(GANGNAM, "01", 100L, 400L, 30L, 300L, 1_000L)));
+        given(nonCapitalJobRankingService.getRegionRank(GANGNAM)).willReturn(Optional.empty());
+
+        // when
+        RegionDetailInfo detail = regionDetailService.details(GANGNAM, null);
+
+        // then - 통계 자체는 실리고 백분위만 빈다
+        assertThat(detail.getJobStatistics().validOpenings()).isEqualTo(300L);
+        assertThat(detail.getJobStatistics().nonCapitalRank()).isNull();
     }
 
     private void givenRegionCode() {

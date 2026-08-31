@@ -22,17 +22,19 @@ import java.util.Optional;
 /**
  * 일자리 점수 캐시의 Redis 구현. {@code RedisTemplate} 은 이 클래스 밖으로 나가지 않는다.
  *
- * <p>키·값 형식은 As-Is {@code JobScoreService} 와 <b>완전히 동일</b>하다.
- * 키는 {@code job:score:{중분류코드|default}}, 값은 Hash {@code {시군구코드(String): 점수(Integer)}},
- * TTL 은 12시간이다. {@code recommendation} 이관 전까지 옛 서비스와 같은 키를 공유하므로
- * 어느 한쪽이 쓴 캐시를 다른 쪽이 그대로 읽을 수 있어야 한다.
+ * <p>키는 {@code job:score:v2:{중분류코드|default}}, 값은 Hash {@code {시군구코드(String): 점수(Integer)}},
+ * TTL 은 12시간이다. {@code evictAll} 의 스캔 패턴은 {@code job:score:*} 라 옛 버전 키까지 함께 지운다.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class JobScoreRedisAdapter implements JobScoreCache {
 
-    private static final String KEY_PREFIX = "job:score:";
+    /**
+     * {@code v2} 는 구인배수 백분위를 섞은 산식의 버전이다. 점수 공식을 바꾸면 TTL 12시간을
+     * 기다리는 사이 옛 결과가 계속 나가므로, 키를 갈아 옛 값과 섞이지 않게 한다.
+     */
+    private static final String KEY_PREFIX = "job:score:v2:";
 
     /** 직종 코드가 없는(전체 일자리 기준) 키의 리터럴. As-Is 와 같은 문자열이어야 한다. */
     private static final String ALL_JOBS_KEY = "default";
@@ -40,8 +42,11 @@ public class JobScoreRedisAdapter implements JobScoreCache {
     /** 원본이 시드 배치로만 바뀌므로 반나절이면 충분하다. */
     private static final Duration TTL = Duration.ofHours(12);
 
-    /** {@code evictAll} 이 훑을 키 패턴. 한 번에 가져올 개수는 Redis 를 오래 잡지 않을 만큼만. */
-    private static final String SCAN_PATTERN = KEY_PREFIX + "*";
+    /**
+     * {@code evictAll} 이 훑을 키 패턴. 버전 접두어를 포함하지 않는다 — 옛 버전 키까지
+     * 같이 지워야 잔여 키가 남지 않는다. 한 번에 가져올 개수는 Redis 를 오래 잡지 않을 만큼만.
+     */
+    private static final String SCAN_PATTERN = "job:score:*";
     private static final int SCAN_COUNT = 500;
 
     private final RedisTemplate<String, Object> redisTemplate;

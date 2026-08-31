@@ -10,10 +10,12 @@ import SDD.smash.domain.infra.application.InfraQueryService;
 import SDD.smash.domain.infra.application.InfraScoreService;
 import SDD.smash.domain.job.application.JobQueryService;
 import SDD.smash.domain.job.application.JobScoreService;
+import SDD.smash.domain.job.application.NonCapitalJobRankingService;
 import SDD.smash.domain.job.application.RegionJobStatisticsQueryService;
 import SDD.smash.domain.recommendation.application.dto.DwellingSimpleInfoSummary;
 import SDD.smash.domain.recommendation.application.dto.JobInfoSummary;
 import SDD.smash.domain.recommendation.application.dto.MajorInfraSummaryItem;
+import SDD.smash.domain.recommendation.application.dto.NonCapitalRankSummary;
 import SDD.smash.domain.recommendation.application.dto.RecommendCommand;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsSummary;
 import SDD.smash.domain.recommendation.application.dto.RegionRecommendation;
@@ -50,6 +52,7 @@ public class RecommendRegionService {
 
     private final JobQueryService jobQueryService;
     private final RegionJobStatisticsQueryService regionJobStatisticsQueryService;
+    private final NonCapitalJobRankingService nonCapitalJobRankingService;
     private final DwellingQueryService dwellingQueryService;
     private final SupportQueryService supportQueryService;
     private final InfraQueryService infraQueryService;
@@ -112,7 +115,9 @@ public class RecommendRegionService {
 
                     // 표시용 필드 추가. 정렬·점수 산식은 건드리지 않는다. 미적재/시 레벨이면 null.
                     .jobStatistics(RegionJobStatisticsSummary.from(
-                            regionJobStatisticsQueryService.getLatestStatisticsOfRegion(code)))
+                            regionJobStatisticsQueryService.getLatestStatisticsOfRegion(code),
+                            NonCapitalRankSummary.from(
+                                    nonCapitalJobRankingService.getRegionRank(code).orElse(null))))
 
                     .totalSupportNum(supportQueryService.getAllSupportCount(code))
                     .fitSupportNum(supportQueryService.getFitSupportCount(code, command.supportChoice()))

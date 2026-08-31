@@ -16,6 +16,9 @@ import java.util.List;
  *                        오해되므로 <b>항상 채워진다</b>
  * @param jobOpeningRatio 구인배수(유효구인인원 / 유효구직자수). 유효구직자수가 0 이면 {@code null}
  * @param jobOpenings     구인인원(월). 그 달에 새로 올라온 구인 규모로 유효구인인원과 개념이 다르다
+ * @param nonCapitalRank  구인배수의 <b>비수도권 내</b> 순위. 원시 배수만으로는 좋고 나쁨을 판단할
+ *                        기준이 없어 백분위를 함께 싣는다. <b>수도권(11·41·28) 지역이면 {@code null}</b>
+ *                        이다 — 비수도권 안의 비교라는 정의를 벗어나기 때문이다. 구인배수가 없어도 {@code null}
  */
 public record RegionJobStatisticsSummary(String statisticsMonth,
                                          long validOpenings,
@@ -23,10 +26,17 @@ public record RegionJobStatisticsSummary(String statisticsMonth,
                                          Double jobOpeningRatio,
                                          long jobOpenings,
                                          long jobSeekers,
-                                         long placements) {
+                                         long placements,
+                                         NonCapitalRankSummary nonCapitalRank) {
+
+    /** 순위 없이 접는다. 비수도권 순위를 함께 싣는 경로는 {@link #from(List, NonCapitalRankSummary)} 다. */
+    public static RegionJobStatisticsSummary from(List<RegionJobStatisticsView> views) {
+        return from(views, null);
+    }
 
     /** 직종 대분류별 행을 시군구 합계로 접는다. 적재된 행이 없으면 {@code null}(= 통계 없음). */
-    public static RegionJobStatisticsSummary from(List<RegionJobStatisticsView> views) {
+    public static RegionJobStatisticsSummary from(List<RegionJobStatisticsView> views,
+                                                  NonCapitalRankSummary nonCapitalRank) {
         if (views == null || views.isEmpty()) {
             return null;
         }
@@ -51,6 +61,7 @@ public record RegionJobStatisticsSummary(String statisticsMonth,
         return new RegionJobStatisticsSummary(
                 views.get(0).statisticsMonth(),
                 validOpenings, validSeekers, ratio,
-                jobOpenings, jobSeekers, placements);
+                jobOpenings, jobSeekers, placements,
+                nonCapitalRank);
     }
 }

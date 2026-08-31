@@ -76,6 +76,21 @@ public class JobQueryService {
                 .toList();
     }
 
+    /**
+     * 중분류가 속한 대분류 코드. 고용행정통계가 대분류 단위라 사용자가 고른 중분류를 여기서 올린다.
+     *
+     * <p>존재하지 않는 중분류면 {@code JOB_CODE_NOT_FOUND} 다 — 대분류 코드(2자리)가 잘못
+     * 넘어와도 중분류 마스터에 없으므로 같은 경로로 걸린다. {@code getJobInfo(sigungu, jobCode)}
+     * 가 쓰는 검증과 <b>같은 규칙</b>이라 {@code /api/detail} 과 동작이 갈리지 않는다.
+     */
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    public JobCode getTopCodeOfSubOrThrow(JobCode subCode) {
+        checkSubCategoryExistsOrThrow(subCode);
+        return jobCategoryRepository.findTopCodeOf(subCode)
+                .orElseThrow(() -> new DomainException(
+                        ErrorCode.JOB_CODE_NOT_FOUND, "직종 중분류의 대분류를 찾을 수 없습니다."));
+    }
+
     private void checkSubCategoryExistsOrThrow(JobCode jobCode) {
         if (!jobCategoryRepository.existsSubCategory(jobCode)) {
             throw new DomainException(ErrorCode.JOB_CODE_NOT_FOUND, "유효하지 않은 직종 코드입니다.");
