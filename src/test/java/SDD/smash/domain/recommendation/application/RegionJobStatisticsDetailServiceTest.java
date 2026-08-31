@@ -136,7 +136,7 @@ class RegionJobStatisticsDetailServiceTest {
         RegionJobStatisticsByJobSummary summary = service.byJob(MOKPO, JobCode.of("021"));
 
         // then - 나머지는 생략이 아니라 명시적 false 다
-        assertThat(summary.selectedJobTopCode()).isEqualTo("02");
+        assertThat(summary.selectedJobMajorCode()).isEqualTo("02");
         assertThat(summary.items().get(0).isSelected()).isFalse();
         assertThat(summary.items().get(1).isSelected()).isTrue();
     }
@@ -152,7 +152,7 @@ class RegionJobStatisticsDetailServiceTest {
 
         RegionJobStatisticsByJobSummary summary = service.byJob(MOKPO, null);
 
-        assertThat(summary.selectedJobTopCode()).isNull();
+        assertThat(summary.selectedJobMajorCode()).isNull();
         assertThat(summary.items()).allSatisfy(item -> assertThat(item.isSelected()).isFalse());
         then(jobQueryService).should(never()).getTopCodeOfSubOrThrow(any());
     }
@@ -179,7 +179,7 @@ class RegionJobStatisticsDetailServiceTest {
 
         RegionJobStatisticsByJobSummary summary = service.byJob(MOKPO, JobCode.of("021"));
 
-        assertThat(summary.selectedJobTopCode()).isEqualTo("02");
+        assertThat(summary.selectedJobMajorCode()).isEqualTo("02");
         assertThat(summary.items()).isEmpty();
     }
 

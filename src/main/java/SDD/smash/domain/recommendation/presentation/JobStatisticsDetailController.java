@@ -35,7 +35,7 @@ public class JobStatisticsDetailController {
      * 최신 기준월 한 시군구의 직종 대분류 13종 분해.
      *
      * @param midJobCode 직종 <b>중분류</b> 코드(선택). 주면 그 중분류가 속한 대분류 item 에
-     *                   {@code isSelected=true} 가 붙고 최상단 {@code selectedJobTopCode} 도 채워진다
+     *                   {@code isSelected=true} 가 붙고 최상단 {@code selectedJobMajorCode} 도 채워진다
      */
     @GetMapping("/byJob")
     public ResponseEntity<RegionJobStatisticsByJobResponse> byJob(
