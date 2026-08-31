@@ -1,5 +1,6 @@
 package SDD.smash.domain.job.application;
 
+import SDD.smash.domain.job.application.dto.RegionJobStatisticsTrendPoint;
 import SDD.smash.domain.job.application.dto.RegionJobStatisticsView;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.job.domain.model.RegionJobCount;
@@ -128,10 +129,94 @@ class RegionJobStatisticsQueryServiceTest {
                         org.mockito.ArgumentMatchers.any());
     }
 
+    @Test
+    @DisplayName("추세는 월별로 직종 합계를 접고 월 오름차순으로 방출한다")
+    void foldsTrendByMonthInAscendingOrder() {
+        given(regionJobStatisticsRepository.findAllBySigunguCode(SigunguCode.of("11680")))
+                .willReturn(List.of(
+                        // 2026-07: 두 직종 합산 → 유효구인 250, 유효구직 1400
+                        monthly("11680", "01", "2026-07", 200, 1_000),
+                        monthly("11680", "02", "2026-07", 50, 400),
+                        // 2026-06: 한 직종
+                        monthly("11680", "01", "2026-06", 100, 500)));
+
+        List<RegionJobStatisticsTrendPoint> points =
+                service.getRegionTrend(SigunguCode.of("11680"), 36);
+
+        assertThat(points).hasSize(2);
+        assertThat(points.get(0).statisticsMonth()).isEqualTo("2026-06");
+        assertThat(points.get(1).statisticsMonth()).isEqualTo("2026-07");
+        assertThat(points.get(1).validOpenings()).isEqualTo(250L);
+        assertThat(points.get(1).validSeekers()).isEqualTo(1_400L);
+        assertThat(points.get(1).jobOpeningRatio()).isEqualTo(250d / 1_400d);
+    }
+
+    @Test
+    @DisplayName("최근 N개월만 남기고 앞선 월은 잘라낸다")
+    void keepsOnlyRecentMonths() {
+        given(regionJobStatisticsRepository.findAllBySigunguCode(SigunguCode.of("11680")))
+                .willReturn(List.of(
+                        monthly("11680", "01", "2026-05", 10, 10),
+                        monthly("11680", "01", "2026-06", 20, 20),
+                        monthly("11680", "01", "2026-07", 30, 30)));
+
+        List<RegionJobStatisticsTrendPoint> points =
+                service.getRegionTrend(SigunguCode.of("11680"), 2);
+
+        assertThat(points).hasSize(2);
+        assertThat(points.get(0).statisticsMonth()).isEqualTo("2026-06");
+        assertThat(points.get(1).statisticsMonth()).isEqualTo("2026-07");
+    }
+
+    @Test
+    @DisplayName("그 달 유효구직자 합계가 0 이면 구인배수는 null 이다")
+    void trendRatioIsNullWhenSeekersZero() {
+        given(regionJobStatisticsRepository.findAllBySigunguCode(SigunguCode.of("11680")))
+                .willReturn(List.of(monthly("11680", "01", "2026-07", 40, 0)));
+
+        List<RegionJobStatisticsTrendPoint> points =
+                service.getRegionTrend(SigunguCode.of("11680"), 36);
+
+        assertThat(points).hasSize(1);
+        assertThat(points.get(0).jobOpeningRatio()).isNull();
+    }
+
+    @Test
+    @DisplayName("months 가 1 미만이면 예외 없이 최소 1개월로 클램프한다")
+    void trendClampsNonPositiveMonths() {
+        given(regionJobStatisticsRepository.findAllBySigunguCode(SigunguCode.of("11680")))
+                .willReturn(List.of(
+                        monthly("11680", "01", "2026-06", 20, 20),
+                        monthly("11680", "01", "2026-07", 30, 30)));
+
+        List<RegionJobStatisticsTrendPoint> points =
+                service.getRegionTrend(SigunguCode.of("11680"), -5);
+
+        assertThat(points).hasSize(1);
+        assertThat(points.get(0).statisticsMonth()).isEqualTo("2026-07");
+    }
+
+    @Test
+    @DisplayName("적재된 월이 없으면 빈 추세를 준다")
+    void trendIsEmptyWhenNothingLoaded() {
+        given(regionJobStatisticsRepository.findAllBySigunguCode(SigunguCode.of("11680")))
+                .willReturn(List.of());
+
+        assertThat(service.getRegionTrend(SigunguCode.of("11680"), 36)).isEmpty();
+    }
+
     private RegionJobStatistics statistics(String sigunguCode, String jobCode,
                                            long validOpenings, long validSeekers) {
         return RegionJobStatistics.reconstitute(
                 new RegionJobStatisticsKey(SigunguCode.of(sigunguCode), JobCode.of(jobCode), LATEST),
+                0, 0, 0, validOpenings, validSeekers);
+    }
+
+    private RegionJobStatistics monthly(String sigunguCode, String jobCode, String month,
+                                        long validOpenings, long validSeekers) {
+        return RegionJobStatistics.reconstitute(
+                new RegionJobStatisticsKey(SigunguCode.of(sigunguCode), JobCode.of(jobCode),
+                        StatisticsMonth.of(month)),
                 0, 0, 0, validOpenings, validSeekers);
     }
 }

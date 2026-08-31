@@ -70,6 +70,8 @@ public class AiConverter {
                         .score(dto.getScore())
                         .totalJobInfo(dto.getTotalJobInfo())
                         .fitJobInfo(dto.getFitJobInfo())
+                        // 새 표시 필드. aiUse=true 재조립 경로에서도 유실되지 않게 패스스루한다.
+                        .jobStatistics(dto.getJobStatistics())
                         .totalSupportNum(dto.getTotalSupportNum())
                         .fitSupportNum(dto.getFitSupportNum())
                         .dwellingSimpleInfo(dto.getDwellingSimpleInfo())
