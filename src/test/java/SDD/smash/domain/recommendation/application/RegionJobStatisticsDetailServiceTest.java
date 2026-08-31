@@ -4,9 +4,11 @@ import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.domain.job.application.JobQueryService;
 import SDD.smash.domain.job.application.RegionJobStatisticsQueryService;
 import SDD.smash.domain.job.application.dto.JobCategoryView;
+import SDD.smash.domain.job.application.dto.RegionJobStatisticsTrendPoint;
 import SDD.smash.domain.job.application.dto.RegionJobStatisticsView;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsByJobSummary;
+import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsTrendPointSummary;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.exception.DomainException;
 import SDD.smash.global.exception.ErrorCode;
@@ -81,6 +83,34 @@ class RegionJobStatisticsDetailServiceTest {
                 .given(addressQueryService).checkSigunguExistsOrThrow(any());
 
         assertThatThrownBy(() -> service.byJob(SigunguCode.of("99999")))
+                .isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ADDRESS_CODE_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("추세는 존재 검증 후 job 폴딩 결과를 recommendation 요약으로 매핑한다")
+    void trendMapsJobFoldingResult() {
+        given(regionJobStatisticsQueryService.getRegionTrend(SigunguCode.of("11680"), 36))
+                .willReturn(List.of(
+                        new RegionJobStatisticsTrendPoint("2026-06", 100L, 500L, 0.2),
+                        new RegionJobStatisticsTrendPoint("2026-07", 250L, 1400L, 250d / 1400d)));
+
+        List<RegionJobStatisticsTrendPointSummary> points =
+                service.trend(SigunguCode.of("11680"), 36);
+
+        assertThat(points).hasSize(2);
+        assertThat(points.get(0).statisticsMonth()).isEqualTo("2026-06");
+        assertThat(points.get(1).validOpenings()).isEqualTo(250L);
+    }
+
+    @Test
+    @DisplayName("추세도 존재하지 않는 시군구면 ADDRESS_CODE_NOT_FOUND 를 던진다")
+    void trendThrowsWhenSigunguMissing() {
+        willThrow(new DomainException(ErrorCode.ADDRESS_CODE_NOT_FOUND, "유효하지 않은 시군구 코드"))
+                .given(addressQueryService).checkSigunguExistsOrThrow(any());
+
+        assertThatThrownBy(() -> service.trend(SigunguCode.of("99999"), 36))
                 .isInstanceOf(DomainException.class)
                 .extracting(e -> ((DomainException) e).getErrorCode())
                 .isEqualTo(ErrorCode.ADDRESS_CODE_NOT_FOUND);

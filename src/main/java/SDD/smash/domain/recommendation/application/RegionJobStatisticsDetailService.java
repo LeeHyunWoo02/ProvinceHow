@@ -6,6 +6,7 @@ import SDD.smash.domain.job.application.RegionJobStatisticsQueryService;
 import SDD.smash.domain.job.application.dto.JobCategoryView;
 import SDD.smash.domain.job.application.dto.RegionJobStatisticsView;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsByJobSummary;
+import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsTrendPointSummary;
 import SDD.smash.global.domain.model.SigunguCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,18 @@ public class RegionJobStatisticsDetailService {
                 regionJobStatisticsQueryService.getLatestStatisticsOfRegion(sigunguCode);
 
         return RegionJobStatisticsByJobSummary.from(views, jobMajorNames());
+    }
+
+    /**
+     * 한 시군구의 월별 고용통계 추세(직종 13종 합계, 월 오름차순). 존재하지 않는 시군구면 예외,
+     * 존재하지만 미적재면 빈 목록이다. 폴딩·최근 N개월 절단은 job 이 담당한다.
+     */
+    public List<RegionJobStatisticsTrendPointSummary> trend(SigunguCode sigunguCode, int months) {
+        addressQueryService.checkSigunguExistsOrThrow(sigunguCode);
+
+        return regionJobStatisticsQueryService.getRegionTrend(sigunguCode, months).stream()
+                .map(RegionJobStatisticsTrendPointSummary::from)
+                .toList();
     }
 
     /** 직종 대분류 코드→이름. 순서는 결과 정렬이 따로 하므로 여기서는 조회 순서를 유지한다. */

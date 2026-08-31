@@ -3,6 +3,7 @@ package SDD.smash.domain.recommendation.presentation;
 import SDD.smash.domain.recommendation.application.RegionJobStatisticsDetailService;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsByJobItem;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsByJobSummary;
+import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsTrendPointSummary;
 import SDD.smash.global.exception.DomainException;
 import SDD.smash.global.exception.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -81,5 +82,49 @@ class JobStatisticsDetailControllerTest {
         mockMvc.perform(get("/api/detail/jobStatistics/byJob").param("sigunguCode", "99999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ADDRESS_CODE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("추세 응답이 sigunguCode 와 월 오름차순 points 로 실린다")
+    void trendResponseCarriesAscendingPoints() throws Exception {
+        given(regionJobStatisticsDetailService.trend(any(), org.mockito.ArgumentMatchers.anyInt()))
+                .willReturn(List.of(
+                        new RegionJobStatisticsTrendPointSummary("2023-08", 3980L, 9120L, 0.4364),
+                        new RegionJobStatisticsTrendPointSummary("2026-07", 40L, 0L, null)));
+
+        mockMvc.perform(get("/api/detail/jobStatistics/trend").param("sigunguCode", "11680"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sigunguCode").value("11680"))
+                .andExpect(jsonPath("$.points.length()").value(2))
+                .andExpect(jsonPath("$.points[0].statisticsMonth").value("2023-08"))
+                .andExpect(jsonPath("$.points[0].validOpenings").value(3980))
+                .andExpect(jsonPath("$.points[0].validSeekers").value(9120))
+                .andExpect(jsonPath("$.points[0].jobOpeningRatio").value(0.4364))
+                // 세 지표만 싣는다 — jobOpenings 등은 point 에 없다
+                .andExpect(jsonPath("$.points[0].jobOpenings").doesNotExist())
+                // 유효구직자 0 인 달은 구인배수 null
+                .andExpect(content().string(containsString("\"jobOpeningRatio\":null")));
+    }
+
+    @Test
+    @DisplayName("추세가 미적재면 200 과 함께 points 가 빈 배열로 내려간다")
+    void trendResponseIsEmptyWhenNotLoaded() throws Exception {
+        given(regionJobStatisticsDetailService.trend(any(), org.mockito.ArgumentMatchers.anyInt()))
+                .willReturn(List.of());
+
+        mockMvc.perform(get("/api/detail/jobStatistics/trend").param("sigunguCode", "41110"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sigunguCode").value("41110"))
+                .andExpect(jsonPath("$.points.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("months 가 범위를 벗어나면 400 과 BIND_FAILED 를 반환한다")
+    void trendRejectsOutOfRangeMonths() throws Exception {
+        mockMvc.perform(get("/api/detail/jobStatistics/trend")
+                        .param("sigunguCode", "11680")
+                        .param("months", "0"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("BIND_FAILED"));
     }
 }
