@@ -29,4 +29,10 @@ public interface RegionJobStatisticsRepository {
 
     /** 시군구 하나의 월별 시계열. 오래된 월부터 정렬한다. */
     List<RegionJobStatistics> findSeriesOf(SigunguCode sigunguCode, JobCode jobCode);
+
+    /**
+     * 시군구 하나의 전 직종·전 월 통계. 월별 합계 추세를 만들 때 쓴다.
+     * 한 시군구는 최대 13 × 36 ≈ 468 행이라 전 행을 읽어 메모리에서 접어도 무방하다.
+     */
+    List<RegionJobStatistics> findAllBySigunguCode(SigunguCode sigunguCode);
 }

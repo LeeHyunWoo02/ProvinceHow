@@ -55,6 +55,11 @@ public class RegionJobStatisticsRepositoryAdapter implements RegionJobStatistics
                 .findAllBySigunguCodeAndJobTopCodeOrderByStatMonthAsc(sigunguCode.value(), jobCode.value()));
     }
 
+    @Override
+    public List<RegionJobStatistics> findAllBySigunguCode(SigunguCode sigunguCode) {
+        return toDomain(regionJobStatisticsJpaRepository.findAllBySigunguCode(sigunguCode.value()));
+    }
+
     private List<RegionJobStatistics> toDomain(List<RegionJobStatisticsJpaEntity> entities) {
         return entities.stream().map(regionJobStatisticsJpaMapper::toDomain).toList();
     }
