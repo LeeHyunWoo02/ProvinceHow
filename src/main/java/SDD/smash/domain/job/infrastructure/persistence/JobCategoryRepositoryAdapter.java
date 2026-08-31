@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
@@ -29,6 +30,13 @@ public class JobCategoryRepositoryAdapter implements JobCategoryRepository {
         return jobCodeMiddleJpaRepository.findAllByTopCode(topCode.value()).stream()
                 .map(jobJpaMapper::toDomain)
                 .toList();
+    }
+
+    @Override
+    public Optional<JobCode> findTopCodeOf(JobCode subCode) {
+        return jobCodeMiddleJpaRepository.findByCode(subCode.value())
+                .map(JobCodeMiddleJpaEntity::getTopCode)
+                .map(JobCode::of);
     }
 
     @Override

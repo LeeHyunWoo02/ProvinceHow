@@ -22,6 +22,16 @@ public class JobScorePolicy {
     private static final int FULL_SCORE = 100;
 
     /**
+     * 일자리 수가 차지하는 비중. 구인배수는 나머지 {@code 1 - COUNT_WEIGHT} 만 가져간다.
+     *
+     * <p>보수적으로 잡았다. 일자리 수는 3년 넘게 순위를 만들어 온 주 지표이고 구인배수는
+     * 이번에 처음 섞는 보조 지표다. 비중을 크게 주면 규모가 아주 작은 군 지역이 배수 하나로
+     * 상위에 올라온다 — 실제 이주 가능성이 아니라 통계의 분모가 작아서 생기는 순위다.
+     */
+    private static final double COUNT_WEIGHT = 0.8d;
+    private static final double RATIO_WEIGHT = 1.0d - COUNT_WEIGHT;
+
+    /**
      * @param counts 지역별 일자리 수. 비어 있으면 결과도 비어 있다
      * @return 지역별 0~100 점수
      */
@@ -49,5 +59,48 @@ public class JobScorePolicy {
             scores.put(count.sigunguCode(), Score.of(score));
         }
         return scores;
+    }
+
+    /**
+     * 일자리 수 점수에 <b>비수도권 내 구인배수 백분위</b>를 보조로 섞는다.
+     *
+     * <p>원시 구인배수를 그대로 넣지 않는다. 배수는 최소 0.024 ~ 최대 0.903 으로 분포가
+     * 넓고 한쪽으로 쏠려 있어, 그대로 쓰면 이상치 몇 곳이 척도를 독차지한다. 비수도권 안의
+     * 백분위(0~100)로 바꿔 넣으면 일자리 수 점수와 같은 눈금이 되어 가중합이 성립한다.
+     *
+     * <p>결과에는 <b>일자리 수가 없고 백분위만 있는 지역도 들어간다</b>. 일자리 수 원본이
+     * 비어 있는 상태(외부 API 가 막혀 {@code JobCount} 가 0행)에서도 구인배수가 점수에
+     * 반영되게 하려는 것이다. 그런 지역의 일자리 수 점수는 0 으로 본다 — 호출부가 이미
+     * "맵에 없으면 0점" 으로 다루므로 의미가 달라지지 않는다.
+     *
+     * @param nonCapitalPercentiles 시군구 -> 비수도권 내 백분위(0~100).
+     *                              여기에 없는 지역(수도권·배수 없음)은 일자리 수 점수를 그대로 쓴다
+     */
+    public Map<SigunguCode, Score> scores(List<RegionJobCount> counts,
+                                          Map<SigunguCode, Integer> nonCapitalPercentiles) {
+
+        Map<SigunguCode, Score> countScores = scores(counts);
+        if (nonCapitalPercentiles == null || nonCapitalPercentiles.isEmpty()) {
+            return countScores;
+        }
+
+        Map<SigunguCode, Score> blended = new LinkedHashMap<>();
+        countScores.forEach((code, countScore) ->
+                blended.put(code, blend(countScore, nonCapitalPercentiles.get(code))));
+
+        nonCapitalPercentiles.forEach((code, percentile) -> {
+            if (!blended.containsKey(code)) {
+                blended.put(code, blend(Score.ZERO, percentile));
+            }
+        });
+        return blended;
+    }
+
+    private Score blend(Score countScore, Integer percentile) {
+        if (percentile == null) {
+            return countScore;
+        }
+        int value = (int) Math.round(COUNT_WEIGHT * countScore.value() + RATIO_WEIGHT * percentile);
+        return Score.of(Math.max(0, Math.min(FULL_SCORE, value)));
     }
 }
