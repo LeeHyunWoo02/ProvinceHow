@@ -38,6 +38,9 @@ public class RegionRecommendation {
     private JobInfoSummary totalJobInfo;
     private JobInfoSummary fitJobInfo;
 
+    /** EIS 고용행정통계 요약(상세와 동일한 전체 요약). 미적재/시 레벨이면 null. */
+    private RegionJobStatisticsSummary jobStatistics;
+
     private Integer totalSupportNum;
     private Integer fitSupportNum;
 
