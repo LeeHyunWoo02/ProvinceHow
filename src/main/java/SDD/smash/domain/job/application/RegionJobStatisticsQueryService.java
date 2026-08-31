@@ -1,5 +1,6 @@
 package SDD.smash.domain.job.application;
 
+import SDD.smash.domain.job.application.dto.RegionJobStatisticsTrendPoint;
 import SDD.smash.domain.job.application.dto.RegionJobStatisticsView;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.job.domain.model.RegionJobCount;
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.TreeMap;
 
 /**
  * 고용행정통계 조회 유스케이스. job 컨텍스트의 공개 진입점이다.
@@ -74,6 +76,37 @@ public class RegionJobStatisticsQueryService {
         return regionJobStatisticsRepository.findSeriesOf(sigunguCode, jobCode).stream()
                 .map(RegionJobStatisticsView::from)
                 .toList();
+    }
+
+    /**
+     * 한 시군구의 직종 13종 합계를 월별로 접은 추세. 월 오름차순이며 최근 {@code months} 개월만 남긴다.
+     *
+     * <p>데이터가 있는 월만 방출한다(빈 월을 0 으로 채우지 않는다). 구인배수는 그 달 유효구직자수
+     * 합계 기준으로 다시 계산하며, 합계가 0 이면 {@code null} 이다.
+     */
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    public List<RegionJobStatisticsTrendPoint> getRegionTrend(SigunguCode sigunguCode, int months) {
+
+        // 월별로 유효구인인원·유효구직자수 합계를 접는다. TreeMap 이라 키(기준월)가 오름차순이다.
+        Map<StatisticsMonth, long[]> byMonth = new TreeMap<>();
+        for (RegionJobStatistics statistics : regionJobStatisticsRepository.findAllBySigunguCode(sigunguCode)) {
+            long[] sum = byMonth.computeIfAbsent(statistics.month(), key -> new long[2]);
+            sum[0] += statistics.validOpenings();
+            sum[1] += statistics.validSeekers();
+        }
+
+        List<RegionJobStatisticsTrendPoint> ordered = byMonth.entrySet().stream()
+                .map(entry -> toTrendPoint(entry.getKey(), entry.getValue()[0], entry.getValue()[1]))
+                .toList();
+
+        // 최근 N개월만 남긴다. N 이 있는 월 수보다 크면 있는 만큼 그대로 준다.
+        int from = Math.max(0, ordered.size() - months);
+        return List.copyOf(ordered.subList(from, ordered.size()));
+    }
+
+    private RegionJobStatisticsTrendPoint toTrendPoint(StatisticsMonth month, long validOpenings, long validSeekers) {
+        Double ratio = (validSeekers == 0L) ? null : (double) validOpenings / (double) validSeekers;
+        return new RegionJobStatisticsTrendPoint(month.text(), validOpenings, validSeekers, ratio);
     }
 
     /**

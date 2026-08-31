@@ -2,10 +2,16 @@ package SDD.smash.domain.recommendation.presentation;
 
 import SDD.smash.domain.recommendation.application.RegionJobStatisticsDetailService;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsByJobSummary;
+import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsTrendPointSummary;
 import SDD.smash.domain.recommendation.presentation.dto.RegionJobStatisticsByJobResponse;
+import SDD.smash.domain.recommendation.presentation.dto.RegionJobStatisticsTrendResponse;
 import SDD.smash.global.domain.model.SigunguCode;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
+
+import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,5 +38,16 @@ public class JobStatisticsDetailController {
         RegionJobStatisticsByJobSummary summary =
                 regionJobStatisticsDetailService.byJob(SigunguCode.of(sigunguCode));
         return ResponseEntity.ok(RegionJobStatisticsByJobResponse.from(summary));
+    }
+
+    /** 한 시군구의 월별 고용통계 추세(직종 13종 합계). 최근 {@code months} 개월만 준다. */
+    @GetMapping("/trend")
+    public ResponseEntity<RegionJobStatisticsTrendResponse> trend(
+            @RequestParam(name = "sigunguCode") @NotNull(message = "지역코드는 필수입니다.") String sigunguCode,
+            @RequestParam(name = "months", defaultValue = "36") @Min(1) @Max(120) int months) {
+
+        List<RegionJobStatisticsTrendPointSummary> points =
+                regionJobStatisticsDetailService.trend(SigunguCode.of(sigunguCode), months);
+        return ResponseEntity.ok(RegionJobStatisticsTrendResponse.of(sigunguCode, points));
     }
 }
