@@ -100,7 +100,10 @@ public class RegionJobStatisticsQueryService {
                 .toList();
 
         // 최근 N개월만 남긴다. N 이 있는 월 수보다 크면 있는 만큼 그대로 준다.
-        int from = Math.max(0, ordered.size() - months);
+        // months 는 이 컨텍스트의 public 계약이므로 호출부 검증에만 기대지 않고 최소 1 로 클램프한다
+        // (음수면 subList 경계가 깨져 ErrorCode 없는 500 이 난다).
+        int effective = Math.max(1, months);
+        int from = Math.max(0, ordered.size() - effective);
         return List.copyOf(ordered.subList(from, ordered.size()));
     }
 
