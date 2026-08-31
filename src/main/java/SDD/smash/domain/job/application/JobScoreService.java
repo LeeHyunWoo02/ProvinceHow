@@ -24,6 +24,10 @@ import java.util.Optional;
  *
  * <p>점수 공식은 {@code JobScorePolicy}, Redis 상세는 {@code JobScoreRedisAdapter} 로 빠졌다.
  *
+ * <p>점수의 입력은 두 가지다 — 일자리 수(주)와 비수도권 내 구인배수 백분위(보조).
+ * 구인배수는 <b>정규화된 백분위</b>로만 들어간다. 원시 배수를 그대로 넣으면 이상치가 상위를
+ * 차지해 지방 이주 서비스의 추천이 무너진다.
+ *
  * <p>직종 코드 검증이 <b>캐시 확인보다 먼저</b> 온다. As-Is 순서 그대로다 —
  * 유효하지 않은 코드는 캐시 히트 여부와 무관하게 예외여야 한다.
  *
@@ -38,6 +42,7 @@ public class JobScoreService {
     private final JobCountRepository jobCountRepository;
     private final JobCategoryRepository jobCategoryRepository;
     private final JobScoreCache jobScoreCache;
+    private final NonCapitalJobRankingService nonCapitalJobRankingService;
 
     private final JobScorePolicy policy = new JobScorePolicy();
 
@@ -64,7 +69,10 @@ public class JobScoreService {
                 ? jobCountRepository.findAllRegionTotals()
                 : jobCountRepository.findAllRegionCountsOf(jobCode);
 
-        Map<SigunguCode, Score> scores = policy.scores(counts);
+        // 비수도권 백분위는 job 이 캐시해 둔 최신월 분포에서 나온다. 통계가 적재되지 않았으면
+        // 빈 맵이라 일자리 수만 보던 예전 점수와 같아진다.
+        Map<SigunguCode, Score> scores =
+                policy.scores(counts, nonCapitalJobRankingService.getNonCapitalPercentiles());
 
         // 3) 캐시 저장. TTL 은 어댑터가 안다.
         jobScoreCache.put(key, scores);

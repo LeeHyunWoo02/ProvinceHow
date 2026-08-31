@@ -8,6 +8,7 @@ import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsSummar
  *
  * @param statisticsMonth 기준월({@code YYYY-MM}). 화면의 "YYYY년 M월 기준" 표기용
  * @param jobOpeningRatio 구인배수. 유효구직자수가 0 이면 {@code null}
+ * @param nonCapitalRank  구인배수의 비수도권 내 순위. 수도권 지역이거나 배수가 없으면 {@code null}
  */
 public record RegionJobStatisticsEntry(String statisticsMonth,
                                        long validOpenings,
@@ -15,7 +16,8 @@ public record RegionJobStatisticsEntry(String statisticsMonth,
                                        Double jobOpeningRatio,
                                        long jobOpenings,
                                        long jobSeekers,
-                                       long placements) {
+                                       long placements,
+                                       NonCapitalRankEntry nonCapitalRank) {
 
     public static RegionJobStatisticsEntry from(RegionJobStatisticsSummary summary) {
         if (summary == null) {
@@ -28,6 +30,7 @@ public record RegionJobStatisticsEntry(String statisticsMonth,
                 summary.jobOpeningRatio(),
                 summary.jobOpenings(),
                 summary.jobSeekers(),
-                summary.placements());
+                summary.placements(),
+                NonCapitalRankEntry.from(summary.nonCapitalRank()));
     }
 }

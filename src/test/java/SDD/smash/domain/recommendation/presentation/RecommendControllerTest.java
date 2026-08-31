@@ -1,6 +1,7 @@
 package SDD.smash.domain.recommendation.presentation;
 
 import SDD.smash.domain.recommendation.application.RecommendRegionService;
+import SDD.smash.domain.recommendation.application.dto.NonCapitalRankSummary;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsSummary;
 import SDD.smash.domain.recommendation.application.dto.RegionRecommendation;
 import SDD.smash.domain.recommendation.application.port.out.RegionPickProvider;
@@ -44,7 +45,8 @@ class RecommendControllerTest {
                 .sigunguCode("11680")
                 .score(90)
                 .jobStatistics(new RegionJobStatisticsSummary(
-                        "2026-07", 500L, 2000L, 0.25, 150L, 600L, 50L))
+                        "2026-07", 500L, 2000L, 0.25, 150L, 600L, 50L,
+                        new NonCapitalRankSummary(72, 28, 49, 173)))
                 .build();
         RegionRecommendation withoutStat = RegionRecommendation.builder()
                 .sigunguCode("41110")   // 미적재/시 레벨 → jobStatistics null
@@ -59,6 +61,7 @@ class RecommendControllerTest {
                 .andExpect(jsonPath("$.items[0].jobStatistics.validOpenings").value(500))
                 .andExpect(jsonPath("$.items[0].jobStatistics.jobOpeningRatio").value(0.25))
                 .andExpect(jsonPath("$.items[0].jobStatistics.placements").value(50))
+                .andExpect(jsonPath("$.items[0].jobStatistics.nonCapitalRank.topPercent").value(28))
                 // 미적재 지역은 jobStatistics 가 null 이다
                 .andExpect(jsonPath("$.items[1].jobStatistics").doesNotExist())
                 .andExpect(content().string(containsString("\"jobStatistics\":null")));
@@ -71,7 +74,7 @@ class RecommendControllerTest {
                 RegionRecommendation.builder()
                         .sigunguCode("11680")
                         .jobStatistics(new RegionJobStatisticsSummary(
-                                "2026-07", 40L, 0L, null, 10L, 0L, 0L))
+                                "2026-07", 40L, 0L, null, 10L, 0L, 0L, null))
                         .build()));
 
         mockMvc.perform(get(BASE))
@@ -87,7 +90,8 @@ class RecommendControllerTest {
                 RegionRecommendation.builder()
                         .sigunguCode("11680")
                         .jobStatistics(new RegionJobStatisticsSummary(
-                                "2026-07", 500L, 2000L, 0.25, 150L, 600L, 50L))
+                                "2026-07", 500L, 2000L, 0.25, 150L, 600L, 50L,
+                        new NonCapitalRankSummary(72, 28, 49, 173)))
                         .build()));
         given(regionPickProvider.pick(any())).willReturn(List.of());
 

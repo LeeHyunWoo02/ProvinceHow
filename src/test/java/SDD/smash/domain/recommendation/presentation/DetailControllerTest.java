@@ -6,6 +6,7 @@ import SDD.smash.domain.recommendation.application.dto.DwellingTypeItem;
 import SDD.smash.domain.recommendation.application.dto.JobVacancyItem;
 import SDD.smash.domain.recommendation.application.dto.RegionDetailInfo;
 import SDD.smash.domain.recommendation.application.dto.RegionJobProfileItem;
+import SDD.smash.domain.recommendation.application.dto.NonCapitalRankSummary;
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsSummary;
 import SDD.smash.domain.recommendation.application.port.out.RegionSummaryProvider;
 import org.junit.jupiter.api.DisplayName;
@@ -124,7 +125,8 @@ class DetailControllerTest {
         RegionDetailInfo info = RegionDetailInfo.builder()
                 .sigunguCode("11680")
                 .jobStatistics(new RegionJobStatisticsSummary(
-                        "2026-07", 500L, 2000L, 0.25, 150L, 600L, 50L))
+                        "2026-07", 500L, 2000L, 0.25, 150L, 600L, 50L,
+                        new NonCapitalRankSummary(72, 28, 49, 173)))
                 .build();
         given(regionDetailService.details(any(), any())).willReturn(info);
 
@@ -138,7 +140,12 @@ class DetailControllerTest {
                 .andExpect(jsonPath("$.jobStatistics.jobOpeningRatio").value(0.25))
                 .andExpect(jsonPath("$.jobStatistics.jobOpenings").value(150))
                 .andExpect(jsonPath("$.jobStatistics.jobSeekers").value(600))
-                .andExpect(jsonPath("$.jobStatistics.placements").value(50));
+                .andExpect(jsonPath("$.jobStatistics.placements").value(50))
+                // 비수도권 백분위가 상세에도 함께 실린다
+                .andExpect(jsonPath("$.jobStatistics.nonCapitalRank.percentile").value(72))
+                .andExpect(jsonPath("$.jobStatistics.nonCapitalRank.topPercent").value(28))
+                .andExpect(jsonPath("$.jobStatistics.nonCapitalRank.rank").value(49))
+                .andExpect(jsonPath("$.jobStatistics.nonCapitalRank.total").value(173));
     }
 
     @Test
@@ -148,14 +155,16 @@ class DetailControllerTest {
         given(regionDetailService.details(any(), any())).willReturn(RegionDetailInfo.builder()
                 .sigunguCode("11680")
                 .jobStatistics(new RegionJobStatisticsSummary(
-                        "2026-07", 40L, 0L, null, 10L, 0L, 0L))
+                        "2026-07", 40L, 0L, null, 10L, 0L, 0L, null))
                 .build());
 
         // when & then
         mockMvc.perform(get("/api/detail").param("sigunguCode", "11680"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.jobStatistics.validOpenings").value(40))
-                .andExpect(content().string(containsString("\"jobOpeningRatio\":null")));
+                .andExpect(content().string(containsString("\"jobOpeningRatio\":null")))
+                // 구인배수가 없으면 백분위도 없다
+                .andExpect(jsonPath("$.jobStatistics.nonCapitalRank").doesNotExist());
     }
 
     @Test

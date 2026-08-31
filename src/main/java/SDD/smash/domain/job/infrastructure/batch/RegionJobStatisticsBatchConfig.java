@@ -55,7 +55,8 @@ import static SDD.smash.global.util.BatchTextUtil.normalize;
  *       깨진 전례가 있어, 이 Step 은 경고만 남기고 0건으로 끝낸다.</li>
  * </ul>
  *
- * <p>파생 캐시 무효화 대상이 없다 — 점수({@code JobScorePolicy})의 입력은 아직 {@code JobCount} 다.
+ * <p>적재가 끝나면 {@code RegionJobStatisticsCacheCleaner} 가 파생 캐시를 버린다 —
+ * 비수도권 구인배수 분포와, 그 백분위를 섞어 계산하는 일자리 점수 둘 다 이 표에서 나온다.
  */
 @Configuration
 @Slf4j
@@ -104,9 +105,10 @@ public class RegionJobStatisticsBatchConfig {
     private final AtomicLong invalidValueCount = new AtomicLong();
 
     @Bean
-    public Job regionJobStatisticsJob() {
+    public Job regionJobStatisticsJob(RegionJobStatisticsCacheCleaner regionJobStatisticsCacheCleaner) {
         return new JobBuilder("regionJobStatisticsJob", jobRepository)
                 .start(regionJobStatisticsStep())
+                .listener(regionJobStatisticsCacheCleaner)
                 .build();
     }
 

@@ -5,6 +5,7 @@ import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsByJobS
 import SDD.smash.domain.recommendation.application.dto.RegionJobStatisticsTrendPointSummary;
 import SDD.smash.domain.recommendation.presentation.dto.RegionJobStatisticsByJobResponse;
 import SDD.smash.domain.recommendation.presentation.dto.RegionJobStatisticsTrendResponse;
+import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.global.domain.model.SigunguCode;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -30,13 +31,21 @@ public class JobStatisticsDetailController {
 
     private final RegionJobStatisticsDetailService regionJobStatisticsDetailService;
 
-    /** 최신 기준월 한 시군구의 직종 대분류 13종 분해. */
+    /**
+     * 최신 기준월 한 시군구의 직종 대분류 13종 분해.
+     *
+     * @param midJobCode 직종 <b>중분류</b> 코드(선택). 주면 그 중분류가 속한 대분류 item 에
+     *                   {@code isSelected=true} 가 붙고 최상단 {@code selectedJobMajorCode} 도 채워진다
+     */
     @GetMapping("/byJob")
     public ResponseEntity<RegionJobStatisticsByJobResponse> byJob(
-            @RequestParam(name = "sigunguCode") @NotNull(message = "지역코드는 필수입니다.") String sigunguCode) {
+            @RequestParam(name = "sigunguCode") @NotNull(message = "지역코드는 필수입니다.") String sigunguCode,
+            @RequestParam(name = "midJobCode", required = false) String midJobCode) {
+
+        JobCode jobCode = (midJobCode == null || midJobCode.isBlank()) ? null : JobCode.of(midJobCode);
 
         RegionJobStatisticsByJobSummary summary =
-                regionJobStatisticsDetailService.byJob(SigunguCode.of(sigunguCode));
+                regionJobStatisticsDetailService.byJob(SigunguCode.of(sigunguCode), jobCode);
         return ResponseEntity.ok(RegionJobStatisticsByJobResponse.from(summary));
     }
 
