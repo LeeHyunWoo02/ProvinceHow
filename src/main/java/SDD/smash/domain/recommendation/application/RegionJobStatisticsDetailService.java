@@ -48,14 +48,14 @@ public class RegionJobStatisticsDetailService {
         addressQueryService.checkSigunguExistsOrThrow(sigunguCode);
 
         // 통계 조회보다 먼저 검증한다. 미적재 지역이라고 해서 잘못된 직종 코드가 통과하면 안 된다.
-        String selectedJobTopCode = (midJobCode == null)
+        String selectedJobMajorCode = (midJobCode == null)
                 ? null
                 : jobQueryService.getTopCodeOfSubOrThrow(midJobCode).value();
 
         List<RegionJobStatisticsView> views =
                 regionJobStatisticsQueryService.getLatestStatisticsOfRegion(sigunguCode);
         if (views.isEmpty()) {
-            return RegionJobStatisticsByJobSummary.empty(selectedJobTopCode);
+            return RegionJobStatisticsByJobSummary.empty(selectedJobMajorCode);
         }
 
         NonCapitalRankView totalRank =
@@ -64,7 +64,7 @@ public class RegionJobStatisticsDetailService {
                 nonCapitalJobRankingService.getRegionRankByJob(sigunguCode);
 
         return RegionJobStatisticsByJobSummary.from(
-                views, jobMajorNames(), selectedJobTopCode, totalRank, rankByJobMajorCode);
+                views, jobMajorNames(), selectedJobMajorCode, totalRank, rankByJobMajorCode);
     }
 
     /**

@@ -122,7 +122,7 @@ class JobStatisticsDetailControllerTest {
                         .param("sigunguCode", "46110")
                         .param("midJobCode", "021"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.selectedJobTopCode").value("02"))
+                .andExpect(jsonPath("$.selectedJobMajorCode").value("02"))
                 .andExpect(jsonPath("$.items[0].isSelected").value(false))
                 .andExpect(jsonPath("$.items[1].isSelected").value(true))
                 .andExpect(jsonPath("$.items[1].nonCapitalRank.topPercent").value(2));
@@ -138,7 +138,7 @@ class JobStatisticsDetailControllerTest {
                         .param("sigunguCode", "46110")
                         .param("midJobCode", ""))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("\"selectedJobTopCode\":null")));
+                .andExpect(content().string(containsString("\"selectedJobMajorCode\":null")));
     }
 
     @Test
@@ -177,7 +177,7 @@ class JobStatisticsDetailControllerTest {
                         .param("sigunguCode", "41110")
                         .param("midJobCode", "021"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.selectedJobTopCode").value("02"))
+                .andExpect(jsonPath("$.selectedJobMajorCode").value("02"))
                 .andExpect(jsonPath("$.items.length()").value(0));
     }
 
