@@ -182,6 +182,21 @@ class RegionJobStatisticsQueryServiceTest {
     }
 
     @Test
+    @DisplayName("months 가 1 미만이면 예외 없이 최소 1개월로 클램프한다")
+    void trendClampsNonPositiveMonths() {
+        given(regionJobStatisticsRepository.findAllBySigunguCode(SigunguCode.of("11680")))
+                .willReturn(List.of(
+                        monthly("11680", "01", "2026-06", 20, 20),
+                        monthly("11680", "01", "2026-07", 30, 30)));
+
+        List<RegionJobStatisticsTrendPoint> points =
+                service.getRegionTrend(SigunguCode.of("11680"), -5);
+
+        assertThat(points).hasSize(1);
+        assertThat(points.get(0).statisticsMonth()).isEqualTo("2026-07");
+    }
+
+    @Test
     @DisplayName("적재된 월이 없으면 빈 추세를 준다")
     void trendIsEmptyWhenNothingLoaded() {
         given(regionJobStatisticsRepository.findAllBySigunguCode(SigunguCode.of("11680")))
