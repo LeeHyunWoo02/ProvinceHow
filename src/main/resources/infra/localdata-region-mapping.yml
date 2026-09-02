@@ -42,6 +42,17 @@
 #    그래서 인천 인프라는 옛 코드(3490000→28110 / 3500000→28140 / 3560000→28260)에 계속 쌓이고
 #    신규 4구는 인프라가 비어 있다. districtSplits 로도 나눌 수 없다 — 개편 전 주소에는
 #    `검단구`·`영종구` 같은 구 이름이 아예 없고, 제물포구는 두 코드를 하나로 합치는 반대 방향이다.
+#
+#  전남광주통합특별시 출범(2026-07-01) — 개방자치단체코드 재부여 (확인일 2026-09-02)
+#    광주(29xxx)·전남(46xxx) 통합으로 시군구 표준코드가 12xxx 로 바뀌었을 뿐 아니라,
+#    LOCALDATA 의 개방자치단체코드도 옛 값(광주 359xxxx / 전남 48xxxxx~501xxxx)이 전부 폐기되고
+#    578xxxx~591xxxx 신규 대역으로 재부여됐다. 옛 코드로는 인허가 API 가 전 업종 0건을 준다.
+#    신규 코드는 살아 있는 API 실측으로 확정했다(주소가 `전남광주통합특별시 …` 로 바뀌어 있다):
+#      목포 5780000 / 여수 5785000 / 순천 5790000 / 나주 5795000 / 광양 5800000
+#      동구 5805000 / 서구 5810000 / 남구 5815000 / 북구 5820000 / 광산구 5825000
+#      담양 5830000 … 신안 5910000 (전남 17군, 5000 간격)
+#    부여 순서는 전남 5시 → 광주 5구 → 전남 17군이다. sigunguCode(12xxx)는 이미 맞으므로
+#    왼쪽 개방자치단체코드만 교체했다. 하위 테이블 이관은 별도 SQL 로 처리됐다.
 # ---------------------------------------------------------------------------
 #  형식
 #    openOrgCode : 개방자치단체코드(7자리, `_ALL` 접미 허용)
@@ -230,21 +241,21 @@ regions:
   - openOrgCode: "3580000"
     sigunguCode: "28720"
     name: 인천광역시 옹진군
-  - openOrgCode: "3590000"
+  - openOrgCode: "5805000"
     sigunguCode: "12210"
-    name: 광주광역시 동구
-  - openOrgCode: "3600000"
+    name: 전남광주통합특별시 동구
+  - openOrgCode: "5810000"
     sigunguCode: "12240"
-    name: 광주광역시 서구
-  - openOrgCode: "3610000"
+    name: 전남광주통합특별시 서구
+  - openOrgCode: "5815000"
     sigunguCode: "12270"
-    name: 광주광역시 남구
-  - openOrgCode: "3620000"
+    name: 전남광주통합특별시 남구
+  - openOrgCode: "5820000"
     sigunguCode: "12300"
-    name: 광주광역시 북구
-  - openOrgCode: "3630000"
+    name: 전남광주통합특별시 북구
+  - openOrgCode: "5825000"
     sigunguCode: "12330"
-    name: 광주광역시 광산구
+    name: 전남광주통합특별시 광산구
   - openOrgCode: "3640000"
     sigunguCode: "30110"
     name: 대전광역시 동구
@@ -449,72 +460,72 @@ regions:
   - openOrgCode: "4620000"
     sigunguCode: "44825"
     name: 충청남도 태안군
-  - openOrgCode: "4800000"
+  - openOrgCode: "5780000"
     sigunguCode: "12110"
-    name: 전라남도 목포시
-  - openOrgCode: "4810000"
+    name: 전남광주통합특별시 목포시
+  - openOrgCode: "5785000"
     sigunguCode: "12130"
-    name: 전라남도 여수시
-  - openOrgCode: "4820000"
+    name: 전남광주통합특별시 여수시
+  - openOrgCode: "5790000"
     sigunguCode: "12150"
-    name: 전라남도 순천시
-  - openOrgCode: "4830000"
+    name: 전남광주통합특별시 순천시
+  - openOrgCode: "5795000"
     sigunguCode: "12170"
-    name: 전라남도 나주시
-  - openOrgCode: "4840000"
+    name: 전남광주통합특별시 나주시
+  - openOrgCode: "5800000"
     sigunguCode: "12190"
-    name: 전라남도 광양시
-  - openOrgCode: "4850000"
+    name: 전남광주통합특별시 광양시
+  - openOrgCode: "5830000"
     sigunguCode: "12710"
-    name: 전라남도 담양군
-  - openOrgCode: "4860000"
+    name: 전남광주통합특별시 담양군
+  - openOrgCode: "5835000"
     sigunguCode: "12720"
-    name: 전라남도 곡성군
-  - openOrgCode: "4870000"
+    name: 전남광주통합특별시 곡성군
+  - openOrgCode: "5840000"
     sigunguCode: "12730"
-    name: 전라남도 구례군
-  - openOrgCode: "4880000"
+    name: 전남광주통합특별시 구례군
+  - openOrgCode: "5845000"
     sigunguCode: "12740"
-    name: 전라남도 고흥군
-  - openOrgCode: "4890000"
+    name: 전남광주통합특별시 고흥군
+  - openOrgCode: "5850000"
     sigunguCode: "12750"
-    name: 전라남도 보성군
-  - openOrgCode: "4900000"
+    name: 전남광주통합특별시 보성군
+  - openOrgCode: "5855000"
     sigunguCode: "12760"
-    name: 전라남도 화순군
-  - openOrgCode: "4910000"
+    name: 전남광주통합특별시 화순군
+  - openOrgCode: "5860000"
     sigunguCode: "12770"
-    name: 전라남도 장흥군
-  - openOrgCode: "4920000"
+    name: 전남광주통합특별시 장흥군
+  - openOrgCode: "5865000"
     sigunguCode: "12780"
-    name: 전라남도 강진군
-  - openOrgCode: "4930000"
+    name: 전남광주통합특별시 강진군
+  - openOrgCode: "5870000"
     sigunguCode: "12790"
-    name: 전라남도 해남군
-  - openOrgCode: "4940000"
+    name: 전남광주통합특별시 해남군
+  - openOrgCode: "5875000"
     sigunguCode: "12800"
-    name: 전라남도 영암군
-  - openOrgCode: "4950000"
+    name: 전남광주통합특별시 영암군
+  - openOrgCode: "5880000"
     sigunguCode: "12810"
-    name: 전라남도 무안군
-  - openOrgCode: "4960000"
+    name: 전남광주통합특별시 무안군
+  - openOrgCode: "5885000"
     sigunguCode: "12820"
-    name: 전라남도 함평군
-  - openOrgCode: "4970000"
+    name: 전남광주통합특별시 함평군
+  - openOrgCode: "5890000"
     sigunguCode: "12830"
-    name: 전라남도 영광군
-  - openOrgCode: "4980000"
+    name: 전남광주통합특별시 영광군
+  - openOrgCode: "5895000"
     sigunguCode: "12840"
-    name: 전라남도 장성군
-  - openOrgCode: "4990000"
+    name: 전남광주통합특별시 장성군
+  - openOrgCode: "5900000"
     sigunguCode: "12850"
-    name: 전라남도 완도군
-  - openOrgCode: "5000000"
+    name: 전남광주통합특별시 완도군
+  - openOrgCode: "5905000"
     sigunguCode: "12860"
-    name: 전라남도 진도군
-  - openOrgCode: "5010000"
+    name: 전남광주통합특별시 진도군
+  - openOrgCode: "5910000"
     sigunguCode: "12870"
-    name: 전라남도 신안군
+    name: 전남광주통합특별시 신안군
   - openOrgCode: "5020000"
     sigunguCode: "47110"
     name: 경상북도 포항시
