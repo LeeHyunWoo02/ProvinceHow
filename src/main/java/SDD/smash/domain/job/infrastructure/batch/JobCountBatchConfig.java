@@ -9,6 +9,8 @@ import SDD.smash.domain.job.infrastructure.persistence.JobCodeMiddleJpaRepositor
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.StepExecutionListener;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.core.job.builder.JobBuilder;
 import org.springframework.batch.core.repository.JobRepository;
@@ -125,7 +127,22 @@ public class JobCountBatchConfig {
                 .reader(jobCountSourceReader())
                 .processor(jobCountCsvProcessor())
                 .writer(jobCountWriter())
+                .listener(jobCountStepListener())
                 .build();
+    }
+
+    /**
+     * 재실행 시 FK 검증 캐시를 비운다. 싱글턴 빈 필드라 비우지 않으면 이전 실행의 목록이 남아
+     * 그사이 바뀐 시군구/직종 코드를 반영하지 못한다({@code RegionJobStatisticsBatchConfig} 와 같은 방식).
+     */
+    private StepExecutionListener jobCountStepListener() {
+        return new StepExecutionListener() {
+            @Override
+            public void beforeStep(StepExecution stepExecution) {
+                sigunguCodeCache = null;
+                middleCodeCache = null;
+            }
+        };
     }
 
     /**

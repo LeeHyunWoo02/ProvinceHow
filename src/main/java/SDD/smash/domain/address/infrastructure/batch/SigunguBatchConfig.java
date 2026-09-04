@@ -17,6 +17,7 @@ import org.springframework.batch.item.data.RepositoryItemWriter;
 import org.springframework.batch.item.data.builder.RepositoryItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,7 +46,10 @@ public class SigunguBatchConfig {
     private final SidoJpaRepository sidoJpaRepository;
     private final SigunguJpaRepository sigunguJpaRepository;
 
-    public SigunguBatchConfig(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager,
+    // SigunguWriter 가 smash_data 에 쓰므로 청크 트랜잭션 매니저를 dataTransactionManager 로 못 박는다.
+    // 필드 @Qualifier 는 lombok 이 생성자에 복사하지 않아 무효이므로 파라미터에 붙인다.
+    public SigunguBatchConfig(JobRepository jobRepository,
+                              @Qualifier("dataTransactionManager") PlatformTransactionManager platformTransactionManager,
                               SidoJpaRepository sidoJpaRepository, SigunguJpaRepository sigunguJpaRepository) {
         this.jobRepository = jobRepository;
         this.platformTransactionManager = platformTransactionManager;
@@ -55,19 +59,6 @@ public class SigunguBatchConfig {
 
     @Value("${sigungu.filePath}")
     private String filePath;
-
-    private Set<String> sidoCodeCache = null;
-
-    /** 등록된 시도 코드면 그대로, 아니면 null. As-Is {@code resolveSido} 와 판정이 같다. */
-    private String resolveSidoCode(String sidoCode) {
-        if (sidoCodeCache == null) {
-            sidoCodeCache = new HashSet<>();
-            for (SidoJpaEntity s : sidoJpaRepository.findAll()) {
-                sidoCodeCache.add(s.getSidoCode());
-            }
-        }
-        return sidoCodeCache.contains(sidoCode) ? sidoCode : null;
-    }
 
     @Bean
     public Job SigunguJob() {
@@ -108,16 +99,27 @@ public class SigunguBatchConfig {
                 .build();
     }
 
-    /** 빈 이름은 As-Is 의 오타(sigungo)를 그대로 둔다. 이름을 바꾸는 것은 이관 범위가 아니다. */
+    /**
+     * 빈 이름은 As-Is 의 오타(sigungo)를 그대로 둔다. 이름을 바꾸는 것은 이관 범위가 아니다.
+     *
+     * <p>시도 코드 집합은 Step 실행마다 새로 조회한다. @StepScope 라 재실행 때 stale 캐시가 남지 않는다.
+     * 등록된 시도 코드면 그대로, 아니면 null 을 넘겨 As-Is {@code resolveSido} 와 판정을 맞춘다.
+     */
     @Bean
+    @StepScope
     public ItemProcessor<SigunguCsvRow, SigunguJpaEntity> sigungoCsvProcessor() {
+        Set<String> sidoCodes = new HashSet<>();
+        for (SidoJpaEntity s : sidoJpaRepository.findAll()) {
+            sidoCodes.add(s.getSidoCode());
+        }
         return row -> {
             String sidoCode = addLeadingZero(normalize(row.sidoCode()));
             if (sidoCode == null) {
-                log.warn("❗ Empty sido key. Skip row.");
+                log.warn("Empty sido key. Skip row.");
                 return null;
             }
-            return AddressCsvMapper.toSigunguJpaEntity(row, resolveSidoCode(sidoCode));
+            String resolvedSidoCode = sidoCodes.contains(sidoCode) ? sidoCode : null;
+            return AddressCsvMapper.toSigunguJpaEntity(row, resolvedSidoCode);
         };
     }
 

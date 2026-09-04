@@ -3,7 +3,6 @@ package SDD.smash.domain.address.infrastructure.batch;
 import SDD.smash.domain.address.infrastructure.batch.dto.SidoCsvRow;
 import SDD.smash.domain.address.infrastructure.persistence.SidoJpaEntity;
 import SDD.smash.domain.address.infrastructure.persistence.SidoJpaRepository;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -15,6 +14,7 @@ import org.springframework.batch.item.data.RepositoryItemWriter;
 import org.springframework.batch.item.data.builder.RepositoryItemWriterBuilder;
 import org.springframework.batch.item.file.FlatFileItemReader;
 import org.springframework.batch.item.file.builder.FlatFileItemReaderBuilder;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,14 +29,16 @@ import org.springframework.transaction.PlatformTransactionManager;
  * {@code BatchGuard} 가 STEP_NAME 으로 재실행 여부를 판단하므로 바꾸지 않는다.
  */
 @Configuration
-@Slf4j
 public class SidoBatchConfig {
 
     private final JobRepository jobRepository;
     private final PlatformTransactionManager platformTransactionManager;
     private final SidoJpaRepository sidoJpaRepository;
 
-    public SidoBatchConfig(JobRepository jobRepository, PlatformTransactionManager platformTransactionManager,
+    // SidoWriter 가 smash_data 에 쓰므로 청크 트랜잭션 매니저를 dataTransactionManager 로 못 박는다.
+    // 필드 @Qualifier 는 lombok 이 생성자에 복사하지 않아 무효이므로 파라미터에 붙인다.
+    public SidoBatchConfig(JobRepository jobRepository,
+                           @Qualifier("dataTransactionManager") PlatformTransactionManager platformTransactionManager,
                            SidoJpaRepository sidoJpaRepository) {
         this.jobRepository = jobRepository;
         this.platformTransactionManager = platformTransactionManager;

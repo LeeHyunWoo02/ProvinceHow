@@ -4,7 +4,6 @@ import SDD.smash.domain.infra.infrastructure.master.IndustryMasterEntry;
 import SDD.smash.domain.infra.infrastructure.master.InfraMasterCatalog;
 import SDD.smash.domain.infra.infrastructure.persistence.IndustryJpaEntity;
 import SDD.smash.domain.infra.infrastructure.persistence.IndustryJpaRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
@@ -17,6 +16,7 @@ import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.data.RepositoryItemWriter;
 import org.springframework.batch.item.data.builder.RepositoryItemWriterBuilder;
 import org.springframework.batch.item.support.IteratorItemReader;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -47,13 +47,36 @@ import java.util.List;
  */
 @Configuration
 @Slf4j
-@RequiredArgsConstructor
 public class IndustryBatchConfig {
 
     private final JobRepository jobRepository;
-    private final PlatformTransactionManager platformTransactionManager;
+
+    /**
+     * 청크 트랜잭션 매니저. 아래 생성자에서 <b>이름을 명시</b>해 주입받는다.
+     *
+     * <p>{@code industryWriter} 가 업무 DB({@code smash_data})에 쓰므로 이 매니저는 반드시
+     * {@code dataTransactionManager}(JPA)여야 한다. 타입만으로 주입받으면 {@code @Primary}
+     * 해석에 결과가 걸려, 누군가 {@code @Primary} 를 옮기는 순간 청크가 조용히 다른 DB 의
+     * 트랜잭션이 된다. {@code InfraBatchConfig} 와 같은 이유로 못 박는다.
+     */
+    private final PlatformTransactionManager dataTransactionManager;
     private final IndustryJpaRepository industryJpaRepository;
     private final InfraMasterCatalog masterCatalog;
+
+    /**
+     * 명시적 생성자다. <b>필드에 붙인 {@code @Qualifier} 는 효과가 없다</b> — 이 프로젝트에는
+     * {@code lombok.config}({@code lombok.copyableAnnotations})가 없어 lombok 생성자가
+     * 파라미터로 애노테이션을 복사하지 않는다. 그래서 생성자 파라미터에 직접 붙인다.
+     */
+    public IndustryBatchConfig(JobRepository jobRepository,
+                               @Qualifier("dataTransactionManager") PlatformTransactionManager dataTransactionManager,
+                               IndustryJpaRepository industryJpaRepository,
+                               InfraMasterCatalog masterCatalog) {
+        this.jobRepository = jobRepository;
+        this.dataTransactionManager = dataTransactionManager;
+        this.industryJpaRepository = industryJpaRepository;
+        this.masterCatalog = masterCatalog;
+    }
 
     @Bean
     public Job industryJob(Step industryStep) {
@@ -67,7 +90,7 @@ public class IndustryBatchConfig {
                              ItemProcessor<IndustryMasterEntry, IndustryJpaEntity> industryMasterProcessor,
                              RepositoryItemWriter<IndustryJpaEntity> industryWriter) {
         return new StepBuilder("industryStep", jobRepository)
-                .<IndustryMasterEntry, IndustryJpaEntity>chunk(20, platformTransactionManager)
+                .<IndustryMasterEntry, IndustryJpaEntity>chunk(20, dataTransactionManager)
                 .reader(industryMasterReader)
                 .processor(industryMasterProcessor)
                 .writer(industryWriter)
