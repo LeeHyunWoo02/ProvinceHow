@@ -143,14 +143,35 @@ public class DwellingBaseMonthService {
         return primary;
     }
 
-    /** 배치 JobParameter 로 넘길 {@code yyyyMM} 표기. */
+    /**
+     * 배치 JobParameter 로 넘길 {@code yyyyMM} 표기.
+     *
+     * <p><b>주의:</b> 내부에서 {@link #resolveBaseMonth()} 를 호출하므로 MOLIT 탐침(외부 호출 +
+     * 일일 예산 소모)이 한 번 일어난다. 한 실행에서 기준월 텍스트와 집계 구간을 모두 필요로 하면
+     * {@link #resolveBaseMonth()} 를 한 번만 부른 뒤 그 결과를 {@link #resolveBaseMonthText(YearMonth)}
+     * / {@link #resolveAggregationPeriod(YearMonth)} 오버로드에 넘겨 탐침이 두 번 돌지 않게 한다.
+     */
     public String resolveBaseMonthText() {
-        return policy.format(resolveBaseMonth());
+        return resolveBaseMonthText(resolveBaseMonth());
     }
 
-    /** 이번 실행이 모을 집계 구간. */
+    /** 이미 확정된 기준월을 {@code yyyyMM} 텍스트로 변환한다(추가 탐침 없음). */
+    public String resolveBaseMonthText(YearMonth baseMonth) {
+        return policy.format(baseMonth);
+    }
+
+    /**
+     * 이번 실행이 모을 집계 구간.
+     *
+     * <p>{@link #resolveBaseMonthText()} 와 같은 주의사항이 적용된다 — 내부에서 탐침이 한 번 일어난다.
+     */
     public AggregationPeriod resolveAggregationPeriod() {
-        return policy.aggregationPeriod(resolveBaseMonth(), lookbackMonths);
+        return resolveAggregationPeriod(resolveBaseMonth());
+    }
+
+    /** 이미 확정된 기준월로 집계 구간을 만든다(추가 탐침 없음). */
+    public AggregationPeriod resolveAggregationPeriod(YearMonth baseMonth) {
+        return policy.aggregationPeriod(baseMonth, lookbackMonths);
     }
 
     /** 집계 개월 수 설정값. 배치 JobParameter {@code months} 로 넘긴다. */

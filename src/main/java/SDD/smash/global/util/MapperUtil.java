@@ -3,11 +3,16 @@ package SDD.smash.global.util;
 import com.fasterxml.jackson.databind.JsonNode;
 
 public class MapperUtil {
+
+    private MapperUtil() {
+    }
+
     /**
      * json 에서 문자열 값을 꺼내는 메소드
      * String... -> 가변인자 문법 / String[] 와 동일하지만, 호출할 때 배열을 직접 만들지 않아도 여러 개의 인자를 넘길 수 있음.
      * */
     public static String text(JsonNode node, String... keys) {
+        if (node == null) return null;
         for (String key : keys) {
             JsonNode value = node.get(key);
             if (value != null && !value.isNull()) return value.asText();
@@ -19,6 +24,7 @@ public class MapperUtil {
      * json 에서 정수 값을 꺼내는 메소드
      * */
     public static Integer num(JsonNode node, String... keys) {
+        if (node == null) return null;
         for (String key : keys) {
             JsonNode value = node.get(key);
             if (value != null && !value.isNull()) {

@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -53,17 +54,24 @@ public class SupportScoreService {
             return Map.of();
         }
 
-        // 3) 시군구별로 선택한 태그들의 개수를 모아 정책을 적용한다.
+        // 3) 태그를 고정해 전 시군구 개수를 태그당 1회로 조회한다(과거엔 시군구×태그 개별 왕복).
+        List<SigunguCode> sigunguCodes = addressQueryService.getAllSigunguCodes();
+        Map<SupportTag, Map<SigunguCode, Integer>> countsPerTag = new LinkedHashMap<>();
+        for (SupportTag tag : selectedTags) {
+            countsPerTag.put(tag, supportPolicyRepository.countByTagForAll(tag, sigunguCodes));
+        }
+
+        // 4) 시군구별로 선택한 태그들의 개수를 모아 정책을 적용한다(집계 방식은 As-Is 그대로).
         Map<SigunguCode, Score> scores = new LinkedHashMap<>();
-        for (SigunguCode sigunguCode : addressQueryService.getAllSigunguCodes()) {
+        for (SigunguCode sigunguCode : sigunguCodes) {
             Map<SupportTag, Integer> countsByTag = new LinkedHashMap<>();
             for (SupportTag tag : selectedTags) {
-                countsByTag.put(tag, supportPolicyRepository.countBy(sigunguCode, tag));
+                countsByTag.put(tag, countsPerTag.get(tag).getOrDefault(sigunguCode, 0));
             }
             scores.put(sigunguCode, policy.score(countsByTag, selectedTags));
         }
 
-        // 4) 캐시 저장. TTL 은 어댑터가 안다.
+        // 5) 캐시 저장. TTL 은 어댑터가 안다.
         supportScoreCache.put(key, scores);
 
         return scores;

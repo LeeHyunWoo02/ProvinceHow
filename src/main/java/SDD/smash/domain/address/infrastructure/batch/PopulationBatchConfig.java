@@ -4,7 +4,6 @@ import SDD.smash.domain.address.application.PopulationCollectService;
 import SDD.smash.domain.address.application.dto.PopulationCollectionInfo;
 import SDD.smash.domain.address.domain.model.PopulationSnapshot;
 import SDD.smash.domain.address.infrastructure.batch.dto.PopulationUpsertRow;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -39,7 +38,6 @@ import java.time.format.DateTimeFormatter;
  * 대소문자를 구분하지 않아 드러나지 않고 <b>리눅스(기본 0)에서만 "table doesn't exist" 로 터진다</b>.
  */
 @Configuration
-@Slf4j
 public class PopulationBatchConfig {
 
     private static final DateTimeFormatter BASE_MONTH_FORMAT = DateTimeFormatter.ofPattern("yyyyMM");

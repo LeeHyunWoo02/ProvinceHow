@@ -20,4 +20,9 @@ public record RentStat(Double average, Money median) {
     public boolean hasMedian() {
         return median != null;
     }
+
+    /** 중앙값을 저장용 만원 단위 정수로. 실거래가 없으면 null. */
+    public Integer medianManwon() {
+        return median == null ? null : median.manwon();
+    }
 }

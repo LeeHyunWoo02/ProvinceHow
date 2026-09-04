@@ -15,6 +15,9 @@ public record Population(SigunguCode sigunguCode, int count) {
         if (sigunguCode == null) {
             throw new DomainException(ErrorCode.ADDRESS_CODE_NOT_FOUND, "시군구 코드는 필수입니다.");
         }
+        if (count < 0) {
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "인구수는 0 이상이어야 합니다.");
+        }
     }
 
     public static Population of(SigunguCode sigunguCode, int count) {

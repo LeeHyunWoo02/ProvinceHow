@@ -46,20 +46,7 @@ public class RedisConfig {
      */
     @Bean
     public RedisTemplate<String, SupportPolicyListPayload> supportListRedisTemplate(RedisConnectionFactory cf) {
-        RedisTemplate<String, SupportPolicyListPayload> template = new RedisTemplate<>();
-        template.setConnectionFactory(cf);
-        template.setKeySerializer(new StringRedisSerializer());
-
-        ObjectMapper om = new ObjectMapper();
-        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-
-        var javaType = om.getTypeFactory().constructType(SupportPolicyListPayload.class);
-        var serializer = new Jackson2JsonRedisSerializer<SupportPolicyListPayload>(javaType);
-
-        template.setValueSerializer(serializer);
-        template.setHashValueSerializer(serializer);
-        template.afterPropertiesSet();
-        return template;
+        return jsonValueTemplate(cf, SupportPolicyListPayload.class);
     }
 
     /**
@@ -68,20 +55,7 @@ public class RedisConfig {
      */
     @Bean
     public RedisTemplate<String, JobVacancyListPayload> jobVacancyListRedisTemplate(RedisConnectionFactory cf) {
-        RedisTemplate<String, JobVacancyListPayload> template = new RedisTemplate<>();
-        template.setConnectionFactory(cf);
-        template.setKeySerializer(new StringRedisSerializer());
-
-        ObjectMapper om = new ObjectMapper();
-        om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-
-        var javaType = om.getTypeFactory().constructType(JobVacancyListPayload.class);
-        var serializer = new Jackson2JsonRedisSerializer<JobVacancyListPayload>(javaType);
-
-        template.setValueSerializer(serializer);
-        template.setHashValueSerializer(serializer);
-        template.afterPropertiesSet();
-        return template;
+        return jsonValueTemplate(cf, JobVacancyListPayload.class);
     }
 
     /**
@@ -90,15 +64,23 @@ public class RedisConfig {
      */
     @Bean
     public RedisTemplate<String, RegionJobProfilePayload> regionJobProfileRedisTemplate(RedisConnectionFactory cf) {
-        RedisTemplate<String, RegionJobProfilePayload> template = new RedisTemplate<>();
+        return jsonValueTemplate(cf, RegionJobProfilePayload.class);
+    }
+
+    /**
+     * 문자열 키 + visibility ALL ObjectMapper 기반 Jackson2Json 값/해시값 직렬화 전용 템플릿.
+     * 위 세 전용 빈이 공유하는 보일러플레이트다(redis-conventions §3.1).
+     */
+    private <T> RedisTemplate<String, T> jsonValueTemplate(RedisConnectionFactory cf, Class<T> type) {
+        RedisTemplate<String, T> template = new RedisTemplate<>();
         template.setConnectionFactory(cf);
         template.setKeySerializer(new StringRedisSerializer());
 
         ObjectMapper om = new ObjectMapper();
         om.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
 
-        var javaType = om.getTypeFactory().constructType(RegionJobProfilePayload.class);
-        var serializer = new Jackson2JsonRedisSerializer<RegionJobProfilePayload>(javaType);
+        var javaType = om.getTypeFactory().constructType(type);
+        var serializer = new Jackson2JsonRedisSerializer<T>(javaType);
 
         template.setValueSerializer(serializer);
         template.setHashValueSerializer(serializer);

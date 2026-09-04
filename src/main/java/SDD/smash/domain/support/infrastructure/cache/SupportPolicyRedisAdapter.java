@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 지원정책 정본 저장소의 Redis 구현. {@code RedisTemplate} 은 이 클래스 밖으로 나가지 않는다.
@@ -79,6 +81,30 @@ public class SupportPolicyRedisAdapter implements SupportPolicyRepository {
     @Override
     public int countBy(SigunguCode code, SupportTag tag) {
         Object value = redisTemplate.opsForValue().get(countKey(code, tag));
+        return toCount(value);
+    }
+
+    /**
+     * 태그를 고정하고 시군구별 개수 키를 한 번의 {@code multiGet} 으로 읽는다. 개별
+     * {@link #countBy} 를 시군구 수만큼 왕복하던 것을 태그당 1회로 줄인다. 반환 순서는
+     * 입력 {@code codes} 순서를 그대로 따르며, 값이 없는 키는 0 으로 채운다.
+     */
+    @Override
+    public Map<SigunguCode, Integer> countByTagForAll(SupportTag tag, List<SigunguCode> codes) {
+        Map<SigunguCode, Integer> result = new LinkedHashMap<>();
+        if (codes == null || codes.isEmpty()) {
+            return result;
+        }
+        List<String> keys = codes.stream().map(code -> countKey(code, tag)).toList();
+        List<Object> values = redisTemplate.opsForValue().multiGet(keys);
+        for (int i = 0; i < codes.size(); i++) {
+            Object value = (values == null || i >= values.size()) ? null : values.get(i);
+            result.put(codes.get(i), toCount(value));
+        }
+        return result;
+    }
+
+    private int toCount(Object value) {
         return value instanceof Number ? ((Number) value).intValue() : 0;
     }
 

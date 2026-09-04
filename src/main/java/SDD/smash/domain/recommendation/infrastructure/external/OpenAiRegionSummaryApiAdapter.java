@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 
 import java.util.List;
 
@@ -25,13 +26,14 @@ import java.util.List;
  * 이제 요약문만 돌려주고 응답 조립은 {@code presentation/AiConverter} 가 한다.
  * 프롬프트 문자열·web_search_preview 도구 설정·마크다운 정리 정규식은 그대로다.
  *
- * <p><b>폴백 2경로 — As-Is 그대로 유지한다.</b> {@code null} 을 반환해
+ * <p><b>폴백 — 예외를 밖으로 내보내지 않고 {@code null} 을 반환해</b>
  * 상세 응답은 정상적으로 내려가고 {@code aiSummary} 만 비게 한다.
  * <ol>
- *   <li>{@code JsonProcessingException}</li>
- *   <li>{@code DomainException} (OpenAI 호출 실패)</li>
+ *   <li>{@code choices} 가 null/빈 (응답에 선택지가 없음)</li>
+ *   <li>{@code JsonProcessingException} (직렬화/역직렬화 실패)</li>
+ *   <li>{@code RestClientException}/{@code DomainException}
+ *       (OpenAI 4xx/5xx·타임아웃 — {@code OpenAiClient}·{@code RestClient} 가 던진다)</li>
  * </ol>
- * (추천 쪽과 달리 {@code extractJson} 을 쓰지 않으므로 세 번째 경로가 없다 — As-Is 와 동일.)
  *
  * <p>빈 이름을 {@code detailAiSummaryService} 로 고정한다.
  */
@@ -95,6 +97,9 @@ public class OpenAiRegionSummaryApiAdapter implements RegionSummaryProvider {
             OpenAiRequest request = new OpenAiRequest(MODEL, List.of(system, user), TEMPERATURE);
 
             OpenAiResponse response = openAiClient.getChatCompletion(request);
+            if (response.getChoices() == null || response.getChoices().isEmpty()) {
+                return null;                // 폴백 ① — choices 가 비면 null
+            }
 
             String aiSummaryContent = response.getChoices().get(0).getMessage().getContent()
                     .replaceAll(" {2,}\\n", "\n") // 공백 2개+개행 → 일반 개행
@@ -103,10 +108,11 @@ public class OpenAiRegionSummaryApiAdapter implements RegionSummaryProvider {
 
             return aiSummaryContent;
         } catch (JsonProcessingException e) {
-            return null;                    // 폴백 ① — As-Is 의 toResponseDTO(dto, null) 과 같은 결과
-        } catch (DomainException e){
-            log.warn("OpenAI API 호출 실패");
-            return null;                    // 폴백 ②
+            return null;                    // 폴백 ② — 직렬화/역직렬화 실패
+        } catch (RestClientException | DomainException e){
+            // OpenAI 호출 실패(4xx/5xx·타임아웃 등). 비밀값·URL 은 남기지 않는다.
+            log.warn("OpenAI 지역 요약 호출 실패 - null 로 폴백");
+            return null;                    // 폴백 ③
         }
     }
 

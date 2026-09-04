@@ -18,7 +18,8 @@ public class RegionInfra {
 
     private RegionInfra(List<IndustryCount> industryCounts) {
         if (industryCounts == null) {
-            throw new DomainException(ErrorCode.ADDRESS_CODE_NOT_FOUND, "인프라 목록은 필수입니다.");
+            // 시군구 코드와 무관한 프로그래밍 오류다(재구성 시 목록 누락).
+            throw new DomainException(ErrorCode.VALIDATION_FAILED, "인프라 목록은 필수입니다.");
         }
         this.industryCounts = List.copyOf(industryCounts);
     }

@@ -13,6 +13,7 @@ import SDD.smash.domain.job.domain.port.JobScoreCache;
 import SDD.smash.domain.job.domain.service.JobScorePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -31,9 +32,9 @@ import java.util.Optional;
  * <p>직종 코드 검증이 <b>캐시 확인보다 먼저</b> 온다. As-Is 순서 그대로다 —
  * 유효하지 않은 코드는 캐시 히트 여부와 무관하게 예외여야 한다.
  *
- * <p>{@code @Transactional} 을 붙이지 않는다. 캐시 접근을 포함하는 메서드라
- * 트랜잭션으로 감싸면 커넥션을 쥔 채 네트워크를 기다리게 된다(persistence-conventions §6.3).
- * DB 접근은 조회 한 번뿐이며 As-Is 도 이 경로에 트랜잭션이 없었다.
+ * <p>공개 메서드 {@code scoresFor} 에는 {@code @Transactional} 을 붙이지 않는다. 캐시·백분위
+ * 조회를 포함해 트랜잭션으로 감싸면 커넥션을 쥔 채 네트워크를 기다리게 된다(persistence-conventions §6.3).
+ * DB 조회부({@link #loadCounts})만 잘라 읽기 트랜잭션으로 감싼다.
  */
 @Service
 @RequiredArgsConstructor
@@ -65,9 +66,8 @@ public class JobScoreService {
         }
 
         // 2) 기준이 되는 일자리 수를 읽어 정책을 적용한다.
-        List<RegionJobCount> counts = key.isAllJobs()
-                ? jobCountRepository.findAllRegionTotals()
-                : jobCountRepository.findAllRegionCountsOf(jobCode);
+        //    DB 조회만 트랜잭션으로 감싸고 캐시·백분위 조회는 트랜잭션 밖에 둔다.
+        List<RegionJobCount> counts = loadCounts(key, jobCode);
 
         // 비수도권 백분위는 job 이 캐시해 둔 최신월 분포에서 나온다. 통계가 적재되지 않았으면
         // 빈 맵이라 일자리 수만 보던 예전 점수와 같아진다.
@@ -78,5 +78,13 @@ public class JobScoreService {
         jobScoreCache.put(key, scores);
 
         return scores;
+    }
+
+    /** 기준 일자리 수 조회만 트랜잭션으로 감싼다. 캐시·외부호출은 호출부에서 트랜잭션 밖에 둔다. */
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    protected List<RegionJobCount> loadCounts(JobScoreKey key, JobCode jobCode) {
+        return key.isAllJobs()
+                ? jobCountRepository.findAllRegionTotals()
+                : jobCountRepository.findAllRegionCountsOf(jobCode);
     }
 }

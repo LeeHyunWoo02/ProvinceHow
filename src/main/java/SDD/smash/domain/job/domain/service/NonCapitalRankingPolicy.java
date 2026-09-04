@@ -8,6 +8,8 @@ import SDD.smash.domain.job.domain.model.StatisticsMonth;
 import SDD.smash.global.domain.model.SidoCode;
 import SDD.smash.global.domain.model.SigunguCode;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,14 +110,39 @@ public class NonCapitalRankingPolicy {
         return Optional.of(new NonCapitalRank(percentile, topPercent, rank, total));
     }
 
-    /** 분포 전체를 백분위 맵으로 바꾼다. 점수 정규화가 쓰는 경로다. */
+    /**
+     * 분포 전체를 백분위 맵으로 바꾼다. 점수 정규화가 쓰는 경로다.
+     *
+     * <p>코드마다 분포를 다시 훑는 대신 한 번 정렬해 값별 백분위를 미리 구한다. 결과는
+     * {@link #rankOf} 의 동점 처리(동점 무리의 한가운데)와 동일하다.
+     */
     public Map<SigunguCode, Integer> percentiles(Map<SigunguCode, Double> distribution) {
         Map<SigunguCode, Integer> percentiles = new LinkedHashMap<>();
-        if (distribution == null) {
+        if (distribution == null || distribution.isEmpty()) {
             return percentiles;
         }
-        for (SigunguCode code : distribution.keySet()) {
-            rankOf(code, distribution).ifPresent(rank -> percentiles.put(code, rank.percentile()));
+
+        int total = distribution.size();
+        List<Double> sorted = new ArrayList<>(distribution.values());
+        sorted.sort(Double::compare);
+
+        // 값별 백분위를 정렬 한 번으로 구한다. below = 자기보다 작은 개수, equal = 동점 개수.
+        Map<Double, Integer> percentileByValue = new HashMap<>();
+        int i = 0;
+        while (i < sorted.size()) {
+            double value = sorted.get(i);
+            int below = i;
+            int equal = 0;
+            while (i < sorted.size() && Double.compare(sorted.get(i), value) == 0) {
+                equal++;
+                i++;
+            }
+            percentileByValue.put(value,
+                    clamp((int) Math.round(((below + (equal / 2.0)) / total) * PERCENT), 0, PERCENT));
+        }
+
+        for (Map.Entry<SigunguCode, Double> entry : distribution.entrySet()) {
+            percentiles.put(entry.getKey(), percentileByValue.get(entry.getValue()));
         }
         return percentiles;
     }

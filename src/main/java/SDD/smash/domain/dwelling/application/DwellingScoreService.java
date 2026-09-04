@@ -11,8 +11,10 @@ import SDD.smash.domain.dwelling.domain.port.DwellingScoreCache;
 import SDD.smash.domain.dwelling.domain.service.DwellingScorePolicy;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -23,11 +25,10 @@ import java.util.Optional;
  * <p>가격 보정은 {@link DwellingType#normalize}, 점수 공식은 {@link DwellingScorePolicy},
  * Redis 상세는 {@code DwellingScoreRedisAdapter} 로 각각 빠졌다.
  *
- * <p><b>{@code @Transactional} 을 붙이지 않는다.</b> 이 메서드는 캐시 접근을 포함하는데
- * 트랜잭션 안에서 캐시를 호출하면 커넥션을 쥔 채 네트워크를 기다리게 된다
- * (persistence-conventions §6.3). DB 접근은 {@code findAll()} 한 번뿐이라
- * Spring Data 가 여는 자체 트랜잭션으로 충분하며, 이는 As-Is 와도 같다
- * (As-Is 역시 이 경로에 트랜잭션이 없었다).
+ * <p><b>{@code scoresFor} 자체에는 {@code @Transactional} 을 붙이지 않는다.</b>
+ * 캐시·계산은 트랜잭션 밖에 둔다 — 트랜잭션 안에서 캐시를 호출하면 커넥션을 쥔 채
+ * 네트워크를 기다리게 된다(persistence-conventions §6.3). DB 조회부만 {@link #loadMarkets()}
+ * 로 잘라 {@code readOnly} 트랜잭션 경계를 두고, 캐시 미스일 때만 호출한다.
  */
 @Service
 @RequiredArgsConstructor
@@ -51,8 +52,9 @@ public class DwellingScoreService {
 
         // 2) 전 시군구 시세를 읽어 정책을 적용한다.
         //    실거래가 없는 시군구도 결과에 남는다(중앙값 없음 → 0점). As-Is 와 같다.
+        //    예산 구간화는 키 생성에서 한 번만 하고, 그 값을 정책에 그대로 넘긴다.
         Map<SigunguCode, Score> scores = new LinkedHashMap<>();
-        for (DwellingMarket market : dwellingMarketRepository.findAll()) {
+        for (DwellingMarket market : loadMarkets()) {
             scores.put(market.sigunguCode(),
                     policy.score(type, market.medianOf(type).orElse(null), key.normalizedBudget()));
         }
@@ -61,5 +63,11 @@ public class DwellingScoreService {
         dwellingScoreCache.put(key, scores);
 
         return scores;
+    }
+
+    /** 전 시군구 시세 조회부. DB 접근만 트랜잭션 경계로 감싼다(캐시·계산은 밖에 둔다). */
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    protected List<DwellingMarket> loadMarkets() {
+        return dwellingMarketRepository.findAll();
     }
 }

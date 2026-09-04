@@ -3,6 +3,7 @@ package SDD.smash.domain.support.application;
 import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.support.application.dto.SupportPolicyView;
+import SDD.smash.domain.support.application.dto.SupportTagView;
 import SDD.smash.domain.support.domain.model.SupportTag;
 import SDD.smash.domain.support.domain.port.SupportPolicyRepository;
 import lombok.RequiredArgsConstructor;
@@ -52,6 +53,18 @@ public class SupportQueryService {
             sum += supportPolicyRepository.countBy(sigunguCode, tag);
         }
         return sum;
+    }
+
+    /**
+     * 지원정책 태그 카탈로그. 다른 컨텍스트(recommendation)가 도메인 enum {@code SupportTag} 를
+     * 직접 참조하지 않도록 support 의 공개 진입점에서 노출한다.
+     */
+    public List<SupportTagView> getAllTags() {
+        List<SupportTagView> result = new ArrayList<>();
+        for (SupportTag tag : SupportTag.values()) {
+            result.add(new SupportTagView(tag.name(), tag.getValue()));
+        }
+        return result;
     }
 
     /**

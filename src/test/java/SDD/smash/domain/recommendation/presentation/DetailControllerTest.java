@@ -182,4 +182,54 @@ class DetailControllerTest {
                 // 공고 목록은 필드에서 사라지지 않고 빈 배열로 유지된다(직행 OpenAPI 대기)
                 .andExpect(jsonPath("$.jobVacancies.length()").value(0));
     }
+
+    @Test
+    @DisplayName("aiUse=true 인데 AI 요약이 null 이어도 200 과 함께 본문은 정상 조립되고 aiSummary 만 null 이다")
+    void keeps200AndBodyWhenAiSummaryNull() throws Exception {
+        // given - AI 어댑터가 실패 시 폴백으로 null 을 반환하는 상황
+        JobVacancyItem item = new JobVacancyItem(
+                "46203390", "백엔드 개발자", "스매시", "https://saramin/1",
+                "서울 > 강남구", "웹개발", "회사내규", "신입", "대졸", "정규직",
+                true, LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 31));
+        RegionDetailInfo info = RegionDetailInfo.builder()
+                .sigunguCode("11680")
+                .sigunguName("강남구")
+                .jobVacancies(List.of(item))
+                .dwellingInfo(new DwellingInfoSummary(70.5, 65, 25000.0, 24000))
+                .build();
+        given(regionDetailService.details(any(), any())).willReturn(info);
+        given(regionSummaryProvider.summarize(any())).willReturn(null);
+
+        // when & then
+        mockMvc.perform(get("/api/detail").param("sigunguCode", "11680").param("aiUse", "true"))
+                .andExpect(status().isOk())
+                // AI 요약이 없어도 non-AI 필드는 그대로 조립된다
+                .andExpect(jsonPath("$.sigunguName").value("강남구"))
+                .andExpect(jsonPath("$.jobVacancies[0].postingId").value("46203390"))
+                .andExpect(jsonPath("$.jobVacancies[0].title").value("백엔드 개발자"))
+                .andExpect(jsonPath("$.dwellingInfo.monthMid").value(65))
+                // AI 실패는 aiSummary 만 null 로 흡수된다
+                .andExpect(jsonPath("$.aiSummary").doesNotExist())
+                .andExpect(content().string(containsString("\"aiSummary\":null")));
+    }
+
+    @Test
+    @DisplayName("aiUse=true 인데 AI 요약이 빈 문자열이어도 200 과 함께 본문은 정상 조립된다")
+    void keeps200AndBodyWhenAiSummaryBlank() throws Exception {
+        // given - 어댑터 폴백이 빈 문자열을 돌려주는 경계 상황
+        RegionDetailInfo info = RegionDetailInfo.builder()
+                .sigunguCode("11680")
+                .sigunguName("강남구")
+                .dwellingInfo(new DwellingInfoSummary(70.5, 65, 25000.0, 24000))
+                .build();
+        given(regionDetailService.details(any(), any())).willReturn(info);
+        given(regionSummaryProvider.summarize(any())).willReturn("");
+
+        // when & then
+        mockMvc.perform(get("/api/detail").param("sigunguCode", "11680").param("aiUse", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sigunguName").value("강남구"))
+                .andExpect(jsonPath("$.dwellingInfo.monthMid").value(65))
+                .andExpect(jsonPath("$.aiSummary").value(""));
+    }
 }

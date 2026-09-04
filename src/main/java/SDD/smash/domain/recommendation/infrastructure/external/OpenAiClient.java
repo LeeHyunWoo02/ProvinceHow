@@ -4,17 +4,17 @@ package SDD.smash.domain.recommendation.infrastructure.external;
 import SDD.smash.global.exception.DomainException;
 import SDD.smash.domain.recommendation.infrastructure.external.dto.OpenAiRequest;
 import SDD.smash.domain.recommendation.infrastructure.external.dto.OpenAiResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
 
+import static SDD.smash.global.exception.ErrorCode.OPENAI_SERVER_ERROR;
 import static SDD.smash.global.exception.ErrorCode.OPENAI_TOKEN_EXPIRED;
 
 @Component
@@ -33,9 +33,14 @@ public class OpenAiClient {
     }
     /**
      * 사용자 질문을 GPT 모델에 전달하고 응답 받기.
-     * */
-    public OpenAiResponse getChatCompletion(OpenAiRequest requestDto) throws JsonProcessingException {
-        ResponseEntity<OpenAiResponse> res = restClient.post()
+     *
+     * <p>비-2xx 응답은 {@code onStatus} 에서 {@link DomainException} 으로 번역한다
+     * (429 → 토큰/쿼터 소진, 5xx → 서버 오류). 그 밖의 4xx 는 {@code retrieve()} 기본
+     * 핸들러가 {@code RestClientException} 으로 던지며, 타임아웃도 {@code ResourceAccessException}
+     * 으로 나간다. 상위 어댑터가 이들을 모두 폴백(빈 목록/null)으로 흡수한다.
+     */
+    public OpenAiResponse getChatCompletion(OpenAiRequest requestDto) {
+        OpenAiResponse body = restClient.post()
                 .uri(APIURL)
                 .contentType(MediaType.APPLICATION_JSON)
                 // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
@@ -43,11 +48,17 @@ public class OpenAiClient {
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + APIKEY)
                 .body(requestDto)
                 .retrieve()
-                .toEntity(OpenAiResponse.class);
-        if (!res.getStatusCode().is2xxSuccessful() || res.getBody() == null) {
-            throw new DomainException(OPENAI_TOKEN_EXPIRED, "토큰이 만료되었습니다.");
+                .onStatus(status -> status.value() == 429, (req, res) -> {
+                    throw new DomainException(OPENAI_TOKEN_EXPIRED, "OpenAI 요청 한도를 초과했습니다.");
+                })
+                .onStatus(HttpStatusCode::is5xxServerError, (req, res) -> {
+                    throw new DomainException(OPENAI_SERVER_ERROR, "OpenAI 서버 오류가 발생했습니다.");
+                })
+                .body(OpenAiResponse.class);
+        if (body == null) {
+            throw new DomainException(OPENAI_SERVER_ERROR, "OpenAI 응답 본문이 비어 있습니다.");
         }
-        return res.getBody();
+        return body;
     }
 
 }

@@ -5,11 +5,10 @@ import SDD.smash.global.domain.model.SidoCode;
 import SDD.smash.domain.job.application.JobQueryService;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.recommendation.application.dto.CodeItem;
-import SDD.smash.domain.support.domain.model.SupportTag;
+import SDD.smash.domain.support.application.SupportQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -24,6 +23,7 @@ public class RegionCodeService {
 
     private final JobQueryService jobQueryService;
     private final AddressQueryService addressQueryService;
+    private final SupportQueryService supportQueryService;
 
     public List<CodeItem> getAllJobTops() {
         return jobQueryService.getAllTopCategories().stream()
@@ -50,8 +50,10 @@ public class RegionCodeService {
     }
 
     public List<CodeItem> getAllSupportTags() {
-        return Arrays.stream(SupportTag.values())
-                .map(tag -> new CodeItem(tag.name(), tag.getValue()))
+        // support 컨텍스트의 application Service 를 통해서만 태그를 가져온다.
+        // SupportTagView(code=enum 상수명, name=한국어 라벨) → 기존 CodeItem 형태 그대로.
+        return supportQueryService.getAllTags().stream()
+                .map(v -> new CodeItem(v.code(), v.name()))
                 .toList();
     }
 }

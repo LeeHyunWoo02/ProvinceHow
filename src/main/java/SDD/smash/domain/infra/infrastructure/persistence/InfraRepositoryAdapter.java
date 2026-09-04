@@ -43,6 +43,13 @@ public class InfraRepositoryAdapter implements RegionInfraRepository, InfraMajor
     }
 
     @Override
+    public List<MajorInfraSummary> findAllBy(SigunguCode sigunguCode) {
+        return infraJpaRepository.findMajorSummaries(sigunguCode.value()).stream()
+                .map(infraJpaMapper::toDomain)
+                .toList();
+    }
+
+    @Override
     public List<RegionMajorScore> findAllBy(Set<Major> majors) {
         return infraJpaRepository.findRegionMajorScores(majors).stream()
                 .map(infraJpaMapper::toDomain)

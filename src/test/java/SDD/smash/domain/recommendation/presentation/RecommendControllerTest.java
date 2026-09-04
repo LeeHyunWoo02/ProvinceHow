@@ -100,4 +100,47 @@ class RecommendControllerTest {
                 .andExpect(jsonPath("$.items[0].jobStatistics.statisticsMonth").value("2026-07"))
                 .andExpect(jsonPath("$.items[0].jobStatistics.validSeekers").value(2000));
     }
+
+    @Test
+    @DisplayName("aiUse=true 인데 AI 픽이 빈 목록이어도 200 과 함께 items 는 그대로 실린다")
+    void keeps200AndItemsWhenAiPickEmpty() throws Exception {
+        // given - AI 어댑터가 실패 시 폴백으로 빈 목록을 반환하는 상황
+        given(recommendRegionService.recommend(any())).willReturn(List.of(
+                RegionRecommendation.builder()
+                        .sigunguCode("11680")
+                        .sigunguName("강남구")
+                        .score(90)
+                        .build()));
+        given(regionPickProvider.pick(any())).willReturn(List.of());
+
+        // when & then
+        mockMvc.perform(get(BASE + "&aiUse=true"))
+                .andExpect(status().isOk())
+                // AI 결과가 없어도 non-AI 필드(추천 목록)는 정상 조립된다
+                .andExpect(jsonPath("$.items[0].sigunguCode").value("11680"))
+                .andExpect(jsonPath("$.items[0].sigunguName").value("강남구"))
+                .andExpect(jsonPath("$.items[0].score").value(90))
+                // AI 실패는 aiPick 만 빈 배열로 흡수된다
+                .andExpect(jsonPath("$.aiPick.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("aiUse=true 인데 AI 픽이 null 이어도 200 과 함께 aiPick 은 빈 배열로 실린다")
+    void keeps200AndItemsWhenAiPickNull() throws Exception {
+        // given - AI 어댑터 폴백이 null 을 돌려주는 상황
+        given(recommendRegionService.recommend(any())).willReturn(List.of(
+                RegionRecommendation.builder()
+                        .sigunguCode("11680")
+                        .score(90)
+                        .build()));
+        given(regionPickProvider.pick(any())).willReturn(null);
+
+        // when & then
+        mockMvc.perform(get(BASE + "&aiUse=true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].sigunguCode").value("11680"))
+                .andExpect(jsonPath("$.items[0].score").value(90))
+                // null 은 AiConverter 가 빈 배열로 정규화한다
+                .andExpect(jsonPath("$.aiPick.length()").value(0));
+    }
 }

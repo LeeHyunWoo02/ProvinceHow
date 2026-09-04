@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestClientException;
 
 import java.util.List;
 
@@ -27,12 +28,14 @@ import static SDD.smash.global.util.MapperUtil.extractJson;
  * ({@code List<RegionPick>})만 돌려주고, 응답 조립은 {@code presentation/AiConverter} 가 한다.
  * 프롬프트 문자열·모델 파라미터·{@code extractJson} 사용은 그대로다.
  *
- * <p><b>폴백 3경로 — As-Is 그대로 유지한다.</b> 어느 경우든 예외를 밖으로 내보내지 않고
- * 빈 목록을 반환해, 추천 결과는 정상 응답되고 {@code aiPick} 만 빈 배열이 되게 한다.
+ * <p><b>폴백 — 어느 경우든 예외를 밖으로 내보내지 않고</b> 빈 목록을 반환해,
+ * 추천 결과는 정상 응답되고 {@code aiPick} 만 빈 배열이 되게 한다.
  * <ol>
+ *   <li>{@code choices} 가 null/빈 (응답에 선택지가 없음)</li>
  *   <li>{@code extractJson} 이 null (응답에서 JSON 을 못 찾음)</li>
  *   <li>{@code JsonProcessingException} (직렬화/역직렬화 실패)</li>
- *   <li>{@code DomainException} (OpenAI 호출 실패 — {@code OpenAiClient} 가 던진다)</li>
+ *   <li>{@code RestClientException}/{@code DomainException}
+ *       (OpenAI 4xx/5xx·타임아웃 — {@code OpenAiClient}·{@code RestClient} 가 던진다)</li>
  * </ol>
  *
  * <p>빈 이름을 {@code aiRecommendService} 로 고정한다 — 클래스명만 컨벤션에 맞게 바꾸고
@@ -107,18 +110,22 @@ public class OpenAiRegionPickApiAdapter implements RegionPickProvider {
             OpenAiRequest request = new OpenAiRequest(MODEL, List.of(system, user),TEMPERATURE);
 
             OpenAiResponse response = openAiClient.getChatCompletion(request);
+            if (response.getChoices() == null || response.getChoices().isEmpty()) {
+                return List.of();                       // 폴백 ① — choices 가 비면 빈 목록
+            }
             String raw = response.getChoices().get(0).getMessage().getContent();
             String jsonOnly = extractJson(raw);
             if(jsonOnly == null){
-                return List.of();                       // 폴백 ① — As-Is 의 toResponseList(list, null) 과 같은 결과
+                return List.of();                       // 폴백 ② — 응답에서 JSON 을 못 찾음
             }
             AiRecommendDTO aiDto = objectMapper.readValue(jsonOnly, AiRecommendDTO.class);
             return toPicks(aiDto);
         } catch (JsonProcessingException e) {
-            return List.of();                           // 폴백 ②
-        } catch (DomainException e){
-            log.warn("OpenAI API 호출 실패");
-            return List.of();                           // 폴백 ③
+            return List.of();                           // 폴백 ③ — 직렬화/역직렬화 실패
+        } catch (RestClientException | DomainException e){
+            // OpenAI 호출 실패(4xx/5xx·타임아웃 등). 비밀값·URL 은 남기지 않는다.
+            log.warn("OpenAI 지역 추천 호출 실패 - 빈 목록으로 폴백");
+            return List.of();                           // 폴백 ④
         }
     }
 

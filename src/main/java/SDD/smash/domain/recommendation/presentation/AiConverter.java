@@ -61,23 +61,8 @@ public class AiConverter {
      */
     public static RecommendAggregateResponse toResponseList(List<RegionRecommendation> recommendDTOList,
                                                             @Nullable List<RegionPick> picks){
-        List<RegionRecommendation> items = recommendDTOList.stream()
-                .map(dto -> RegionRecommendation.builder()
-                        .sidoCode(dto.getSidoCode())
-                        .sidoName(dto.getSidoName())
-                        .sigunguCode(dto.getSigunguCode())
-                        .sigunguName(dto.getSigunguName())
-                        .score(dto.getScore())
-                        .totalJobInfo(dto.getTotalJobInfo())
-                        .fitJobInfo(dto.getFitJobInfo())
-                        // 새 표시 필드. aiUse=true 재조립 경로에서도 유실되지 않게 패스스루한다.
-                        .jobStatistics(dto.getJobStatistics())
-                        .totalSupportNum(dto.getTotalSupportNum())
-                        .fitSupportNum(dto.getFitSupportNum())
-                        .dwellingSimpleInfo(dto.getDwellingSimpleInfo())
-                        .infraMajors(dto.getInfraMajors())
-                        .build())
-                .toList();
+        // 동일 타입으로의 필드 복사는 불필요하다. 유스케이스 결과를 그대로 items 로 넘긴다.
+        List<RegionRecommendation> items = recommendDTOList;
 
         List<AiPickEntry> aiPick = (picks == null)
                 ? List.of()

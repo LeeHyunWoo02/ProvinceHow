@@ -149,13 +149,13 @@ class SaraminJobPostingApiAdapterTest {
     @Test
     @DisplayName("로그용 URL 에서 access-key 를 가린다")
     void masksAccessKeyInLoggableUrl() {
-        // given
-        SaraminJobPostingApiAdapter adapter = adapter(ACCESS_KEY, 1);
+        // given - 마스킹은 공통 클라이언트가 담당한다
+        SaraminJobSearchClient client = client(ACCESS_KEY);
         URI uri = URI.create(server.url("/job-search").toString()
                 + "?access-key=" + ACCESS_KEY + "&start=0");
 
         // when
-        String masked = adapter.maskedUrl(uri);
+        String masked = client.maskedUrl(uri);
 
         // then
         assertThat(masked).doesNotContain(ACCESS_KEY).contains("****");
@@ -168,19 +168,24 @@ class SaraminJobPostingApiAdapterTest {
                 .setBody(body);
     }
 
+    private SaraminJobSearchClient client(String accessKey) {
+        return new SaraminJobSearchClient(
+                RestClient.create(),
+                new ExternalApiMetrics(new SimpleMeterRegistry()),
+                server.url("/").toString().replaceAll("/$", ""),
+                "/job-search",
+                accessKey);
+    }
+
     private SaraminJobPostingApiAdapter adapter(String accessKey, int maxAttempts) {
         SaraminApiSpecLoader specLoader = new SaraminApiSpecLoader(
                 new ObjectMapper(), new DefaultResourceLoader(), "classpath:saramin/saramin-job-api.json");
         return new SaraminJobPostingApiAdapter(
-                RestClient.create(),
-                new SaraminJobPostingParser(new ObjectMapper()),
+                client(accessKey),
+                new SaraminJobPostingParser(new SaraminResponseReader(new ObjectMapper())),
                 new SaraminCodeMapper(specLoader),
                 specLoader,
-                server.url("/").toString().replaceAll("/$", ""),
-                "/job-search",
-                accessKey,
                 maxAttempts,
-                0L,
-                new ExternalApiMetrics(new SimpleMeterRegistry()));
+                0L);
     }
 }

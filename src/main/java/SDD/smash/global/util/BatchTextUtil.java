@@ -2,6 +2,10 @@ package SDD.smash.global.util;
 
 
 public class BatchTextUtil {
+
+    private BatchTextUtil() {
+    }
+
     public static String addLeadingZero(String code) {
         if (code == null) return null;
         code = code.replace("\uFEFF", "").trim();

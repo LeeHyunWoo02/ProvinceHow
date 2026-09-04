@@ -1,24 +1,17 @@
 package SDD.smash.domain.job.infrastructure.external;
 
 import SDD.smash.global.domain.model.SigunguCode;
-import SDD.smash.global.metrics.ExternalApiMetrics;
 import SDD.smash.global.exception.DomainException;
 import SDD.smash.domain.job.domain.model.JobPostingId;
 import SDD.smash.domain.job.domain.model.JobVacancy;
 import SDD.smash.domain.job.domain.port.JobVacancyProvider;
 import SDD.smash.domain.job.infrastructure.external.dto.SaraminApiSpecFile;
 import SDD.smash.domain.job.infrastructure.external.dto.SaraminJobVacancyRaw;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.web.util.UriUtils;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -46,48 +39,20 @@ import java.util.Optional;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class SaraminJobVacancyAdapter implements JobVacancyProvider {
 
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final String ACTIVE_TRUE = "1";
 
-    private final RestClient restClient;
+    private final SaraminJobSearchClient jobSearchClient;
     private final SaraminJobVacancyParser parser;
     private final SaraminApiSpecLoader specLoader;
     private final SaraminLocCodeResolver locCodeResolver;
 
-    private final String baseUrl;
-    private final String path;
-    private final String accessKey;
-
-    /** 호출 성공/실패 계측. 사람인은 일일 한도가 있어 호출 수 자체가 관측 대상이다. */
-    private final ExternalApiMetrics externalApiMetrics;
-
-    /** 메트릭의 api 태그 값. 어댑터가 아니라 수집원 단위다(일일 한도가 수집원 단위이므로). */
-    private static final String API_NAME = "saramin";
-
-    public SaraminJobVacancyAdapter(
-            RestClient restClient,
-            SaraminJobVacancyParser parser,
-            SaraminApiSpecLoader specLoader,
-            SaraminLocCodeResolver locCodeResolver,
-            @Value("${apis.saramin.base-url:https://oapi.saramin.co.kr}") String baseUrl,
-            @Value("${apis.saramin.path:/job-search}") String path,
-            @Value("${apis.saramin.access-key:}") String accessKey,
-            ExternalApiMetrics externalApiMetrics) {
-        this.externalApiMetrics = externalApiMetrics;
-        this.restClient = restClient;
-        this.parser = parser;
-        this.specLoader = specLoader;
-        this.locCodeResolver = locCodeResolver;
-        this.baseUrl = baseUrl;
-        this.path = path;
-        this.accessKey = (accessKey == null) ? "" : accessKey.trim();
-    }
-
     @Override
     public Optional<List<JobVacancy>> findVacancies(SigunguCode region, int size) {
-        if (accessKey.isEmpty()) {
+        if (!jobSearchClient.hasAccessKey()) {
             log.warn("[saramin] access-key 가 비어 있어 채용공고 목록을 조회하지 않는다. region={} - 미시도(캐싱 안 함)",
                     region.value());
             return Optional.empty();
@@ -103,32 +68,22 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
         }
 
         int count = Math.min(Math.max(1, size), spec.request().maxCount());
-        URI uri = buildUri(spec.request(), locCd, count);
+        URI uri = jobSearchClient.regionUri(spec.request(), locCd, count);
 
         try {
-            // uri 는 이미 인코딩된 URI 객체다. String 오버로드로 넘기면 URI 템플릿으로 재해석돼
-            // access-key 의 %2B 가 %252B 로 재인코딩된다. URI 오버로드를 유지한다.
-            ResponseEntity<String> response = restClient.get()
-                    .uri(uri)
-                    // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
-                    .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
-                    .retrieve()
-                    .toEntity(String.class);
-            List<SaraminJobVacancyRaw> raws = parser.parse(response.getBody(), spec.response());
+            List<SaraminJobVacancyRaw> raws = parser.parse(jobSearchClient.get(uri), spec.response());
             List<JobVacancy> vacancies = raws.stream()
                     .map(this::toVacancy)
                     .filter(java.util.Objects::nonNull)
                     .toList();
             log.debug("[saramin] 채용공고 목록 조회 region={}, locCd={}, raw={}건, 카드={}건",
                     region.value(), locCd, raws.size(), vacancies.size());
-            externalApiMetrics.success(API_NAME);
             // 실제 조회 성공(0건이어도) → 결과를 담아 돌려준다(유스케이스가 네거티브 캐싱).
             return Optional.of(vacancies);
         } catch (RuntimeException e) {
             // 호출 실패는 '미시도'로 취급 -> 네거티브 캐싱하지 않아 다음 요청에서 재시도한다.
             log.warn("[saramin] 채용공고 목록 조회 실패 region={}, url={} - 미시도(캐싱 안 함)",
-                    region.value(), maskedUrl(uri), e);
-            externalApiMetrics.failure(API_NAME);
+                    region.value(), jobSearchClient.maskedUrl(uri), e);
             return Optional.empty();
         }
     }
@@ -167,26 +122,5 @@ public class SaraminJobVacancyAdapter implements JobVacancyProvider {
         } catch (NumberFormatException e) {
             return null;
         }
-    }
-
-    private URI buildUri(SaraminApiSpecFile.Request request, String locCd, int count) {
-        return UriComponentsBuilder.fromHttpUrl(baseUrl)
-                .path(path)
-                .queryParam(request.accessKeyParam(), accessKey)
-                .queryParam("loc_cd", locCd)
-                .queryParam(request.startParam(), 0)
-                .queryParam(request.countParam(), count)
-                .build().encode().toUri();
-    }
-
-    /** 로그용 URL. access-key 값을 가린다. */
-    private String maskedUrl(URI uri) {
-        String url = uri.toString();
-        if (accessKey.isEmpty()) {
-            return url;
-        }
-        String masked = url.replace(accessKey, "****");
-        String encoded = UriUtils.encode(accessKey, StandardCharsets.UTF_8);
-        return masked.replace(encoded, "****");
     }
 }

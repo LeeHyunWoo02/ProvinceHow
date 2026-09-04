@@ -139,13 +139,14 @@ public record RegionCodeMapping(List<Entry> entries, List<DistrictSplit> distric
         return entries.size();
     }
 
-    /** 수집 대상 인허가기관 코드 목록(파일 순서 유지). */
+    /** 수집 대상 인허가기관 코드 목록(파일 순서 유지). 테스트 전용 — 프로덕션은 {@link #asMap()} 을 쓴다. */
     public List<LocalDataRegionCode> targets() {
         List<LocalDataRegionCode> targets = new ArrayList<>(entries.size());
         entries.forEach(entry -> targets.add(entry.openOrgCode()));
         return targets;
     }
 
+    /** 단건 조회. 테스트 전용 — 프로덕션은 {@link #asMap()} 인덱스를 쓴다. */
     public Optional<SigunguCode> toSigungu(LocalDataRegionCode openOrgCode) {
         if (openOrgCode == null) {
             return Optional.empty();
@@ -163,7 +164,7 @@ public record RegionCodeMapping(List<Entry> entries, List<DistrictSplit> distric
         return map;
     }
 
-    /** 이 시군구코드가 일반구로 분해되는 상위 시인가. */
+    /** 이 시군구코드가 일반구로 분해되는 상위 시인가. 테스트 전용 — 프로덕션은 {@link #splitIndex()} 를 쓴다. */
     public Optional<DistrictSplit> splitOf(SigunguCode parentSigunguCode) {
         if (parentSigunguCode == null) {
             return Optional.empty();

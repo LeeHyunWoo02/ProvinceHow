@@ -11,11 +11,4 @@ public class SidoJpaMapper {
     public Sido toDomain(SidoJpaEntity entity) {
         return Sido.reconstitute(SidoCode.of(entity.getSidoCode()), entity.getName());
     }
-
-    public SidoJpaEntity toJpaEntity(Sido sido) {
-        return SidoJpaEntity.builder()
-                .sidoCode(sido.code().value())
-                .name(sido.name())
-                .build();
-    }
 }

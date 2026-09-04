@@ -13,7 +13,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class SaraminJobSampleParserTest {
 
-    private final SaraminJobSampleParser parser = new SaraminJobSampleParser(new ObjectMapper());
+    private final SaraminJobSampleParser parser =
+            new SaraminJobSampleParser(new SaraminResponseReader(new ObjectMapper()));
     private final SaraminApiSpecFile.Response spec = SaraminApiSpecFile.defaults().response();
 
     @Test

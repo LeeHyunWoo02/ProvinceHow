@@ -51,12 +51,8 @@ public class RecommendController {
             @RequestParam(name = "infraChoice", required = true) @NotNull(message = "인프라 선택은 필수입니다.") @Min(0) @Max(15) Integer infraChoice,
             @RequestParam(name = "aiUse", defaultValue = "false") boolean aiUse
     ) {
-        try {
-            log.info("[recommend] recommend 호출됨 sup={}, jobCode={}, dwellingType={}, price={},inf={}",
-                    supportChoice, midJobCode, dwellingType, price, infraChoice);
-        } catch (Exception e) {
-            // As-Is 그대로 — 로그 실패를 요청 처리에 영향 주지 않으려는 방어(원래도 사실상 no-op).
-        }
+        log.info("[recommend] recommend 호출됨 sup={}, jobCode={}, dwellingType={}, price={},inf={}",
+                supportChoice, midJobCode, dwellingType, price, infraChoice);
 
         JobCode jobCode = (midJobCode == null) ? null : JobCode.of(midJobCode);
         RecommendCommand command = new RecommendCommand(supportChoice, jobCode, dwellingType, Money.of(price), infraChoice);

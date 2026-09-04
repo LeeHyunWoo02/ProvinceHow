@@ -6,7 +6,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.util.List;
 
@@ -19,7 +18,6 @@ import java.util.List;
  * 타협이다 — {@code RegionRecommendation} 의 클래스 주석에 근거를 적었다.
  */
 @Getter
-@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder

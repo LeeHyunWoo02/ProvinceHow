@@ -123,15 +123,17 @@ class SaraminJobVacancyAdapterTest {
 
     private SaraminJobVacancyAdapter adapter(String accessKey, SaraminApiSpecFile spec) {
         SaraminApiSpecLoader specLoader = new FixedSpecLoader(spec);
-        return new SaraminJobVacancyAdapter(
+        SaraminJobSearchClient client = new SaraminJobSearchClient(
                 RestClient.create(),
-                new SaraminJobVacancyParser(new ObjectMapper()),
-                specLoader,
-                new SaraminLocCodeResolver(specLoader),
+                new ExternalApiMetrics(new SimpleMeterRegistry()),
                 server.url("/").toString().replaceAll("/$", ""),
                 "/job-search",
-                accessKey,
-                new ExternalApiMetrics(new SimpleMeterRegistry()));
+                accessKey);
+        return new SaraminJobVacancyAdapter(
+                client,
+                new SaraminJobVacancyParser(new SaraminResponseReader(new ObjectMapper())),
+                specLoader,
+                new SaraminLocCodeResolver(specLoader));
     }
 
     /** 파일을 읽지 않고 주어진 스펙만 돌려주는 로더. */

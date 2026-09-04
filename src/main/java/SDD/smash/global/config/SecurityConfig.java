@@ -1,6 +1,5 @@
 package SDD.smash.global.config;
 
-import SDD.smash.global.security.ApiRateLimitService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,14 +23,10 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final ApiRateLimitService apiRateLimitService;
     private final Environment env;
 
     @Value("${front_url}")
     private String[] frontUrl;
-
-    @Value("${ratelimit.secret}")
-    private String ipSecret;
 
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
@@ -91,10 +86,6 @@ public class SecurityConfig {
                         }));
         http
                 .formLogin((formLogin) -> formLogin.disable());
-
-
-//        http
-//                .addFilterBefore(new ApiRateLimitFilter(apiRateLimitService, env, ipSecret), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

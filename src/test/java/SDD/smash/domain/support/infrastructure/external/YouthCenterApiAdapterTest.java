@@ -5,6 +5,7 @@ import SDD.smash.domain.support.domain.model.SupportTag;
 import SDD.smash.global.config.YouthCenterProperties;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.metrics.ExternalApiMetrics;
+import SDD.smash.global.util.RetryBackoff;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -277,16 +278,16 @@ class YouthCenterApiAdapterTest {
     @Test
     @DisplayName("재시도 지연이 지수적으로 늘어나고 상한에서 멈춘다")
     void growsRetryDelayExponentiallyUpToCap() {
-        assertThat(YouthCenterApiAdapter.backoffDelayMs(1_000L, 2.0d, 1, 30_000L)).isEqualTo(1_000L);
-        assertThat(YouthCenterApiAdapter.backoffDelayMs(1_000L, 2.0d, 2, 30_000L)).isEqualTo(2_000L);
-        assertThat(YouthCenterApiAdapter.backoffDelayMs(1_000L, 2.0d, 3, 30_000L)).isEqualTo(4_000L);
-        assertThat(YouthCenterApiAdapter.backoffDelayMs(1_000L, 2.0d, 10, 30_000L)).isEqualTo(30_000L);
+        assertThat(RetryBackoff.backoffDelayMs(1_000L, 2.0d, 1, 30_000L)).isEqualTo(1_000L);
+        assertThat(RetryBackoff.backoffDelayMs(1_000L, 2.0d, 2, 30_000L)).isEqualTo(2_000L);
+        assertThat(RetryBackoff.backoffDelayMs(1_000L, 2.0d, 3, 30_000L)).isEqualTo(4_000L);
+        assertThat(RetryBackoff.backoffDelayMs(1_000L, 2.0d, 10, 30_000L)).isEqualTo(30_000L);
     }
 
     @Test
     @DisplayName("배수가 1 미만이어도 지연이 줄어들지 않는다")
     void neverShrinksRetryDelay() {
-        assertThat(YouthCenterApiAdapter.backoffDelayMs(1_000L, 0.5d, 3, 30_000L)).isEqualTo(1_000L);
+        assertThat(RetryBackoff.backoffDelayMs(1_000L, 0.5d, 3, 30_000L)).isEqualTo(1_000L);
     }
 
     @Test
@@ -297,8 +298,9 @@ class YouthCenterApiAdapterTest {
         headers.add(HttpHeaders.RETRY_AFTER, "3");
 
         // then
-        assertThat(YouthCenterApiAdapter.retryAfterMillis(headers)).contains(3_000L);
-        assertThat(YouthCenterApiAdapter.retryAfterMillis(new HttpHeaders())).isEqualTo(Optional.empty());
+        assertThat(RetryBackoff.retryAfterMillis(headers.getFirst(HttpHeaders.RETRY_AFTER))).contains(3_000L);
+        assertThat(RetryBackoff.retryAfterMillis(new HttpHeaders().getFirst(HttpHeaders.RETRY_AFTER)))
+                .isEqualTo(Optional.empty());
     }
 
     // ------------------------------------------------------------------ 호출 간격
