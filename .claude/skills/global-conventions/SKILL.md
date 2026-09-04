@@ -124,7 +124,7 @@ SDD.smash.global.exception.handler.GlobalExceptionHandler
 - 공개 API는 전부 `/api` 하위. `SecurityConfig`가 `/api/**` permitAll, 나머지 authenticated.
 - 경로·쿼리 파라미터는 camelCase (`/recommend`, `sigunguCode`, `midJobCode`, `infraChoice`).
 - **현재 CORS는 GET/OPTIONS만 허용**한다. 다른 메서드를 열려면 `SecurityConfig`를 함께 바꾼다.
-- `/api/**`에는 `ApiRateLimitFilter`(`global/security`)가 걸린다. 새 엔드포인트도 이 필터를 통과한다.
+- `ApiRateLimitFilter`(`global/security`)는 **현재 비활성(미등록) 상태**다. `SecurityConfig`가 이 필터를 등록하지 않으므로 `/api/**` 요청에 레이트리밋이 걸리지 않는다. 클래스는 향후 재활성 가능성 때문에 남겨 둔다.
 
 ---
 

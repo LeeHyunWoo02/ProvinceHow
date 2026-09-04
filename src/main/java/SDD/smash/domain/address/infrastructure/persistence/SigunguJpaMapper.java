@@ -19,14 +19,6 @@ public class SigunguJpaMapper {
                 SidoCode.of(entity.getSidoCode()));
     }
 
-    public SigunguJpaEntity toJpaEntity(Sigungu sigungu) {
-        return SigunguJpaEntity.builder()
-                .sigunguCode(sigungu.code().value())
-                .name(sigungu.name())
-                .sidoCode(sigungu.sidoCode().value())
-                .build();
-    }
-
     public Population toPopulation(PopulationJpaEntity entity) {
         return Population.of(SigunguCode.of(entity.getSigunguCode()), entity.getPopulationCount());
     }
