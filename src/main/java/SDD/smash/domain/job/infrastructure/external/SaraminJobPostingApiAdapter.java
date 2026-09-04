@@ -3,20 +3,12 @@ package SDD.smash.domain.job.infrastructure.external;
 import SDD.smash.domain.job.domain.model.JobPostingPage;
 import SDD.smash.domain.job.domain.port.JobPostingProvider;
 import SDD.smash.domain.job.infrastructure.external.dto.SaraminApiSpecFile;
-import SDD.smash.global.metrics.ExternalApiMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.util.UriComponentsBuilder;
-import org.springframework.web.util.UriUtils;
 
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 /**
  * 사람인(Saramin) 채용정보 오픈 API 어댑터. {@link JobPostingProvider} 포트 구현이다.
@@ -38,7 +30,7 @@ import java.util.Map;
  * <h2>보안</h2>
  * <ul>
  *   <li>access-key 가 비어 있으면 <b>호출하지 않는다</b>. {@link #isConfigured()} 가 거짓이 된다</li>
- *   <li>로그에 남기는 URL 은 항상 {@link #maskedUrl(URI)} 를 거쳐 access-key 를 가린다</li>
+ *   <li>로그에 남기는 URL 은 항상 {@link SaraminJobSearchClient#maskedUrl(URI)} 를 거쳐 access-key 를 가린다</li>
  *   <li>응답 본문 전체를 로그로 찍지 않는다</li>
  * </ul>
  *
@@ -49,52 +41,32 @@ import java.util.Map;
 @ConditionalOnProperty(name = "apis.job.provider", havingValue = "saramin", matchIfMissing = true)
 public class SaraminJobPostingApiAdapter implements JobPostingProvider {
 
-    /** 사람인 채용검색 경로. */
-    private static final String DEFAULT_PATH = "/job-search";
-
-    private final RestClient restClient;
+    private final SaraminJobSearchClient jobSearchClient;
     private final SaraminJobPostingParser parser;
     private final SaraminCodeMapper codeMapper;
     private final SaraminApiSpecLoader specLoader;
 
-    private final String baseUrl;
-    private final String path;
-    private final String accessKey;
     private final int maxAttempts;
     private final long retryDelayMillis;
 
-    /** 호출 성공/실패 계측. 사람인은 일일 한도가 있어 호출 수 자체가 관측 대상이다. */
-    private final ExternalApiMetrics externalApiMetrics;
-
-    /** 메트릭의 api 태그 값. 어댑터가 아니라 수집원 단위다(일일 한도가 수집원 단위이므로). */
-    private static final String API_NAME = "saramin";
-
     public SaraminJobPostingApiAdapter(
-            RestClient restClient,
+            SaraminJobSearchClient jobSearchClient,
             SaraminJobPostingParser parser,
             SaraminCodeMapper codeMapper,
             SaraminApiSpecLoader specLoader,
-            @Value("${apis.saramin.base-url:https://oapi.saramin.co.kr}") String baseUrl,
-            @Value("${apis.saramin.path:" + DEFAULT_PATH + "}") String path,
-            @Value("${apis.saramin.access-key:}") String accessKey,
             @Value("${apis.saramin.max-attempts:3}") int maxAttempts,
-            @Value("${apis.saramin.retry-delay-ms:1000}") long retryDelayMillis,
-            ExternalApiMetrics externalApiMetrics) {
-        this.externalApiMetrics = externalApiMetrics;
-        this.restClient = restClient;
+            @Value("${apis.saramin.retry-delay-ms:1000}") long retryDelayMillis) {
+        this.jobSearchClient = jobSearchClient;
         this.parser = parser;
         this.codeMapper = codeMapper;
         this.specLoader = specLoader;
-        this.baseUrl = baseUrl;
-        this.path = path;
-        this.accessKey = (accessKey == null) ? "" : accessKey.trim();
         this.maxAttempts = Math.max(1, maxAttempts);
         this.retryDelayMillis = Math.max(0, retryDelayMillis);
     }
 
     @Override
     public boolean isConfigured() {
-        return !accessKey.isEmpty();
+        return jobSearchClient.hasAccessKey();
     }
 
     @Override
@@ -118,7 +90,7 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
 
         int count = Math.min(pageSize, spec.request().maxCount());
         int start = Math.max(0, pageNumber - 1);   // 포트는 1-based, 사람인 start 는 0-based
-        URI uri = buildUri(spec.request(), start, count);
+        URI uri = jobSearchClient.pagedUri(spec.request(), start, count);
         String body = getWithRetry(uri, pageNumber);
 
         SaraminJobPostingParser.ParsedPage parsed = parser.parse(body, spec.response());
@@ -132,45 +104,20 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
                 mapped.unresolvedRegionCount(), mapped.unresolvedJobCount());
     }
 
-    private URI buildUri(SaraminApiSpecFile.Request request, int start, int count) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(baseUrl)
-                .path(path)
-                .queryParam(request.accessKeyParam(), accessKey)
-                .queryParam(request.startParam(), start)
-                .queryParam(request.countParam(), count);
-
-        for (Map.Entry<String, String> extra : request.extraParams().entrySet()) {
-            if (extra.getValue() != null && !extra.getValue().isBlank()) {
-                builder.queryParam(extra.getKey(), extra.getValue());
-            }
-        }
-        return builder.build().encode().toUri();
-    }
-
     private String getWithRetry(URI uri, int pageNumber) {
         RuntimeException last = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                // uri 는 이미 인코딩된 URI 객체다. String 오버로드로 넘기면 URI 템플릿으로 재해석돼
-                // access-key 의 %2B 가 %252B 로 재인코딩된다. URI 오버로드를 유지한다.
-                ResponseEntity<String> response = restClient.get()
-                        .uri(uri)
-                        // RestClient 는 RestTemplate 과 달리 Accept 를 자동으로 채우지 않는다.
-                        .accept(MediaType.APPLICATION_JSON, MediaType.ALL)
-                        .retrieve()
-                        .toEntity(String.class);
-                externalApiMetrics.success(API_NAME);
-                return response.getBody();
+                return jobSearchClient.get(uri);
             } catch (RuntimeException e) {
-                externalApiMetrics.failure(API_NAME);
                 last = e;
                 log.warn("[saramin] 호출 실패 page={}, attempt={}/{}, url={}, reason={}",
-                        pageNumber, attempt, maxAttempts, maskedUrl(uri), e.getMessage());
+                        pageNumber, attempt, maxAttempts, jobSearchClient.maskedUrl(uri), e.getMessage());
                 sleepBeforeRetry(attempt);
             }
         }
         throw new SaraminApiException(
-                "[saramin] 호출 실패 page=" + pageNumber + ", url=" + maskedUrl(uri), last);
+                "[saramin] 호출 실패 page=" + pageNumber + ", url=" + jobSearchClient.maskedUrl(uri), last);
     }
 
     private void sleepBeforeRetry(int attempt) {
@@ -183,21 +130,5 @@ public class SaraminJobPostingApiAdapter implements JobPostingProvider {
             Thread.currentThread().interrupt();
             throw new SaraminApiException("[saramin] 재시도 대기 중 인터럽트", ie);
         }
-    }
-
-    /**
-     * 로그용 URL. access-key 값을 가린다.
-     *
-     * <p>키 파라미터명이 설정으로 바뀔 수 있으므로 파라미터명이 아니라 <b>키 값 자체</b>를 지운다.
-     * 값이 URL 인코딩돼 들어간 경우까지 잡으려고 인코딩된 형태도 함께 지운다.
-     */
-    String maskedUrl(URI uri) {
-        String url = uri.toString();
-        if (accessKey.isEmpty()) {
-            return url;
-        }
-        String masked = url.replace(accessKey, "****");
-        String encoded = UriUtils.encode(accessKey, StandardCharsets.UTF_8);
-        return masked.replace(encoded, "****");
     }
 }

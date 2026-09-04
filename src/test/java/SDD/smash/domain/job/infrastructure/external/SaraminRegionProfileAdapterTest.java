@@ -142,15 +142,17 @@ class SaraminRegionProfileAdapterTest {
 
     private SaraminRegionProfileAdapter adapter(String accessKey, SaraminApiSpecFile spec) {
         SaraminApiSpecLoader specLoader = new FixedSpecLoader(spec);
-        return new SaraminRegionProfileAdapter(
+        SaraminJobSearchClient client = new SaraminJobSearchClient(
                 RestClient.create(),
-                new SaraminJobSampleParser(new ObjectMapper()),
-                specLoader,
-                new SaraminLocCodeResolver(specLoader),
+                new ExternalApiMetrics(new SimpleMeterRegistry()),
                 server.url("/").toString().replaceAll("/$", ""),
                 "/job-search",
-                accessKey,
-                new ExternalApiMetrics(new SimpleMeterRegistry()));
+                accessKey);
+        return new SaraminRegionProfileAdapter(
+                client,
+                new SaraminJobSampleParser(new SaraminResponseReader(new ObjectMapper())),
+                specLoader,
+                new SaraminLocCodeResolver(specLoader));
     }
 
     private static final class FixedSpecLoader extends SaraminApiSpecLoader {

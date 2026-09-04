@@ -18,11 +18,15 @@ import org.springframework.stereotype.Component;
 @ConditionalOnProperty(name = "apis.job.provider", havingValue = "worknet")
 public class WorknetJobListingLinkAdapter implements JobListingLinkProvider {
 
-    @Value("${worknet.base-url}")
-    private String baseUrl;
+    private final String baseUrl;
+    private final String path;
 
-    @Value("${worknet.path}")
-    private String path;
+    public WorknetJobListingLinkAdapter(
+            @Value("${worknet.base-url}") String baseUrl,
+            @Value("${worknet.path}") String path) {
+        this.baseUrl = baseUrl;
+        this.path = path;
+    }
 
     @Override
     public String linkFor(SigunguCode sigunguCode) {
