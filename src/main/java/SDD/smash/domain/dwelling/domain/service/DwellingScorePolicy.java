@@ -23,11 +23,10 @@ public class DwellingScorePolicy {
 
     /**
      * @param median 해당 지역의 시세 중앙값. 실거래가 없으면 {@code null}
-     * @param rawBudget 사용자가 입력한 예산. 내부에서 유형별 구간으로 보정된다
+     * @param budget <b>이미 {@link DwellingType#normalize} 로 보정된</b> 예산.
+     *               보정은 캐시 키({@code DwellingScoreKey})에서 한 번만 수행하고 그 값을 넘긴다
      */
-    public Score score(DwellingType type, Money median, Money rawBudget) {
-
-        Money budget = type.normalize(rawBudget);
+    public Score score(DwellingType type, Money median, Money budget) {
 
         // 실거래가 없는 지역은 0점이다. 비교할 대상이 없으므로 감점이 아니라 무득점으로 다룬다.
         if (median == null) {

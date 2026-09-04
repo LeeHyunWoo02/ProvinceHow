@@ -34,6 +34,20 @@ public interface InfraJpaRepository extends JpaRepository<InfraJpaEntity, Long> 
     Optional<MajorInfraSummaryRow> findMajorSummary(@Param("sigunguCode") String sigunguCode,
                                                     @Param("major") Major major);
 
+    /** 시군구 하나의 대분류별 요약을 한 번의 GROUP BY 로 모두 반환한다. */
+    @Query("""
+            SELECT new SDD.smash.domain.infra.infrastructure.persistence.projection.MajorInfraSummaryRow(
+                ind.major,
+                SUM(i.count),
+                AVG(i.score)
+            )
+            FROM InfraJpaEntity i
+            JOIN IndustryJpaEntity ind ON ind.code = i.industryCode
+            WHERE i.sigunguCode = :sigunguCode
+            GROUP BY ind.major
+            """)
+    List<MajorInfraSummaryRow> findMajorSummaries(@Param("sigunguCode") String sigunguCode);
+
     @Query("""
             SELECT new SDD.smash.domain.infra.infrastructure.persistence.projection.IndustryCountRow(
                 ind.major,

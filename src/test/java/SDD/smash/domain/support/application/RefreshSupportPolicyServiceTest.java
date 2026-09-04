@@ -27,6 +27,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -290,6 +291,15 @@ class RefreshSupportPolicyServiceTest {
         @Override
         public int countBy(SigunguCode code, SupportTag tag) {
             return findBy(code, tag).size();
+        }
+
+        @Override
+        public Map<SigunguCode, Integer> countByTagForAll(SupportTag tag, List<SigunguCode> codes) {
+            Map<SigunguCode, Integer> result = new LinkedHashMap<>();
+            for (SigunguCode code : codes) {
+                result.put(code, countBy(code, tag));
+            }
+            return result;
         }
 
         @Override

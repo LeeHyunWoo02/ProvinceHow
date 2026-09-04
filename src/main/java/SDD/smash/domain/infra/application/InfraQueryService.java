@@ -4,7 +4,6 @@ import SDD.smash.domain.address.application.AddressQueryService;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.domain.infra.application.dto.IndustryCountView;
 import SDD.smash.domain.infra.application.dto.MajorInfraSummaryView;
-import SDD.smash.domain.infra.domain.model.Major;
 import SDD.smash.domain.infra.domain.port.InfraMajorSummaryRepository;
 import SDD.smash.domain.infra.domain.port.RegionInfraRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,9 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * 인프라 조회 유스케이스. {@code recommendation} 이 infra 를 호출하는 통로다.
@@ -29,22 +27,19 @@ public class InfraQueryService {
     private final RegionInfraRepository regionInfraRepository;
 
     /**
-     * 대분류(4종)를 순회하며 조회한다. 해당 대분류의 인프라 정보가 없으면
-     * <b>예외를 던지지 않고 로그만 남긴 뒤 목록에서 뺀다</b> — As-Is 도 "적재된 데이터의 문제"로
-     * 보고 건너뛰었다.
+     * 대분류별 요약을 한 번의 쿼리로 조회한다. 데이터가 없는 대분류는 결과에서 빠진다
+     * (예외를 던지지 않는다 — As-Is 도 "적재된 데이터의 문제"로 보고 건너뛰었다).
+     * 출력 순서는 Major enum 순서를 유지한다.
      */
     @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
     public List<MajorInfraSummaryView> getMajorInfraSummaries(SigunguCode sigunguCode) {
         addressQueryService.checkSigunguExistsOrThrow(sigunguCode);
 
-        List<MajorInfraSummaryView> result = new ArrayList<>();
-        for (Major major : Major.values()) {
-            Optional<MajorInfraSummaryView> summary = infraMajorSummaryRepository.findBy(sigunguCode, major)
-                    .map(MajorInfraSummaryView::from);
-            if (summary.isPresent()) {
-                result.add(summary.get());
-                continue;
-            }
+        List<MajorInfraSummaryView> result = infraMajorSummaryRepository.findAllBy(sigunguCode).stream()
+                .sorted(Comparator.comparingInt(summary -> summary.major().ordinal()))
+                .map(MajorInfraSummaryView::from)
+                .toList();
+        if (result.isEmpty()) {
             log.warn("{}지역의 인프라 정보가 없습니다.", sigunguCode.value());
         }
         return result;

@@ -3,6 +3,7 @@ package SDD.smash.domain.job.application;
 import SDD.smash.domain.job.application.dto.NonCapitalRankView;
 import SDD.smash.domain.job.domain.model.JobCode;
 import SDD.smash.domain.job.domain.model.NonCapitalRatioSnapshot;
+import SDD.smash.domain.job.domain.model.RegionJobStatistics;
 import SDD.smash.domain.job.domain.model.StatisticsMonth;
 import SDD.smash.domain.job.domain.port.NonCapitalRatioCache;
 import SDD.smash.domain.job.domain.port.RegionJobStatisticsRepository;
@@ -10,8 +11,10 @@ import SDD.smash.domain.job.domain.service.NonCapitalRankingPolicy;
 import SDD.smash.global.domain.model.SigunguCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -22,8 +25,9 @@ import java.util.Optional;
  * 접어 둔 분포를 캐시 포트 뒤에서 재사용한다. 조합·계산 규칙은 전부
  * {@code NonCapitalRankingPolicy} 에 있고 여기는 오케스트레이션만 한다.
  *
- * <p>{@code @Transactional} 을 붙이지 않는다 — 캐시 접근을 포함하는 경로라 트랜잭션으로
- * 감싸면 커넥션을 쥔 채 캐시를 기다리게 된다({@code JobScoreService} 와 같은 판단).
+ * <p>공개 메서드에는 {@code @Transactional} 을 붙이지 않는다 — 캐시 접근을 포함하는 경로라
+ * 트랜잭션으로 감싸면 커넥션을 쥔 채 캐시를 기다리게 된다. DB 조회부만 잘라 읽기 트랜잭션으로
+ * 감싼다({@code JobScoreService} 와 같은 판단).
  */
 @Service
 @RequiredArgsConstructor
@@ -74,10 +78,15 @@ public class NonCapitalJobRankingService {
                 .orElseGet(Map::of);
     }
 
-    /** 최신월 분포. 캐시에 있으면 그대로 쓰고, 없으면 그 달 전국을 한 번 읽어 접는다. */
+    /**
+     * 최신월 분포. 캐시에 있으면 그대로 쓰고, 없으면 그 달 전국을 한 번 읽어 접는다.
+     *
+     * <p>두 DB 조회 사이에 캐시 확인이 끼어 있어 하나의 트랜잭션으로 묶을 수 없다(캐시를 트랜잭션
+     * 안에서 기다리게 된다). 그래서 조회 두 개를 각각 읽기 트랜잭션 메서드로 분리한다.
+     */
     private Optional<NonCapitalRatioSnapshot> snapshot() {
 
-        Optional<StatisticsMonth> latest = regionJobStatisticsRepository.findLatestMonth();
+        Optional<StatisticsMonth> latest = loadLatestMonth();
         if (latest.isEmpty()) {
             return Optional.empty();
         }
@@ -88,9 +97,18 @@ public class NonCapitalJobRankingService {
             return cached;
         }
 
-        NonCapitalRatioSnapshot snapshot =
-                policy.snapshot(month, regionJobStatisticsRepository.findAllByMonth(month));
+        NonCapitalRatioSnapshot snapshot = policy.snapshot(month, loadMonthRows(month));
         nonCapitalRatioCache.put(snapshot);
         return Optional.of(snapshot);
+    }
+
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    protected Optional<StatisticsMonth> loadLatestMonth() {
+        return regionJobStatisticsRepository.findLatestMonth();
+    }
+
+    @Transactional(transactionManager = "dataTransactionManager", readOnly = true)
+    protected List<RegionJobStatistics> loadMonthRows(StatisticsMonth month) {
+        return regionJobStatisticsRepository.findAllByMonth(month);
     }
 }
