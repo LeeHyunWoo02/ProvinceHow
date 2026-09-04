@@ -20,9 +20,9 @@ public class DwellingJpaMapper {
         return DwellingJpaEntity.builder()
                 .sigunguCode(market.sigunguCode().value())
                 .monthAvg(market.monthly().average())
-                .monthMid(market.monthly().median() == null ? null : market.monthly().median().manwon())
+                .monthMid(market.monthly().medianManwon())
                 .jeonseAvg(market.jeonse().average())
-                .jeonseMid(market.jeonse().median() == null ? null : market.jeonse().median().manwon())
+                .jeonseMid(market.jeonse().medianManwon())
                 .build();
     }
 }

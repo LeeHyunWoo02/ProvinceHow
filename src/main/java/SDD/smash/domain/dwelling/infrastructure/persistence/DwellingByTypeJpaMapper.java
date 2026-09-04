@@ -20,9 +20,9 @@ public class DwellingByTypeJpaMapper {
                 .sigunguCode(sigunguCode)
                 .housingType(stat.housingType())
                 .monthAvg(stat.monthly().average())
-                .monthMid(stat.monthly().median() == null ? null : stat.monthly().median().manwon())
+                .monthMid(stat.monthly().medianManwon())
                 .jeonseAvg(stat.jeonse().average())
-                .jeonseMid(stat.jeonse().median() == null ? null : stat.jeonse().median().manwon())
+                .jeonseMid(stat.jeonse().medianManwon())
                 .build();
     }
 }

@@ -5,9 +5,6 @@ import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.StepExecutionListener;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
-
 /**
  * {@code infraStep} 의 구조화 로그.
  *
@@ -32,14 +29,14 @@ public class InfraStepLogger implements StepExecutionListener {
                 ? stepExecution.getExecutionContext().getString(CTX_SUMMARY)
                 : NOT_COLLECTED;
 
-        long elapsedMs = elapsedMillis(stepExecution);
+        long elapsedMs = InfraStepLogSupport.elapsedMillis(stepExecution);
         boolean failed = stepExecution.getStatus().isUnsuccessful();
 
         if (failed) {
             log.error("[infraJob] step=infraStep, baseDate={}, {}, saved={}, filteredByProcessor={}, "
                             + "elapsed={}ms, status={}, reason={}",
                     baseDate, summary, stepExecution.getWriteCount(), stepExecution.getFilterCount(),
-                    elapsedMs, stepExecution.getStatus(), firstFailure(stepExecution));
+                    elapsedMs, stepExecution.getStatus(), InfraStepLogSupport.firstFailure(stepExecution));
         } else {
             log.info("[infraJob] step=infraStep, baseDate={}, {}, saved={}, filteredByProcessor={}, "
                             + "elapsed={}ms, status={}",
@@ -47,29 +44,5 @@ public class InfraStepLogger implements StepExecutionListener {
                     elapsedMs, stepExecution.getStatus());
         }
         return stepExecution.getExitStatus();
-    }
-
-    private static long elapsedMillis(StepExecution stepExecution) {
-        LocalDateTime start = stepExecution.getStartTime();
-        LocalDateTime end = stepExecution.getEndTime() == null ? LocalDateTime.now() : stepExecution.getEndTime();
-        if (start == null) {
-            return 0L;
-        }
-        return Duration.between(start, end).toMillis();
-    }
-
-    private static String firstFailure(StepExecution stepExecution) {
-        return stepExecution.getFailureExceptions().stream()
-                .findFirst()
-                .map(e -> e.getClass().getSimpleName() + ": " + firstLine(e.getMessage()))
-                .orElse("(원인 미기록)");
-    }
-
-    private static String firstLine(String message) {
-        if (message == null) {
-            return "";
-        }
-        int newline = message.indexOf('\n');
-        return newline < 0 ? message : message.substring(0, newline);
     }
 }
