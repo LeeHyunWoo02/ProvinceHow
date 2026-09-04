@@ -23,7 +23,6 @@ import org.springframework.web.client.RestClient;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -440,41 +439,9 @@ class LocalDataApiAdapterTest {
         server.verify();
     }
 
-    @Test
-    @DisplayName("Retry-After 헤더의 초 값을 밀리초로 읽는다")
-    void readsRetryAfterHeaderInSeconds() {
-        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-        headers.set(org.springframework.http.HttpHeaders.RETRY_AFTER, "3");
-
-        assertThat(LocalDataApiAdapter.retryAfterMillis(headers)).contains(3000L);
-        assertThat(LocalDataApiAdapter.retryAfterMillis(new org.springframework.http.HttpHeaders()))
-                .isEqualTo(Optional.empty());
-    }
-
     // ------------------------------------------------------------------ 재시도 지연
-
-    @Test
-    @DisplayName("재시도 지연이 시도마다 배수만큼 늘어난다 - 1초 → 2초 → 4초")
-    void growsRetryDelayExponentiallyPerAttempt() {
-        // given / when / then - 실제로 sleep 하지 않는 순수 계산이라 테스트가 느려지지 않는다
-        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 1, 60_000)).isEqualTo(1000);
-        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 2, 60_000)).isEqualTo(2000);
-        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 3, 60_000)).isEqualTo(4000);
-    }
-
-    @Test
-    @DisplayName("지연은 max-retry-after-ms 상한을 넘지 않는다")
-    void capsRetryDelayAtConfiguredMaximum() {
-        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 20, 60_000)).isEqualTo(60_000);
-        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 2, 7, 10_000)).isEqualTo(10_000);
-    }
-
-    @Test
-    @DisplayName("기본 지연이 0이거나 배수가 1 미만이면 지연이 늘어나지 않는다")
-    void keepsDelayFlatForZeroBaseOrInvalidMultiplier() {
-        assertThat(LocalDataApiAdapter.backoffDelayMs(0, 2, 3, 60_000)).isZero();
-        assertThat(LocalDataApiAdapter.backoffDelayMs(1000, 0.5, 3, 60_000)).isEqualTo(1000);
-    }
+    // 순수 계산(지수 백오프 공식, Retry-After 헤더 파싱)은 RetryBackoff 로 위임했고 그 단위 테스트가
+    // 유틸 쪽에 있다. 여기서는 어댑터 설정값 배선과 HTTP 경로의 Retry-After 반영만 확인한다.
 
     @Test
     @DisplayName("어댑터 설정값으로 계산한 지연도 같은 규칙을 따른다")

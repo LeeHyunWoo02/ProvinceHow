@@ -7,6 +7,7 @@ import SDD.smash.domain.infra.domain.model.InfraFacility;
 import SDD.smash.domain.infra.domain.model.LocalDataRegionCode;
 import SDD.smash.global.metrics.CallBudgetMetrics;
 import SDD.smash.global.metrics.ExternalApiMetrics;
+import SDD.smash.global.util.RetryBackoff;
 import SDD.smash.domain.infra.domain.port.InfraFacilityProvider;
 import SDD.smash.domain.infra.infrastructure.master.IndustryMasterEntry;
 import SDD.smash.domain.infra.infrastructure.master.InfraMasterCatalog;
@@ -29,7 +30,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -283,7 +283,11 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
                 externalApiMetrics.failure(API_NAME);
                 last = translate(e, slug, regionCode, page);
                 // 서버가 대기시간을 명시하면 그 값이 우리 추정보다 정확하다. 없을 때만 백오프를 쓴다.
-                long wait = retryAfterMillis(e.getResponseHeaders())
+                // LocalData 는 응답 헤더가 아예 null 일 수 있으므로 여기서 null 가드를 둔다
+                // (기존 "headers==null → empty" 동작 보존).
+                HttpHeaders responseHeaders = e.getResponseHeaders();
+                long wait = RetryBackoff.retryAfterMillis(
+                                responseHeaders == null ? null : responseHeaders.getFirst(HttpHeaders.RETRY_AFTER))
                         .map(value -> Math.min(value, maxRetryAfterMs))
                         .orElseGet(() -> backoffDelayMs(attempt));
                 if (attempt < maxAttempts && isRetryable(e)) {
@@ -441,43 +445,12 @@ public class LocalDataApiAdapter implements InfraFacilityProvider {
         }
     }
 
-    /** {@code attempt}(1부터)번째 시도가 실패한 뒤 기다릴 시간. 설정값을 묶어 계산에 넘긴다. */
-    long backoffDelayMs(int attempt) {
-        return backoffDelayMs(retryDelayMs, retryBackoffMultiplier, attempt, maxRetryAfterMs);
-    }
-
     /**
-     * 지수 백오프 지연. {@code base * multiplier^(attempt-1)} 를 {@code maxDelayMs} 로 자른다.
-     *
-     * <p>실제로 {@code sleep} 하지 않는 순수 계산이라 테스트가 느려지지 않는다.
+     * {@code attempt}(1부터)번째 시도가 실패한 뒤 기다릴 시간. 설정값을 묶어 순수 계산 유틸에 넘긴다.
      * 기본값(base 1000ms, 배수 2, 상한 60000ms)이면 1000 → 2000 → 4000 이다.
      */
-    static long backoffDelayMs(long baseDelayMs, double multiplier, int attempt, long maxDelayMs) {
-        if (baseDelayMs <= 0) {
-            return 0;
-        }
-        int exponent = Math.max(0, attempt - 1);
-        double delay = baseDelayMs * Math.pow(Math.max(1.0d, multiplier), exponent);
-        if (Double.isNaN(delay) || delay >= maxDelayMs) {
-            return Math.max(0, maxDelayMs);
-        }
-        return Math.min(Math.max(0, maxDelayMs), (long) delay);
-    }
-
-    static Optional<Long> retryAfterMillis(HttpHeaders headers) {
-        if (headers == null) {
-            return Optional.empty();
-        }
-        String value = headers.getFirst(HttpHeaders.RETRY_AFTER);
-        if (value == null || value.isBlank()) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(Long.parseLong(value.trim()) * 1000L);
-        } catch (NumberFormatException e) {
-            // HTTP-date 형식도 규격상 가능하나 이 게이트웨이 실측 사례가 없다. 기본 지연으로 돌린다.
-            return Optional.empty();
-        }
+    long backoffDelayMs(int attempt) {
+        return RetryBackoff.backoffDelayMs(retryDelayMs, retryBackoffMultiplier, attempt, maxRetryAfterMs);
     }
 
     private boolean isRetryable(HttpStatusCodeException e) {

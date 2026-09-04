@@ -3,6 +3,7 @@ package SDD.smash.domain.support.infrastructure.external;
 import SDD.smash.global.config.YouthCenterProperties;
 import SDD.smash.global.domain.model.SigunguCode;
 import SDD.smash.global.metrics.ExternalApiMetrics;
+import SDD.smash.global.util.RetryBackoff;
 import SDD.smash.domain.support.domain.model.SupportPolicy;
 import SDD.smash.domain.support.domain.model.SupportPolicyCollection;
 import SDD.smash.domain.support.domain.model.SupportTag;
@@ -16,7 +17,6 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import java.time.Duration;
-import java.util.Optional;
 
 /**
  * 청년정책(온통청년) API 어댑터. {@code SupportPolicyProvider} 포트 구현이다.
@@ -128,7 +128,7 @@ public class YouthCenterApiAdapter implements SupportPolicyProvider {
             } catch (WebClientResponseException e) {
                 int status = e.getStatusCode().value();
                 if (attempt < maxAttempts && isRetryable(status)) {
-                    long wait = retryAfterMillis(e.getHeaders())
+                    long wait = RetryBackoff.retryAfterMillis(e.getHeaders().getFirst(HttpHeaders.RETRY_AFTER))
                             .map(value -> Math.min(value, maxRetryAfterMs))
                             .orElseGet(() -> backoffDelayMs(attempt));
                     log.debug("[YouthCenter] 재시도 sigungu={}, tag={}, status={}, attempt={}/{}, wait={}ms",
@@ -236,44 +236,11 @@ public class YouthCenterApiAdapter implements SupportPolicyProvider {
         return sleep(waitMs);
     }
 
-    /** {@code attempt}(1부터)번째 시도가 실패한 뒤 기다릴 시간. */
-    long backoffDelayMs(int attempt) {
-        return backoffDelayMs(retryDelayMs, retryBackoffMultiplier, attempt, maxRetryAfterMs);
-    }
-
     /**
-     * 지수 백오프 지연. {@code base * multiplier^(attempt-1)} 를 {@code maxDelayMs} 로 자른다.
-     *
-     * <p>실제로 {@code sleep} 하지 않는 순수 계산이라 테스트가 느려지지 않는다.
-     * 기본값(base 1000ms, 배수 2, 상한 30000ms)이면 1000 → 2000 → 4000 이다.
-     * {@code LocalDataApiAdapter} 의 같은 이름 메서드와 계산식이 동일하다.
+     * {@code attempt}(1부터)번째 시도가 실패한 뒤 기다릴 시간. 계산은 공용 {@link RetryBackoff} 에 위임한다.
      */
-    static long backoffDelayMs(long baseDelayMs, double multiplier, int attempt, long maxDelayMs) {
-        if (baseDelayMs <= 0) {
-            return 0;
-        }
-        int exponent = Math.max(0, attempt - 1);
-        double delay = baseDelayMs * Math.pow(Math.max(1.0d, multiplier), exponent);
-        if (Double.isNaN(delay) || delay >= maxDelayMs) {
-            return Math.max(0, maxDelayMs);
-        }
-        return Math.min(Math.max(0, maxDelayMs), (long) delay);
-    }
-
-    static Optional<Long> retryAfterMillis(HttpHeaders headers) {
-        if (headers == null) {
-            return Optional.empty();
-        }
-        String value = headers.getFirst(HttpHeaders.RETRY_AFTER);
-        if (value == null || value.isBlank()) {
-            return Optional.empty();
-        }
-        try {
-            return Optional.of(Long.parseLong(value.trim()) * 1000L);
-        } catch (NumberFormatException e) {
-            // HTTP-date 형식도 규격상 가능하나 이 서버의 실측 사례가 없다. 기본 지연으로 돌린다.
-            return Optional.empty();
-        }
+    long backoffDelayMs(int attempt) {
+        return RetryBackoff.backoffDelayMs(retryDelayMs, retryBackoffMultiplier, attempt, maxRetryAfterMs);
     }
 
     /**
