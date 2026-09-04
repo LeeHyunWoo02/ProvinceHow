@@ -18,15 +18,18 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 
 /**
  * 정본 저장소 어댑터. 임베디드 Redis 를 쓰지 않고 템플릿을 목킹해 <b>만료를 걸지 않는지</b>와
@@ -36,6 +39,7 @@ import static org.mockito.Mockito.never;
 class SupportPolicyRedisAdapterTest {
 
     private static final SigunguCode JONGNO = SigunguCode.of("11110");
+    private static final SigunguCode JUNGGU = SigunguCode.of("11140");
     private static final String LIST_KEY = "support:policy:11110:HOUSING_SUPPORT";
     private static final String COUNT_KEY = "support:policy:11110:HOUSING_SUPPORT:count";
     private static final Instant COLLECTED_AT = Instant.parse("2026-08-19T06:12:31Z");
@@ -139,5 +143,60 @@ class SupportPolicyRedisAdapterTest {
 
         // when / then
         assertThat(adapter.findBy(JONGNO, SupportTag.HOUSING_SUPPORT)).isEmpty();
+    }
+
+    // ------------------------------------------------------------------ 다건 개수 조회(multiGet)
+
+    @Test
+    @DisplayName("countByTagForAll 은 count 키를 한 번의 multiGet 으로 읽어 입력 순서대로 돌려준다")
+    void countByTagForAllReadsWithSingleMultiGet() {
+        // given — 종로는 3건, 중구는 값 없음
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        List<String> expectedKeys = List.of(
+                "support:policy:11110:HOUSING_SUPPORT:count",
+                "support:policy:11140:HOUSING_SUPPORT:count");
+        List<Object> values = new java.util.ArrayList<>();
+        values.add(3);
+        values.add(null); // 중구는 count 키 없음
+        given(valueOperations.multiGet(expectedKeys)).willReturn(values);
+
+        // when
+        Map<SigunguCode, Integer> result =
+                adapter.countByTagForAll(SupportTag.HOUSING_SUPPORT, List.of(JONGNO, JUNGGU));
+
+        // then — 입력 codes 순서 유지, 없는 키는 0, multiGet 은 1회만
+        assertThat(result).containsExactly(
+                org.assertj.core.api.Assertions.entry(JONGNO, 3),
+                org.assertj.core.api.Assertions.entry(JUNGGU, 0));
+        then(valueOperations).should(times(1)).multiGet(anyList());
+    }
+
+    @Test
+    @DisplayName("multiGet 이 null 을 돌려줘도 모든 시군구를 0 으로 채운다")
+    void countByTagForAllFillsZeroWhenMultiGetReturnsNull() {
+        // given
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.multiGet(anyList())).willReturn(null);
+
+        // when
+        Map<SigunguCode, Integer> result =
+                adapter.countByTagForAll(SupportTag.HOUSING_SUPPORT, List.of(JONGNO, JUNGGU));
+
+        // then
+        assertThat(result).containsExactly(
+                org.assertj.core.api.Assertions.entry(JONGNO, 0),
+                org.assertj.core.api.Assertions.entry(JUNGGU, 0));
+    }
+
+    @Test
+    @DisplayName("코드 목록이 비면 Redis 를 조회하지 않고 빈 맵을 돌려준다")
+    void countByTagForAllReturnsEmptyWithoutQueryWhenNoCodes() {
+        // when
+        Map<SigunguCode, Integer> result =
+                adapter.countByTagForAll(SupportTag.HOUSING_SUPPORT, List.of());
+
+        // then
+        assertThat(result).isEmpty();
+        then(redisTemplate).should(never()).opsForValue();
     }
 }
