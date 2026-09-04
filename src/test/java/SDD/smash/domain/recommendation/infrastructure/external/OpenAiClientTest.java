@@ -105,11 +105,10 @@ class OpenAiClientTest {
     }
 
     @Test
-    @DisplayName("401 응답은 DomainException 이 아니라 HttpClientErrorException 으로 나간다 - 현행 동작 기록")
+    @DisplayName("401 응답은 onStatus 대상(429/5xx)이 아니라 HttpClientErrorException(RestClientException)으로 나간다")
     void propagatesHttpClientErrorOnUnauthorized() {
-        // given - retrieve() 의 기본 상태 핸들러가 4xx 에서 먼저 예외를 던지므로
-        //         getStatusCode().is2xxSuccessful() 검사는 오류 응답을 보지 못한다.
-        //         즉 상위 어댑터의 catch(DomainException) 폴백에 걸리지 않는다
+        // given - 429/5xx 만 DomainException 으로 번역하므로 401 은 기본 핸들러가 던진다.
+        //         상위 어댑터가 RestClientException 을 폴백으로 흡수한다.
         server.expect(requestTo(API_URL))
                 .andRespond(withStatus(HttpStatus.UNAUTHORIZED)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -122,16 +121,48 @@ class OpenAiClientTest {
     }
 
     @Test
-    @DisplayName("2xx 인데 본문이 비면 OPENAI_TOKEN_EXPIRED 로 DomainException 을 던진다")
-    void throwsDomainExceptionWhenSuccessfulResponseHasNoBody() {
-        // given - getStatusCode()/getBody() 검사가 실제로 걸리는 유일한 경로다
-        server.expect(requestTo(API_URL)).andRespond(withStatus(HttpStatus.NO_CONTENT));
+    @DisplayName("429 응답은 OPENAI_TOKEN_EXPIRED 로 DomainException 을 던진다")
+    void translates429IntoTokenExpired() {
+        // given
+        server.expect(requestTo(API_URL))
+                .andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":{\"message\":\"rate limit\"}}"));
 
         // when & then
         assertThatThrownBy(() -> client.getChatCompletion(request()))
                 .isInstanceOf(DomainException.class)
                 .extracting(e -> ((DomainException) e).getErrorCode())
                 .isEqualTo(ErrorCode.OPENAI_TOKEN_EXPIRED);
+    }
+
+    @Test
+    @DisplayName("5xx 응답은 OPENAI_SERVER_ERROR 로 DomainException 을 던진다")
+    void translates5xxIntoServerError() {
+        // given
+        server.expect(requestTo(API_URL))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("{\"error\":{\"message\":\"boom\"}}"));
+
+        // when & then
+        assertThatThrownBy(() -> client.getChatCompletion(request()))
+                .isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).getErrorCode())
+                .isEqualTo(ErrorCode.OPENAI_SERVER_ERROR);
+    }
+
+    @Test
+    @DisplayName("2xx 인데 본문이 비면 OPENAI_SERVER_ERROR 로 DomainException 을 던진다")
+    void throwsDomainExceptionWhenSuccessfulResponseHasNoBody() {
+        // given - onStatus 를 통과한 2xx 지만 본문이 비는 유일한 경로다
+        server.expect(requestTo(API_URL)).andRespond(withStatus(HttpStatus.NO_CONTENT));
+
+        // when & then
+        assertThatThrownBy(() -> client.getChatCompletion(request()))
+                .isInstanceOf(DomainException.class)
+                .extracting(e -> ((DomainException) e).getErrorCode())
+                .isEqualTo(ErrorCode.OPENAI_SERVER_ERROR);
     }
 
     @Test
