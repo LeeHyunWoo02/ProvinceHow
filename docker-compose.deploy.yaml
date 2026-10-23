@@ -98,14 +98,14 @@ services:
   grafana:
     image: "grafana/grafana:13.1.4"
     restart: unless-stopped
-    # 외부 노출은 Caddy(grafana.jibang.info)만 담당한다. 포트를 직접 열지 않는다.
+    # 외부 노출은 Caddy(grafana.jibang.site)만 담당한다. 포트를 직접 열지 않는다.
     env_file:
       # 관리자 계정(GF_SECURITY_ADMIN_USER / GF_SECURITY_ADMIN_PASSWORD)은 시크릿이라
       # backend.env 에서 온다. 없으면 Grafana 기본값(admin/admin)으로 뜨므로 반드시 채운다.
       - ./backend.env
     environment:
       # 리버스 프록시 뒤에 있으므로 root_url 을 알려줘야 로그인 리다이렉트가 깨지지 않는다.
-      GF_SERVER_ROOT_URL: "https://grafana.jibang.info"
+      GF_SERVER_ROOT_URL: "https://grafana.jibang.site"
       GF_USERS_ALLOW_SIGN_UP: "false"
       # 익명 열람을 켜려면 아래 두 줄을 true / Viewer 로 바꾼다(포트폴리오 공개용).
       GF_AUTH_ANONYMOUS_ENABLED: "false"

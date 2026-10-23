@@ -89,7 +89,7 @@
 
 ### 🔹 인프라
 - **Oracle Cloud Infrastructure(OCI)** 컴퓨트 인스턴스에서 Docker Compose로 운영
-- **Caddy**로 HTTPS 리버스 프록시(`api.jibang.info`, `grafana.jibang.info`) 및 인증서 자동 관리
+- **Caddy**로 HTTPS 리버스 프록시(`api.jibang.site`, `grafana.jibang.site`) 및 인증서 자동 관리
 - **Prometheus + Grafana**로 API 트래픽·JVM·캐시·외부 API 호출을 관측
 - **GitHub Actions**를 이용한 CI/CD (main push 시 Docker 이미지 빌드·푸시)
 
@@ -158,7 +158,7 @@ Actuator · Prometheus · Grafana 로 API 트래픽, JVM 상태, 캐시 히트�
 |---|---|
 | 기본 제공 지표 | 요청률·p95, 상태코드별/엔드포인트별 응답, JVM 힙/GC, HikariCP 커넥션풀, Tomcat 스레드, CPU |
 | 커스텀 지표 | 캐시 히트율(`smash_cache_lookups_total`), 외부 API 성공/실패/스킵(`smash_external_api_calls_total`), 일일 호출 예산 소진율 |
-| 접근 통제 | 관리 포트(8081)는 컴포즈 내부망에만 노출, `grafana.jibang.info`는 Caddy 경유로만 접근 |
+| 접근 통제 | 관리 포트(8081)는 컴포즈 내부망에만 노출, `grafana.jibang.site`는 Caddy 경유로만 접근 |
 
 Prometheus는 `backend:8081/actuator/prometheus`와 자기 자신을 30초 주기로 스크랩한다. 로컬 검증 스택 기동 직후 `smash-backend` 타깃이 잡힌 화면:
 

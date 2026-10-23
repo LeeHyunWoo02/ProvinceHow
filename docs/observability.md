@@ -11,8 +11,8 @@
                  인터넷
                     │  443
               ┌─────▼─────┐
-              │   caddy   │  api.jibang.info      → backend:8080
-              │           │  grafana.jibang.info  → grafana:3000
+              │   caddy   │  api.jibang.site      → backend:8080
+              │           │  grafana.jibang.site  → grafana:3000
               └─────┬─────┘
         ┌───────────┴───────────┐
         │                       │
@@ -27,10 +27,10 @@
 
 | 컨테이너 | publish | 외부에서 도달 가능한가 |
 |---|---|---|
-| `backend` 8080 | `127.0.0.1:8080` | Caddy 경유만 (`api.jibang.info`) |
+| `backend` 8080 | `127.0.0.1:8080` | Caddy 경유만 (`api.jibang.site`) |
 | `backend` 8081 (`/actuator`) | **없음** | 불가 — compose 내부 네트워크뿐 |
 | `prometheus` 9090 | **없음** | 불가 |
-| `grafana` 3000 | **없음** | Caddy 경유만 (`grafana.jibang.info`) |
+| `grafana` 3000 | **없음** | Caddy 경유만 (`grafana.jibang.site`) |
 
 > ⚠️ 관리 포트를 분리했어도 **앱의 `SecurityFilterChain` 은 관리 포트에도 적용된다.**
 > 허용 규칙이 없으면 Prometheus 스크랩이 403 으로 막힌다. 그래서 `SecurityConfig` 에
@@ -50,7 +50,7 @@
 | `docker/grafana/provisioning/datasources/prometheus.yml` | 데이터소스 (uid=`prometheus`) |
 | `docker/grafana/provisioning/dashboards/dashboards.yml` | 대시보드 프로비저닝 경로 |
 | `docker/grafana/dashboards/smash-api.json` | 대시보드 정본 |
-| `docker/caddy/Caddyfile` | `grafana.jibang.info` 사이트 블록 |
+| `docker/caddy/Caddyfile` | `grafana.jibang.site` 사이트 블록 |
 | `docker-compose.deploy.yaml` | 서버용. 포트 미개방 + 메모리/CPU 상한 |
 | `docker-compose.yaml` | 로컬용. 9090/3000 을 직접 열어 확인 |
 
@@ -138,7 +138,7 @@ docker compose -f docker-compose.deploy.yaml ps
 
 # 2) 관리 포트가 외부에 열려 있지 않은지 (반드시 실패해야 한다)
 curl -sS -m 5 http://<서버공인IP>:8081/actuator/prometheus ; echo "exit=$?"
-curl -sS -m 5 https://api.jibang.info/actuator/prometheus   # 404 여야 한다
+curl -sS -m 5 https://api.jibang.site/actuator/prometheus   # 404 여야 한다
 
 # 3) prometheus 컨테이너 안에서는 스크랩이 되는지 (200 + 메트릭 본문)
 docker compose -f docker-compose.deploy.yaml exec prometheus \
@@ -149,11 +149,11 @@ docker compose -f docker-compose.deploy.yaml exec prometheus \
   wget -qO- 'http://localhost:9090/api/v1/targets?state=active' | head -c 400
 
 # 5) Grafana
-#    https://grafana.jibang.info 로그인 → 폴더 smash → "smash · API 트래픽과 런타임"
+#    https://grafana.jibang.site 로그인 → 폴더 smash → "smash · API 트래픽과 런타임"
 ```
 
-`grafana.jibang.info` 의 A 레코드가 없으면 Caddy 가 그 사이트의 인증서 발급만 반복 실패한다
-(`api.jibang.info` 는 영향 없음). Caddy 로그에서 ACME 실패가 보이면 DNS 를 먼저 확인한다.
+`grafana.jibang.site` 의 A 레코드가 없으면 Caddy 가 그 사이트의 인증서 발급만 반복 실패한다
+(`api.jibang.site` 는 영향 없음). Caddy 로그에서 ACME 실패가 보이면 DNS 를 먼저 확인한다.
 
 > ⚠️ **`GF_SECURITY_ADMIN_PASSWORD` 는 첫 기동에만 적용된다.** Grafana 는 첫 기동 때
 > 관리자 계정을 자기 SQLite DB(`grafana-data` 볼륨)에 만들고, 그 뒤로는 이 환경변수를 무시한다.
